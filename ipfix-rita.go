@@ -147,6 +147,12 @@ type LogstashIPFIXQueryAggregate struct {
 	Records []LogstashIPFIX `bson:"records"`
 }
 
+//SameKeyQueriesColl is the name of the collection which holds same-flow-key queries
+const SameKeyQueriesColl string = "same-flowkey-queries"
+
+//FlipKeyQueriesColl is the name of the collection which holds flip-flow-key queries
+const FlipKeyQueriesColl string = "flip-flowkey-queries"
+
 func main() {
 	if len(os.Args) < 4 {
 		fmt.Printf("Usage: %s <MongoDB URI> <Logstash IPFIX DB> <Logstash IPFIX Collection> [Expiration Timeout Minutes]\n", os.Args[0])
@@ -214,8 +220,8 @@ func deleteOldResults(ssn *mgo.Session, sourceDB string) {
 		panic(err)
 	}
 	for i := range colls {
-		if strings.HasPrefix(colls[i], "same-flowkey-queries") ||
-			strings.HasPrefix(colls[i], "flip-flowkey-queries") {
+		if colls[i] == SameKeyQueriesColl ||
+			colls[i] == FlipKeyQueriesColl {
 			logstashDB.C(colls[i]).DropCollection()
 		}
 	}
@@ -326,7 +332,7 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 			Records: sameBuffer,
 		}
 
-		tgtColl := logstashDB.C(fmt.Sprintf("same-flowkey-queries-%d", len(sameBuffer)))
+		tgtColl := logstashDB.C(SameKeyQueriesColl)
 		tgtColl.Insert(sameAggregate)
 
 		// Next do the same thing for the flipped Flow Key
@@ -380,53 +386,48 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 			Records: flipBuffer,
 		}
 
-		tgtColl = logstashDB.C(fmt.Sprintf("flip-flowkey-queries-%d", len(flipBuffer)))
+		tgtColl = logstashDB.C(FlipKeyQueriesColl)
 		tgtColl.Insert(flipAggregate)
 	}
 }
 
 func report(ssn *mgo.Session, sourceDB string, expirationTimeout time.Duration) {
-	colls, err := ssn.DB(sourceDB).CollectionNames()
-	if err != nil {
-		panic(err)
-	}
 	fmt.Printf("IPFIX Flow Stitching Data Analysis Report\n")
 	if expirationTimeout != 0 {
 		fmt.Printf("Configured Expiration Timeout: %s\n", expirationTimeout.String())
 	} else {
 		fmt.Printf("Configured Expiration Timeout: None\n")
 	}
-	fmt.Printf("Same/Flip Flow Key Search, # Matches, Count, Uniq Count\n")
-	for i := range colls {
-		sameKey := false
-		flipKey := false
-		if strings.HasPrefix(colls[i], "same-flowkey-queries") {
-			sameKey = true
-			fmt.Printf("SAME, ")
+	fmt.Printf("Same Flow Key Query Statistics:\n")
+	reportQueryAggRecordCounts(ssn, sourceDB, SameKeyQueriesColl, expirationTimeout)
+	fmt.Printf("\nFlipped Flow Key Query Statistics:\n")
+	reportQueryAggRecordCounts(ssn, sourceDB, FlipKeyQueriesColl, expirationTimeout)
+}
+
+func reportQueryAggRecordCounts(ssn *mgo.Session, sourceDB, aggColl string, expirationTimeout time.Duration) {
+	fmt.Printf("# of Flow Key Matches, # of Queries\n")
+	queryRecordCountsIter := ssn.DB(sourceDB).C(aggColl).Pipe(
+		[]bson.M{
+			{
+				"$group": bson.M{
+					"_id":        bson.M{"$size": "$records"},
+					"numQueries": bson.M{"$sum": 1},
+				},
+			},
+			{
+				"$sort": bson.M{"_id": 1},
+			},
+		},
+	).Iter()
+
+	var queryRecordCount struct {
+		KeyMatches int `bson:"_id"`
+		NumQueries int `bson:"numQueries"`
+	}
+	for queryRecordCountsIter.Next(&queryRecordCount) {
+		if queryRecordCountsIter.Err() != nil {
+			panic(queryRecordCountsIter.Err())
 		}
-		if !sameKey && strings.HasPrefix(colls[i], "flip-flowkey-queries") {
-			flipKey = true
-			fmt.Printf("FLIP, ")
-		}
-		if !flipKey && !sameKey {
-			continue
-		}
-		lastSepIdx := strings.LastIndexByte(colls[i], '-')
-		matchCount, err := strconv.Atoi(colls[i][lastSepIdx+1:])
-		if err != nil {
-			panic(err)
-		}
-		count, err := ssn.DB(sourceDB).C(colls[i]).Count()
-		if err != nil {
-			panic(err)
-		}
-		var uniqCount int
-		if sameKey {
-			uniqCount = count / (matchCount + 1)
-		} else {
-			//Brain hurts...
-			uniqCount = count
-		}
-		fmt.Printf("%d, %d, %d\n", matchCount, count, uniqCount)
+		fmt.Printf("%d, %d\n", queryRecordCount.KeyMatches, queryRecordCount.NumQueries)
 	}
 }

@@ -1,0 +1,115 @@
+//IPv4 Specific
+db.getCollection('ipfix').aggregate([
+        { "$match": {"netflow.destinationIPv4Address": {"$ne": null} } },
+        {
+            "$group": {
+                "_id": {
+                    "destinationIPv4Address": "$netflow.destinationIPv4Address",
+                    "destinationTransportPort": "$netflow.destinationTransportPort",
+                },
+                "hits": {"$sum": 1},
+            }
+        },
+        {
+            "$sort": {"hits": -1},
+        },
+])
+
+//IPv4/ IPv6
+db.getCollection('ipfix').aggregate([
+        {
+            "$addFields": {
+                "tmpDestinationIPv4Address": ["$netflow.destinationIPv4Address"],
+                "tmpDestinationIPv6Address": ["$netflow.destinationIPv6Address"],
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "destinationIPAddress": {
+                        "$setUnion": ["$tmpDestinationIPv4Address", "$tmpDestinationIPv6Address"],
+                    },
+                    "destinationTransportPort": "$netflow.destinationTransportPort",
+                },
+                "hits": {"$sum": 1},
+            }
+        },
+        {
+            "$addFields": {
+                "_id": {
+                    "destinationIPAddress" : {
+                        "$arrayElemAt": [
+                            {
+                                "$filter": {
+                                    "input": "$_id.destinationIPAddress",
+                                    "cond": {"$ne": ["$$this", null] },
+                                },
+                            },
+                            0,
+                        ],
+                    },
+                },
+            },
+        },
+        {
+            "$sort": {"hits": -1},
+        },
+])
+
+//IPv4 Specific
+db.getCollection('same-flowkey-queries-1').aggregate([
+        { "$match": {"query.netflow.destinationIPv4Address": {"$ne": null} } },
+        {
+            "$group": {
+                "_id": {
+                    "destinationIPv4Address": "$query.netflow.destinationIPv4Address",
+                    "destinationTransportPort": "$query.netflow.destinationTransportPort",
+                },
+                "hits": {"$sum": 1},
+            }
+        },
+        {
+            "$sort": {"hits": -1},
+        },
+])
+
+//IPv4/ IPv6
+db.getCollection('same-flowkey-queries-1').aggregate([
+        {
+            "$addFields": {
+                "tmpDestinationIPv4Address": ["$query.netflow.destinationIPv4Address"],
+                "tmpDestinationIPv6Address": ["$query.netflow.destinationIPv6Address"],
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "destinationIPAddress": {
+                        "$setUnion": ["$tmpDestinationIPv4Address", "$tmpDestinationIPv6Address"],
+                    },
+                    "destinationTransportPort": "$query.netflow.destinationTransportPort",
+                },
+                "hits": {"$sum": 1},
+            }
+        },
+        {
+            "$addFields": {
+                "_id": {
+                    "destinationIPAddress" : {
+                        "$arrayElemAt": [
+                            {
+                                "$filter": {
+                                    "input": "$_id.destinationIPAddress",
+                                    "cond": {"$ne": ["$$this", null] },
+                                },
+                            },
+                            0,
+                        ],
+                    },
+                },
+            },
+        },
+        {
+            "$sort": {"hits": -1},
+        },
+])
