@@ -33,6 +33,15 @@ const (
 	LackOfResources
 )
 
+//ProtocolNumberMap represents the IANA Protocol Numbers
+//https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+var ProtocolNumberMap = map[int]string{
+	1:  "ICMP",
+	6:  "TCP",
+	17: "UDP",
+	58: "IPv6-ICMP",
+}
+
 //LogstashIPFIX represents an IPFIX record stored in MongoDB via Logstash
 type LogstashIPFIX struct {
 	ID      bson.ObjectId `bson:"_id"`
@@ -143,8 +152,9 @@ func (fk *LogstashIPFIXFlowKeyView) Flip() {
 //LogstashIPFIXQueryAggregate records the LogstashIPFIX record which was
 //used to produce a query as well as the results of that query
 type LogstashIPFIXQueryAggregate struct {
-	Query   LogstashIPFIX   `bson:"query"`
-	Records []LogstashIPFIX `bson:"records"`
+	Query       LogstashIPFIX   `bson:"query"`
+	Records     []LogstashIPFIX `bson:"records"`
+	RecordCount int             `bson:"recordCount"`
 }
 
 //SameKeyQueriesColl is the name of the collection which holds same-flow-key queries
@@ -285,9 +295,6 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 		var sameBuffer []LogstashIPFIX
 		var sameBuffObj LogstashIPFIX
 		for sameIter.Next(&sameBuffObj) {
-			if sameIter.Err() != nil {
-				panic(sameIter.Err())
-			}
 			//For the same Flow Key lookup, we don't want the original record
 			if sameBuffObj.ID == buffObj.ID {
 				continue
@@ -325,11 +332,15 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 			//Checks passed, add it to the flow aggregate
 			sameBuffer = append(sameBuffer, sameBuffObj)
 		}
+		if sameIter.Err() != nil {
+			panic(sameIter.Err())
+		}
 
 		//Insert the aggregate record based on how many records matched the query
 		sameAggregate := LogstashIPFIXQueryAggregate{
-			Query:   buffObj,
-			Records: sameBuffer,
+			Query:       buffObj,
+			Records:     sameBuffer,
+			RecordCount: len(sameBuffer),
 		}
 
 		tgtColl := logstashDB.C(SameKeyQueriesColl)
@@ -347,9 +358,6 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 		var flipBuffer []LogstashIPFIX
 		var flipBuffObj LogstashIPFIX
 		for flipIter.Next(&flipBuffObj) {
-			if sameIter.Err() != nil {
-				panic(sameIter.Err())
-			}
 			flipFinishTime, err := time.Parse(time.RFC3339, flipBuffObj.Netflow.FlowEndTime)
 			if err != nil {
 				panic(err)
@@ -379,11 +387,15 @@ func sortIPFIXByFlowKeyCounts(ssn *mgo.Session, sourceDB, sourceColl string, exp
 			}
 			flipBuffer = append(flipBuffer, flipBuffObj)
 		}
+		if flipIter.Err() != nil {
+			panic(flipIter.Err())
+		}
 
 		//Insert the aggregate for the flip query for this IPFIX record
 		flipAggregate := LogstashIPFIXQueryAggregate{
-			Query:   buffObj,
-			Records: flipBuffer,
+			Query:       buffObj,
+			Records:     flipBuffer,
+			RecordCount: len(flipBuffer),
 		}
 
 		tgtColl = logstashDB.C(FlipKeyQueriesColl)
@@ -399,18 +411,29 @@ func report(ssn *mgo.Session, sourceDB string, expirationTimeout time.Duration) 
 		fmt.Printf("Configured Expiration Timeout: None\n")
 	}
 	fmt.Printf("Same Flow Key Query Statistics:\n")
-	reportQueryAggRecordCounts(ssn, sourceDB, SameKeyQueriesColl, expirationTimeout)
-	fmt.Printf("\nFlipped Flow Key Query Statistics:\n")
-	reportQueryAggRecordCounts(ssn, sourceDB, FlipKeyQueriesColl, expirationTimeout)
+	reportQueryAggRecordCounts(ssn, sourceDB, SameKeyQueriesColl)
+	fmt.Printf("\nSame Flow Key Queries by Transport Protocol\n")
+	fmt.Printf("For Same Flow Key Queries, Easy Queries are Queries Where # of Flow Key Matches = 0\n")
+	reportHardQueryAggsByTransport(ssn, sourceDB, SameKeyQueriesColl, 0)
+	fmt.Printf("\n\nFlipped Flow Key Query Statistics:\n")
+	reportQueryAggRecordCounts(ssn, sourceDB, FlipKeyQueriesColl)
+	fmt.Printf("\nFlipped Flow Key Queries by Transport Protocol\n")
+	fmt.Printf("For Flipped Flow Key Queries, Easy Queries are Queries Where # of Flow Key Matches = 0 or 1\n")
+	reportHardQueryAggsByTransport(ssn, sourceDB, FlipKeyQueriesColl, 1)
 }
 
-func reportQueryAggRecordCounts(ssn *mgo.Session, sourceDB, aggColl string, expirationTimeout time.Duration) {
-	fmt.Printf("# of Flow Key Matches, # of Queries\n")
+func reportQueryAggRecordCounts(ssn *mgo.Session, sourceDB, aggColl string) {
+	totalNumQueries, err := ssn.DB(sourceDB).C(aggColl).Count()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Total number of queries: %d\n", totalNumQueries)
+	fmt.Printf("# of Flow Key Matches, # of Queries, Percent of Queries\n")
 	queryRecordCountsIter := ssn.DB(sourceDB).C(aggColl).Pipe(
 		[]bson.M{
 			{
 				"$group": bson.M{
-					"_id":        bson.M{"$size": "$records"},
+					"_id":        "$recordCount",
 					"numQueries": bson.M{"$sum": 1},
 				},
 			},
@@ -425,9 +448,52 @@ func reportQueryAggRecordCounts(ssn *mgo.Session, sourceDB, aggColl string, expi
 		NumQueries int `bson:"numQueries"`
 	}
 	for queryRecordCountsIter.Next(&queryRecordCount) {
-		if queryRecordCountsIter.Err() != nil {
-			panic(queryRecordCountsIter.Err())
+		fmt.Printf("%d, %d, %4.2f%%\n", queryRecordCount.KeyMatches, queryRecordCount.NumQueries, float64(queryRecordCount.NumQueries)/float64(totalNumQueries)*100)
+	}
+	if queryRecordCountsIter.Err() != nil {
+		panic(queryRecordCountsIter.Err())
+	}
+}
+
+func reportHardQueryAggsByTransport(ssn *mgo.Session, sourceDB, aggColl string, maxEasyNumRecords int) {
+	fmt.Printf("Transport Protocol, # of Queries, # of Hard Queries, %% of Hard Queries\n")
+
+	transportHardQueryCountsIter := ssn.DB(sourceDB).C(aggColl).Pipe(
+		[]bson.M{
+			{"$match": bson.M{"recordCount": bson.M{"$gt": maxEasyNumRecords}}},
+			{"$group": bson.M{
+				"_id":        "$query.netflow.protocolIdentifier",
+				"numQueries": bson.M{"$sum": 1},
+			}},
+		},
+	).Iter()
+
+	var transportHardQueryCount struct {
+		ProtoID    int `bson:"_id"`
+		NumQueries int `bson:"numQueries"`
+	}
+	for transportHardQueryCountsIter.Next(&transportHardQueryCount) {
+		protoTotalNumQueries, err := ssn.DB(sourceDB).C(aggColl).Find(
+			bson.M{
+				"query.netflow.protocolIdentifier": transportHardQueryCount.ProtoID,
+			},
+		).Count()
+		if err != nil {
+			panic(err)
 		}
-		fmt.Printf("%d, %d\n", queryRecordCount.KeyMatches, queryRecordCount.NumQueries)
+		protoString, ok := ProtocolNumberMap[transportHardQueryCount.ProtoID]
+		if !ok {
+			protoString = fmt.Sprintf("%d", transportHardQueryCount.ProtoID)
+		}
+		fmt.Printf(
+			"%s, %d, %d, %4.2f%%\n",
+			protoString,
+			protoTotalNumQueries,
+			transportHardQueryCount.NumQueries,
+			float64(transportHardQueryCount.NumQueries)/float64(protoTotalNumQueries)*100,
+		)
+	}
+	if transportHardQueryCountsIter.Err() != nil {
+		panic(transportHardQueryCountsIter.Err())
 	}
 }
