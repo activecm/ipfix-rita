@@ -1,3 +1,3 @@
 # IPFIX-RITA Converter
 
-#### An IPFIX/ Netflow v0 Flow Sticher and Converter for RITA
+#### An IPFIX/ Netflow v9 Flow Sticher and Converter for RITA
