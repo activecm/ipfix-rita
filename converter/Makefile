@@ -11,7 +11,7 @@ TESTFLAGS := -p=1 -v
 SRC := $(shell find . -path ./vendor -prune -o -type f -name '*.go' -print)
 
 # Default build target is the executable
-$(BINARY): vendor
+$(BINARY): vendor $(SRC)
 	go build -o $(BINARY)
 
 # START INSTALL
@@ -43,11 +43,12 @@ test: vendor docker-check
 # END TESTING
 
 # BEGIN VENDORING
-vendor: Gopkg.lock
-	dep ensure --vendor-only
+vendor: Gopkg.lock $(SRC)
+	dep ensure
 
-Gopkg.lock: $(SRC) Gopkg.toml
-	dep ensure --no-vendor
+#Note: Vendor isn't split because root cannot run dep ensure --no-vendor
+#dep ensure --no-vendor may not touch Gopkg.lock if it is up to date.
+#This leads to dep ensure --no-vendor almost always being run.
 # END VENDORING
 
 .PHONY: docker-check
@@ -56,4 +57,4 @@ docker-check:
 
 .PHONY: root-check
 root-check:
-	@if [ "$(shell id -u)" -ne 0 ]; then echo "This command requires administrator priviledges"; return 1; fi
+	@if [ "$(shell id -u)" -ne 0 ]; then echo "This command requires administrator priviledges to proceed"; return 1; fi
