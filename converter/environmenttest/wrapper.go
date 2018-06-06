@@ -1,4 +1,4 @@
-package integrationtesting
+package environmenttest
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package integrationtesting
+package environmenttest
 
 import (
 	"testing"
@@ -12,8 +12,8 @@ import (
 //MongoDB must be run without encryption/ authentication.
 func NewIntegrationTestingEnvironment(t *testing.T, mongoDBURI string) environment.Environment {
 	envOut := environment.Environment{
-		Config: NewTestingConfig(mongoDBURI),
-		Logger: NewTestingLogger(t),
+		Config: newTestingConfig(mongoDBURI),
+		Logger: newTestingLogger(t),
 	}
 	var err error
 	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig())

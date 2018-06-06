@@ -1,4 +1,4 @@
-package integrationtesting
+package environmenttest
 
 import (
 	"net"
@@ -8,10 +8,10 @@ import (
 	"github.com/activecm/mgosec"
 )
 
-//NewTestingConfig returns a standard testing configuration
+//newTestingConfig returns a standard testing configuration
 //linked to a given instance of MongoDB via the mongoDBURI.
 //MongoDB must be run without encryption/ authentication.
-func NewTestingConfig(mongoDBURI string) config.Config {
+func newTestingConfig(mongoDBURI string) config.Config {
 	return testingConfig{
 		mongoDB: testingMongoDBConfig{
 			connectionString: mongoDBURI,

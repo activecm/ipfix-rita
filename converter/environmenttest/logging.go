@@ -1,4 +1,4 @@
-package integrationtesting
+package environmenttest
 
 import (
 	"testing"
@@ -10,8 +10,8 @@ type testingLogger struct {
 	t *testing.T
 }
 
-//NewTestingLogger routes log calls to go test
-func NewTestingLogger(t *testing.T) logging.Logger {
+//newTestingLogger routes log calls to go test
+func newTestingLogger(t *testing.T) logging.Logger {
 	return testingLogger{t: t}
 }
 
