@@ -8,20 +8,19 @@ import (
 )
 
 //ADDING A CONFIGURATION OPTION:
-//Each configuration option should belong to a parent scope.
+//A new configuration option should belong to a parent scope.
 //If the scope does not exist, create an interface here
 //exposing each of the configuration options for that scope
 //as method calls. Then, expose that interface via
-//the Serializable interface.
+//the Config interface. You may also need to edit the struct
+//implementing Config if you created a new scope.
 //
 //If the scope already exists, simply add a method exposing
 //the option to that scope's interface.
 //
-//Next, for each serialization format, find the object
-//backing the scope interface which has been modified.
-//Add the field to struct definition and add a getter.
-//(You may also need to edit the struct implementing
-//Serializable if you created a new scope).
+//Next, for each Config implementation (yamlConfig and testConfig),
+//find the object backing the scope interface which has been modified,
+//add the field to struct definition and add a getter.
 //
 //Finally, make sure to edit the tests for each format.
 

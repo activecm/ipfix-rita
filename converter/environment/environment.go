@@ -12,5 +12,5 @@ import (
 type Environment struct {
 	config.Config
 	logging.Logger
-	database.DB
+	DB database.DB
 }
