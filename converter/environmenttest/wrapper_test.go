@@ -9,8 +9,8 @@ import (
 
 func TestIntegrationTestWrapper(t *testing.T) {
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
 	require.NotNil(t, env.Config)
 	require.NotNil(t, env.Logger)
 	require.NotNil(t, env.DB.Session)
-	defer cleanup()
 }
