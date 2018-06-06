@@ -21,6 +21,10 @@
 
 
 [[constraint]]
+  branch = "master"
+  name = "github.com/activecm/dbtest"
+
+[[constraint]]
   name = "github.com/activecm/mgosec"
   version = "0.1.0"
 
