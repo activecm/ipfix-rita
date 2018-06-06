@@ -2,6 +2,7 @@ package environment
 
 import (
 	"github.com/activecm/ipfix-rita/converter/config"
+	"github.com/activecm/ipfix-rita/converter/config/yaml"
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/logging"
 )
@@ -13,4 +14,27 @@ type Environment struct {
 	config.Config
 	logging.Logger
 	DB database.DB
+}
+
+//NewDefaultEnvironment creates a new default environment
+//reading the configuration from the standard yaml file,
+//creating the pretty print logger, and connecting
+//the database specified in the yaml configuration
+func NewDefaultEnvironment() (Environment, error) {
+	envOut := Environment{
+		Logger: logging.NewLogrusLogger(),
+	}
+	configBuff, err := yaml.ReadConfigFile()
+	if err != nil {
+		return envOut, err
+	}
+	envOut.Config, err = yaml.NewYAMLConfig(configBuff)
+	if err != nil {
+		return envOut, err
+	}
+	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig())
+	if err != nil {
+		return envOut, err
+	}
+	return envOut, nil
 }

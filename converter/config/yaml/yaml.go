@@ -1,10 +1,29 @@
 package yaml
 
 import (
+	"io"
+	"os"
+
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/pkg/errors"
 	yaml2 "gopkg.in/yaml.v2"
 )
+
+//ConfigPath declares the location of the IPFIX-RITA yaml configuration file
+const ConfigPath = "/etc/ipfix-rita/config.yaml"
+
+//ReadConfigFile opens the ConfigPath for reading and returns the
+//contents of the file or an error
+func ReadConfigFile() ([]byte, error) {
+	f, err := os.Open(ConfigPath)
+	if err != nil {
+		err = errors.WithStack(err)
+		return nil, err
+	}
+	var buf []byte
+	io.ReadFull(f, buf)
+	return buf, nil
+}
 
 //yamlConfig contains the applications settings
 //as represented by a YAML string

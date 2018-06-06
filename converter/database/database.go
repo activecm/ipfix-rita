@@ -28,6 +28,9 @@ func NewDB(conf config.MongoDB) (DB, error) {
 	if err != nil {
 		return db, err
 	}
+	db.SetSocketTimeout(conf.GetSocketTimeout())
+	db.SetCursorTimeout(conf.GetSocketTimeout())
+	db.SetSyncTimeout(conf.GetSocketTimeout())
 	return db, nil
 }
 
