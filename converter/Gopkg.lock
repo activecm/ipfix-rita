@@ -14,7 +14,7 @@
     ".",
     "docker"
   ]
-  revision = "c47e3a5cb5ac03977fef7c0c5275d488909fd601"
+  revision = "006c3e27fc1cfc47dd73b9baf1afa59ec8816ca9"
 
 [[projects]]
   name = "github.com/activecm/mgosec"
@@ -31,14 +31,13 @@
 [[projects]]
   name = "github.com/docker/distribution"
   packages = [
-    "digest",
+    ".",
+    "digestset",
     "reference"
   ]
-  revision = "48294d928ced5dd9b378f7fd7c6f5da3ff3f2c89"
-  version = "v2.6.2"
+  revision = "83389a148052d74ac602f5f1d62f86ff2f3c4aa5"
 
 [[projects]]
-  branch = "master"
   name = "github.com/docker/docker"
   packages = [
     "api",
@@ -68,14 +67,12 @@
     "sockets",
     "tlsconfig"
   ]
-  revision = "3ede32e2033de7505e6500d6c868c2b9ed9f169d"
-  version = "v0.3.0"
+  revision = "7beb39f0b969b075d1325fecb092faf27fd357b6"
 
 [[projects]]
   name = "github.com/docker/go-units"
   packages = ["."]
-  revision = "47565b4f722fb6ceae66b95f853feed578a4a51c"
-  version = "v0.3.3"
+  revision = "9e638d38cf6977a37a8ea0078f3ee75a7cdb2dd1"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -122,8 +119,8 @@
     "assert",
     "require"
   ]
-  revision = "12b6f73e6084dad08a7c6e575284b177ecafbc71"
-  version = "v1.2.1"
+  revision = "f35b8ab0b5a2cef36673838d662e249dd9c94686"
+  version = "v1.2.2"
 
 [[projects]]
   name = "github.com/urfave/cli"
@@ -135,7 +132,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "b47b1587369238182299fe4dad77d05b8b461e06"
+  revision = "8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9"
 
 [[projects]]
   branch = "master"
@@ -146,7 +143,7 @@
     "internal/socks",
     "proxy"
   ]
-  revision = "1e491301e022f8f977054da4c2d852decd59571f"
+  revision = "db08ff08e8622530d9ed3a0e8ac279f6d4c02196"
 
 [[projects]]
   branch = "master"
@@ -155,7 +152,7 @@
     "unix",
     "windows"
   ]
-  revision = "9527bec2660bd847c050fda93a0f0c6dee0800bb"
+  revision = "a9e25c09b96b8870693763211309e213c6ef299d"
 
 [[projects]]
   branch = "v2"
@@ -178,6 +175,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "eddc880ebdd14c9fba18e50a3b44b9356f71b66bd5d60d06b7ffe2fa5654d360"
+  inputs-digest = "e85965eb41bb6a2c5e5b11f4bcdec846fa0dce6d4eb9ba80bbd9941bd427e639"
   solver-name = "gps-cdcl"
   solver-version = 1
