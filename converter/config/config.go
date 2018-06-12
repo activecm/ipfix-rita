@@ -43,8 +43,10 @@ type Serializable interface {
 type MongoDB interface {
 	GetConnectionString() string
 	GetAuthMechanism() (mgosec.AuthMechanism, error)
-	GetSocketTimeout() time.Duration
 	GetTLS() TLS
+	GetDatabase() string
+	GetCollection() string
+	GetSocketTimeout() time.Duration
 }
 
 //TLS provides information for contacting MongoDB over TLS
@@ -62,7 +64,5 @@ type RITA interface {
 //IPFIX provides information for accessing IPFIX data
 //and information regarding the individual records
 type IPFIX interface {
-	GetDatabase() string
-	GetCollection() string
 	GetLocalNetworks() ([]net.IPNet, []error)
 }

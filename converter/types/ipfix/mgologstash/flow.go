@@ -11,8 +11,8 @@ import (
 
 //Flow represents an IPFIX flow record stored in MongoDB via Logstash
 type Flow struct {
-	ID      bson.ObjectId `bson:"_id,omitempty"`
-	Host    string        `bson:"host"` //Host is the metering process host
+	ID      bson.ObjectId `bson:"_id,omitempty"` //12 bytes
+	Host    string        `bson:"host"`          //Host is the metering process host (24 bytes)
 	Netflow struct {
 		SourceIPv4 string `bson:"sourceIPv4Address,omitempty"`
 		SourceIPv6 string `bson:"sourceIPv6Address,omitempty"`

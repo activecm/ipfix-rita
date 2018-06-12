@@ -1,14 +1,15 @@
-package mgologstash
+package mgologstash_test
 
 import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/types/ipfix"
+	"github.com/activecm/ipfix-rita/converter/types/ipfix/mgologstash"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseLogstashTime(t *testing.T) {
-	flow := Flow{}
+	flow := mgologstash.Flow{}
 	flow.Netflow.FlowStartMilliseconds = "2018-05-04T22:36:40.766Z"
 	flow.Netflow.FlowEndMilliseconds = "2018-05-04T22:36:40.960Z"
 	flowStart, err := flow.FlowStartMilliseconds()
@@ -20,12 +21,12 @@ func TestParseLogstashTime(t *testing.T) {
 }
 
 func TestV4V6Address(t *testing.T) {
-	flow := Flow{}
+	flow := mgologstash.Flow{}
 	flow.Netflow.SourceIPv4 = "A"
 	flow.Netflow.DestinationIPv4 = "B"
 	require.Equal(t, flow.SourceIPAddress(), "A")
 	require.Equal(t, flow.DestinationIPAddress(), "B")
-	flow = Flow{}
+	flow = mgologstash.Flow{}
 	flow.Netflow.SourceIPv6 = "C"
 	flow.Netflow.DestinationIPv6 = "D"
 	require.Equal(t, flow.SourceIPAddress(), "C")
@@ -33,7 +34,7 @@ func TestV4V6Address(t *testing.T) {
 }
 
 func TestInheritance(t *testing.T) {
-	var flow interface{} = &Flow{}
+	var flow interface{} = &mgologstash.Flow{}
 	_, ok := flow.(ipfix.Flow)
 	require.True(t, ok)
 }

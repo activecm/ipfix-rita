@@ -11,7 +11,7 @@ import (
 func TestBuffer(t *testing.T) {
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
-	c := env.DB.DB("IPFIX").C("in")
+	c := env.DB.NewInputConnection()
 	err := c.Insert(mgologstash.Flow{
 		Host: "A",
 	})
@@ -24,7 +24,7 @@ func TestBuffer(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 2, count)
 
-	buffer := mgologstash.NewBuffer(c)
+	buffer := mgologstash.NewIDBuffer(c)
 	var flow mgologstash.Flow
 	more := buffer.Next(&flow)
 	require.Equal(t, "A", flow.Exporter())

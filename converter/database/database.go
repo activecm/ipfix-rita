@@ -11,9 +11,13 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+const sessionsCollection = "sessions"
+
 //DB extends mgo.Session with application specific functionality
 type DB struct {
-	*mgo.Session
+	ssn      *mgo.Session
+	input    *mgo.Collection
+	sessions *mgo.Collection
 }
 
 //NewDB creates a mongodb session based on the mongo config
@@ -21,17 +25,39 @@ func NewDB(conf config.MongoDB) (DB, error) {
 	db := DB{}
 	var err error
 	if conf.GetTLS().IsEnabled() {
-		db.Session, err = dialTLS(conf)
+		db.ssn, err = dialTLS(conf)
 	} else {
-		db.Session, err = dialInsecure(conf)
+		db.ssn, err = dialInsecure(conf)
 	}
 	if err != nil {
 		return db, err
 	}
-	db.SetSocketTimeout(conf.GetSocketTimeout())
-	db.SetSyncTimeout(conf.GetSocketTimeout())
-	db.SetCursorTimeout(0)
+	db.ssn.SetSocketTimeout(conf.GetSocketTimeout())
+	db.ssn.SetSyncTimeout(conf.GetSocketTimeout())
+	db.ssn.SetCursorTimeout(0)
+
+	db.input = db.ssn.DB(conf.GetDatabase()).C(conf.GetCollection())
+	db.sessions = db.ssn.DB(conf.GetDatabase()).C(sessionsCollection)
 	return db, nil
+}
+
+//NewInputConnection returns a new socket connected to the input
+//collection
+func (db *DB) NewInputConnection() *mgo.Collection {
+	ssn := db.ssn.Copy()
+	return db.input.With(ssn)
+}
+
+//NewSessionsConnection returns a new socket connected to the
+//session aggregate collection
+func (db *DB) NewSessionsConnection() *mgo.Collection {
+	ssn := db.ssn.Copy()
+	return db.sessions.With(ssn)
+}
+
+//Close closing the underlying connection to MongoDB
+func (db *DB) Close() {
+	db.ssn.Close()
 }
 
 func dialTLS(conf config.MongoDB) (*mgo.Session, error) {

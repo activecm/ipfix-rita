@@ -4,21 +4,23 @@ MongoDB:
   # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
   AuthenticationMechanism: null
   # The time in hours before IPFIX-RITA's connection to MongoDB times out. 0 waits indefinitely.
-  SocketTimeout: 2
-  # The time in hours before IPFIX-RITA's connection to MongoDB times out. 0 waits indefinitely.
   TLS:
     Enable: false
     VerifyCertificate: false
     CAFile: null
+
+  # The datbase and collection holding records produced by the collector
+  Database: IPFIX
+  Collection: in
+
+  # The time in hours before IPFIX-RITA's connection to MongoDB times out. 0 waits indefinitely.
+  SocketTimeout: 2
 
 RITA:
   # The resulting RITA databases will be displayed as "DBRoot-YYYY-MM-DD"
   DBRoot: IPFIX
 
 IPFIX:
-  # The datbase and collection holding records produced by the collector
-  Database: logstash
-  Collection: ipfix
   # CIDR ranges of networks to mark local
   LocalNetworks:
     - 192.168.0.0/16

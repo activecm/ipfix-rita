@@ -12,16 +12,16 @@ func TestNewYAMLConfig(t *testing.T) {
 	testData := `MongoDB:
   ConnectionString: localhost:27018
   AuthenticationMechanism: SCRAM-SHA-1
-  SocketTimeout: 2
   TLS:
     Enable: true
     VerifyCertificate: true
     CAFile: /etc/mycert
+  Database: logstash
+  Collection: ipfix
+  SocketTimeout: 2
 RITA:
   DBRoot: Collector1
 IPFIX:
-  Database: logstash
-  Collection: ipfix
   LocalNetworks:
     - 192.168.0.0/16
     - 172.16.0.0/12
@@ -45,11 +45,11 @@ IPFIX:
 
 	require.Equal(t, "/etc/mycert", testConfig.GetMongoDBConfig().GetTLS().GetCAFile())
 
+	require.Equal(t, "logstash", testConfig.GetMongoDBConfig().GetDatabase())
+
+	require.Equal(t, "ipfix", testConfig.GetMongoDBConfig().GetCollection())
+
 	require.Equal(t, "Collector1", testConfig.GetRITAConfig().GetDBRoot())
-
-	require.Equal(t, "logstash", testConfig.GetIPFIXConfig().GetDatabase())
-
-	require.Equal(t, "ipfix", testConfig.GetIPFIXConfig().GetCollection())
 
 	networks, errors := testConfig.GetIPFIXConfig().GetLocalNetworks()
 	require.Len(t, errors, 1)
@@ -71,20 +71,20 @@ func TestSaveYAMLConfig(t *testing.T) {
 		MongoDB: mongoDB{
 			ConnectionString: "localhost:27018",
 			AuthMechanism:    "SCRAM-SHA-1",
-			SocketTimeout:    2,
 			TLS: tls{
 				Enabled:           true,
 				VerifyCertificate: true,
 				CAFile:            "/etc/mycert",
 			},
+			Database:      "logstash",
+			Collection:    "ipfix",
+			SocketTimeout: 2,
 		},
 		RITA: rita{
 			DBRoot: "Collector1",
 		},
 		IPFIX: ipfix{
-			Database:   "logstash",
-			Collection: "ipfix",
-			LocalNets:  []string{"192.168.0.0/16"},
+			LocalNets: []string{"192.168.0.0/16"},
 		},
 	}
 	serialData, err := testData.SaveConfig()

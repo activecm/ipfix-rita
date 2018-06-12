@@ -12,5 +12,5 @@ func TestIntegrationTestWrapper(t *testing.T) {
 	defer cleanup()
 	require.NotNil(t, env.Config)
 	require.NotNil(t, env.Logger)
-	require.NotNil(t, env.DB.Session)
+	require.NotNil(t, env.DB.NewInputConnection())
 }

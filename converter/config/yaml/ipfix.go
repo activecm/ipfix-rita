@@ -5,17 +5,7 @@ import "github.com/pkg/errors"
 
 //ipfix implements config.IPFIX
 type ipfix struct {
-	Database   string   `yaml:"Database"`
-	Collection string   `yaml:"Collection"`
-	LocalNets  []string `yaml:"LocalNetworks"`
-}
-
-func (i *ipfix) GetDatabase() string {
-	return i.Database
-}
-
-func (i *ipfix) GetCollection() string {
-	return i.Collection
+	LocalNets []string `yaml:"LocalNetworks"`
 }
 
 func (i *ipfix) GetLocalNetworks() ([]net.IPNet, []error) {
