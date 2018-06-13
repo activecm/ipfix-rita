@@ -46,6 +46,7 @@ func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 			}
 		}
 		buffer.Close()
+		pollTicker.Stop()
 		close(errors)
 		close(out)
 	}(r.buffer, r.pollWait, out, errors)
