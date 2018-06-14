@@ -1,6 +1,7 @@
 package yaml
 
 import (
+	"bytes"
 	"io"
 	"os"
 
@@ -20,9 +21,13 @@ func ReadConfigFile() ([]byte, error) {
 		err = errors.WithStack(err)
 		return nil, err
 	}
-	var buf []byte
-	io.ReadFull(f, buf)
-	return buf, nil
+	defer f.Close()
+	buf := bytes.NewBuffer(nil)
+	_, err = io.Copy(buf, f)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 //yamlConfig contains the applications settings
