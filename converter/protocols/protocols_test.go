@@ -3,7 +3,7 @@ package protocols_test
 import (
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/types/protocols"
+	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/stretchr/testify/require"
 )
 

@@ -1,6 +1,6 @@
 package ipfix
 
-import "github.com/activecm/ipfix-rita/converter/types/protocols"
+import "github.com/activecm/ipfix-rita/converter/protocols"
 
 //Flow represents a single IPFIX flow
 type Flow interface {

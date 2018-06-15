@@ -3,8 +3,8 @@ package mgologstash
 import (
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/types/ipfix"
-	"github.com/activecm/ipfix-rita/converter/types/protocols"
+	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2/bson"
 )

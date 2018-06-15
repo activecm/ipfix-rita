@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/types/ipfix"
+	"github.com/activecm/ipfix-rita/converter/ipfix"
 )
 
 //Reader implements ipfix.Reader

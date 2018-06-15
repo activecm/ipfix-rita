@@ -55,6 +55,20 @@ func (db *DB) NewSessionsConnection() *mgo.Collection {
 	return db.sessions.With(ssn)
 }
 
+//Ping ensures the database connection is valid
+func (db *DB) Ping() error {
+	err := db.ssn.Ping()
+	if err != nil {
+		return err
+	}
+	//see if theres any permissions problems
+	_, err = db.ssn.DatabaseNames()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //Close closing the underlying connection to MongoDB
 func (db *DB) Close() {
 	db.ssn.Close()

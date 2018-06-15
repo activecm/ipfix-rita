@@ -1,4 +1,4 @@
-package convert
+package commands
 
 import (
 	"context"
@@ -7,14 +7,14 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/commands"
 	"github.com/activecm/ipfix-rita/converter/environment"
-	input "github.com/activecm/ipfix-rita/converter/types/ipfix/mgologstash"
+	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/partitioning"
 	"github.com/urfave/cli"
 )
 
 func init() {
-	commands.GetRegistry().RegisterCommands(cli.Command{
+	GetRegistry().RegisterCommands(cli.Command{
 		Name:  "run",
 		Usage: "Run the IPFIX-RITA converter",
 		Action: func(c *cli.Context) error {
@@ -32,11 +32,19 @@ func convert() error {
 	if err != nil {
 		return err
 	}
-	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection()), 30*time.Second)
+	pollWait := 30 * time.Second
+	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection()), pollWait)
 	ctx, cancel := interruptContext()
 	defer cancel()
-	data, errors := reader.Drain(ctx)
-	_ = data
+	flowData, errors := reader.Drain(ctx)
+
+	var numWorkers int32 = 5
+	workerBuff := 5
+	partitioner := partitioning.NewHashPartitioner(numWorkers, workerBuff)
+
+	flowPartitions, errors2 := partitioner.Partition(ctx, flowData)
+	_ = flowPartitions
+	_ = errors2
 	_ = errors
 	return nil
 }

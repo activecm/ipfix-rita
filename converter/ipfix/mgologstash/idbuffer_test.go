@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/environmenttest"
-	"github.com/activecm/ipfix-rita/converter/types/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/stretchr/testify/require"
 )
 
