@@ -10,6 +10,15 @@ services:
       - mongodb
     depends_on:
       - mongodb
+  ipfix:
+    image: ai-ipfix/rita:${API_VERSION_TAG:-latest}
+    build:
+        context: ../converter
+    restart: unless-stopped
+    links:
+      - mongodb
+    depends_on:
+      - mongodb
   mongodb:
         image: mongo:latest
         container_name: "mongodb"
