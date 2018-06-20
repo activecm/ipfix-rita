@@ -34,13 +34,13 @@ type FlowMock struct {
 func NewFlowMock() *FlowMock {
 	randIP := func() string {
 		b := make([]byte, 0)
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		return string(b)
 	}
 	randShort := func() uint16 {

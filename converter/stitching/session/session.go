@@ -18,17 +18,8 @@ import (
 //alphabetically. Otherwise the same session could be represented by
 //two different session aggregates.
 type Aggregate struct {
-	ID bson.ObjectId `bson:"_id,omitempty"`
-
-	IPAddressA string `bson:"IPAddressA"`
-	PortA      uint16 `bson:"transportPortA"`
-
-	IPAddressB string `bson:"IPAddressB"`
-	PortB      uint16 `bson:"transportPortB"`
-
-	ProtocolIdentifier protocols.Identifier `bson:"protocolIdentifier"`
-
-	Exporter string `bson:"exporter"`
+	AggregateQuery `bson:",inline"`
+	ID             bson.ObjectId `bson:"_id,omitempty"`
 
 	FlowStartMillisecondsAB uint64 `bson:"flowStartMillisecondsAB"`
 	FlowEndMillisecondsAB   uint64 `bson:"flowEndMillisecondsAB"`
@@ -44,20 +35,45 @@ type Aggregate struct {
 	FlowEndReasonBA ipfix.FlowEndReason `bson:"flowEndReasonBA"`
 }
 
+//AggregateQuery represents the Flow Key + Exporter used to uniquely
+//identify each session aggregate
+type AggregateQuery struct {
+	IPAddressA string `bson:"IPAddressA"`
+	PortA      uint16 `bson:"transportPortA"`
+
+	IPAddressB string `bson:"IPAddressB"`
+	PortB      uint16 `bson:"transportPortB"`
+
+	ProtocolIdentifier protocols.Identifier `bson:"protocolIdentifier"`
+
+	Exporter string `bson:"exporter"`
+}
+
+//FlowAggregateAssignment describes whether a Flow's source and destination
+//are assigned to host A and B respectively, or if they are assigned
+//to host B and A respectively
+type FlowAggregateAssignment bool
+
+//ASource signifies the flow's source was mapped to IPAddressA
+const ASource FlowAggregateAssignment = true
+
+//BSource signifies the flow's source was mapped to IPAddressB
+const BSource FlowAggregateAssignment = false
+
 //FromFlow fills a SessionAggregate from a Flow.
 //Note: ID is unaffected by this function.
-func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
+func FromFlow(flow ipfix.Flow, sess *Aggregate) (FlowAggregateAssignment, error) {
 	flowSource := flow.SourceIPAddress()
 	flowDest := flow.DestinationIPAddress()
 
 	flowStart, err := flow.FlowStartMilliseconds()
 	if err != nil {
-		return err
+		return ASource, err
 	}
 
 	flowEnd, err := flow.FlowEndMilliseconds()
 	if err != nil {
-		return err
+		return ASource, err
 	}
 
 	sess.ProtocolIdentifier = flow.ProtocolIdentifier()
@@ -75,20 +91,20 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 		sess.PacketTotalCountAB = flow.PacketTotalCount()
 		sess.FlowEndReasonAB = flow.FlowEndReason()
 		sess.FlowEndReasonBA = ipfix.Nil
-	} else {
-		//flowDest is IPAddressA
-		sess.IPAddressA = flowDest
-		sess.PortA = flow.DestinationPort()
-		sess.IPAddressB = flowSource
-		sess.PortB = flow.SourcePort()
-		sess.FlowStartMillisecondsBA = flowStart
-		sess.FlowEndMillisecondsBA = flowEnd
-		sess.OctetTotalCountBA = flow.OctetTotalCount()
-		sess.PacketTotalCountBA = flow.PacketTotalCount()
-		sess.FlowEndReasonBA = flow.FlowEndReason()
-		sess.FlowEndReasonAB = ipfix.Nil
+		return ASource, nil
 	}
-	return nil
+	//flowDest is IPAddressA
+	sess.IPAddressA = flowDest
+	sess.PortA = flow.DestinationPort()
+	sess.IPAddressB = flowSource
+	sess.PortB = flow.SourcePort()
+	sess.FlowStartMillisecondsBA = flowStart
+	sess.FlowEndMillisecondsBA = flowEnd
+	sess.OctetTotalCountBA = flow.OctetTotalCount()
+	sess.PacketTotalCountBA = flow.PacketTotalCount()
+	sess.FlowEndReasonBA = flow.FlowEndReason()
+	sess.FlowEndReasonAB = ipfix.Nil
+	return BSource, nil
 }
 
 //Merge merges another aggregate into this aggregate
