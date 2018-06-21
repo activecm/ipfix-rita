@@ -34,13 +34,13 @@ type FlowMock struct {
 func NewFlowMock() *FlowMock {
 	randIP := func() string {
 		b := make([]byte, 0)
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		b = append(b, '.')
-		strconv.AppendInt(b, rand.Int63n(256), 10)
+		b = strconv.AppendInt(b, rand.Int63n(256), 10)
 		return string(b)
 	}
 	randShort := func() uint16 {
@@ -63,10 +63,10 @@ func NewFlowMock() *FlowMock {
 		MockSourcePort:            randShort(),
 		MockDestinationIPAddress:  randIP(),
 		MockDestinationPort:       randShort(),
-		MockFlowStartMilliseconds: rand.Uint64(),
-		MockFlowEndMilliseconds:   rand.Uint64(),
-		MockOctetTotalCount:       rand.Uint64(),
-		MockPacketTotalCount:      rand.Uint64(),
+		MockFlowStartMilliseconds: uint64(rand.Uint32()),
+		MockFlowEndMilliseconds:   uint64(rand.Uint32()),
+		MockOctetTotalCount:       uint64(rand.Uint32()),
+		MockPacketTotalCount:      uint64(rand.Uint32()),
 		MockProtocolIdentifier:    protocols.Identifier(randByte()),
 		MockIPClassOfService:      randByte(),
 		MockVlanID:                randShort(),

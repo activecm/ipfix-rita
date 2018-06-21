@@ -54,4 +54,6 @@ const (
 	//LackOfResources shows the Flow was terminated because of lack of resources
 	//available to the Metering Process and/or the Exporting Process.
 	LackOfResources
+	//Nil is used to represent the absence of a FlowEndReason
+	Nil FlowEndReason = 255
 )

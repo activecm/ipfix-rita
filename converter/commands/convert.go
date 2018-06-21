@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/ipfix"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/partitioning"
+	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
 )
 
@@ -43,6 +46,28 @@ func convert() error {
 	partitioner := partitioning.NewHashPartitioner(numWorkers, workerBuff)
 
 	flowPartitions, errors2 := partitioner.Partition(ctx, flowData)
+
+	exporterMap := stitching.NewExporterMap(numWorkers)
+	writer := output.SpewRITAConnWriter{}
+
+	//TODO: Abstract to StitcherPool and handle errors
+	for id := range flowPartitions {
+		go func(ctx context.Context, env environment.Environment,
+			exporterMap stitching.ExporterMap, writer output.SessionWriter,
+			partition <-chan ipfix.Flow, int id) {
+
+			stitcher := stitching.NewStitcher(env, exporterMap, writer, id)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case flow <- partition:
+					_ = stitcher.Stitch(flow)
+				}
+			}
+		}(ctx, env, exporterMap, writer, flowPartitions[id], id)
+	}
+
 	_ = flowPartitions
 	_ = errors2
 	_ = errors
