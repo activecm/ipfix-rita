@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/output"
-	"github.com/activecm/ipfix-rita/converter/partitioning"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
 )
@@ -39,38 +37,44 @@ func convert() error {
 	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection()), pollWait)
 	ctx, cancel := interruptContext()
 	defer cancel()
-	flowData, errors := reader.Drain(ctx)
+	flowData, inputErrors := reader.Drain(ctx)
 
-	var numWorkers int32 = 5
-	workerBuff := 5
-	partitioner := partitioning.NewHashPartitioner(numWorkers, workerBuff)
+	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
+	var numStitchers int32 = 5
+	stitcherBufferSize := 5
 
-	flowPartitions, errors2 := partitioner.Partition(ctx, flowData)
+	var writer output.SpewRITAConnWriter
 
-	exporterMap := stitching.NewExporterMap(numWorkers)
-	writer := output.SpewRITAConnWriter{}
+	stitchingManager := stitching.NewManager(sameSessionThreshold, stitcherBufferSize, numStitchers)
 
-	//TODO: Abstract to StitcherPool and handle errors
-	for id := range flowPartitions {
-		go func(ctx context.Context, env environment.Environment,
-			exporterMap stitching.ExporterMap, writer output.SessionWriter,
-			partition <-chan ipfix.Flow, int id) {
+	stitchingErrors := stitchingManager.RunAsync(flowData, env.DB, writer)
 
-			stitcher := stitching.NewStitcher(env, exporterMap, writer, id)
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case flow <- partition:
-					_ = stitcher.Stitch(flow)
+	//Print errors to stderr while running
+	channelsDone := 0
+
+errorLoop:
+	for {
+		select {
+		case err, ok := <-inputErrors:
+			if !ok {
+				channelsDone++
+				if channelsDone == 2 {
+					break errorLoop
 				}
+				break
 			}
-		}(ctx, env, exporterMap, writer, flowPartitions[id], id)
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		case err, ok := <-stitchingErrors:
+			if !ok {
+				channelsDone++
+				if channelsDone == 2 {
+					break errorLoop
+				}
+				break
+			}
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		}
 	}
-
-	_ = flowPartitions
-	_ = errors2
-	_ = errors
 	return nil
 }
 
