@@ -39,9 +39,9 @@ dynamic linker find the libraries needed for YAF after installing.
 
 Example script for installing YAF 2.10.0 on Ubuntu 16.04:
 ```
-apt update
-apt install build-essential wget
-apt install libpcap-dev libglib2.0-dev
+sudo apt update
+sudo apt install build-essential wget
+sudo apt install libpcap-dev libglib2.0-dev
 wget https://tools.netsa.cert.org/releases/libfixbuf-2.0.0.tar.gz
 tar xf libfixbuf-2.0.0.tar.gz
 cd libfixbuf-2.0.0
