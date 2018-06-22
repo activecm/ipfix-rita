@@ -1,7 +1,6 @@
 package stitching
 
 import (
-	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/protocols"
@@ -9,34 +8,50 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
-//Stitcher implements the main worker logic for the convert command
-type Stitcher struct {
-	environment.Environment
-	exporters             ExporterMap
-	writer                output.SessionWriter
-	id                    int
-	inactiveTimeoutMillis uint64
-	sessionsColl          *mgo.Collection
+type stitcher struct {
+	id                   int
+	sameSessionThreshold uint64
 }
 
-//NewStitcher creates a new Stitching worker with the default
-//session inactive timeout (1 minute)
-func NewStitcher(env environment.Environment, exporters ExporterMap,
-	writer output.SessionWriter, stitcherID int) Stitcher {
-
-	return Stitcher{
-		Environment: env,
-		exporters:   exporters,
-		writer:      writer,
-		id:          stitcherID,
-		inactiveTimeoutMillis: 60 * 60 * 1000,
-		sessionsColl:          env.DB.NewSessionsConnection(),
+func newStitcher(id int, sameSessionThreshold uint64) stitcher {
+	return stitcher{
+		id:                   id,
+		sameSessionThreshold: sameSessionThreshold,
 	}
 }
 
-//Stitch turns a Flow into a session... TODO
-func (s Stitcher) Stitch(flow ipfix.Flow) error {
+func (s stitcher) run(input <-chan ipfix.Flow, errs chan<- error,
+	doneSignal chan<- struct{}, exporters exporterMap,
+	sessionsColl *mgo.Collection, writer output.SessionWriter) {
 
+	for inFlow := range input {
+		//The maxExpireTime was added to the flusher for this flow
+		//in stitching.Manager. It was added in the Manager
+		//rather than at the beginning of the range loop since
+		//there is no guarantee that this go routine will run immediately.
+		//A stitcher may have a flow with a lower maxExpireTime in its input buffer
+		//than the maxExpireTimes held by its peers.
+		//
+		//We can ignore the ok check since we know the manager created the exporter
+		exporter, _ := exporters.get(inFlow.Exporter())
+
+		err := s.stitchFlow(inFlow, sessionsColl, writer)
+		if err != nil {
+			errs <- err
+		}
+
+		//StitcherDone lets the flusher know that this stitcher is done
+		//processing this flow. The flusher can then update this stitcher's
+		//maxExpireTime with the maxExpireTime derived from the next flow
+		//that this stitcher will process from the same exporter.
+		exporter.flusher.stitcherDone(s.id)
+	}
+
+	//let the manager know this stitcher is finished processing flows.
+	close(doneSignal)
+}
+
+func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, writer output.SessionWriter) error {
 	//If this is a junk connection throw it out and continue
 	proto := flow.ProtocolIdentifier()
 	if proto == protocols.TCP && flow.PacketTotalCount() < 2 {
@@ -54,42 +69,32 @@ func (s Stitcher) Stitch(flow ipfix.Flow) error {
 	//If the protocol is something out, write it out without stitching
 	if proto != protocols.TCP &&
 		proto != protocols.UDP {
-		return s.writer.Write(&sessAgg)
+		return writer.Write(&sessAgg)
 	}
 
-	//add the FlowEnd time of the last flow that could be merged with this flow
-	//to the per exporter clock map
-	flowStart, err := flow.FlowStartMilliseconds()
-	if err != nil {
-		return err
-	}
-	lastPossFlowEnd := flowStart - s.inactiveTimeoutMillis
-
-	exporter := s.exporters.Get(flow.Exporter())
-	exporter.lastPossFlowEnds.Set(s.id, lastPossFlowEnd)
-	//ensure the clock map is cleaned up when we exit
-	defer exporter.lastPossFlowEnds.Clear(s.id)
-
-	//try to insert the new session aggregate
-	//return the conflicting aggregate if an aggregate
+	//try to insert the new session aggregate.
+	//overwrite and return the conflicting aggregate if an aggregate
 	//already exists with the same AggregateQuery (Flow Key + Exporter)
 	var oldSessAgg session.Aggregate
-	_, err = s.sessionsColl.Find(&sessAgg.AggregateQuery).Apply(mgo.Change{
+	info, err := sessionsColl.Find(&sessAgg.AggregateQuery).Apply(mgo.Change{
 		Upsert: true,
 		Update: &sessAgg,
 	}, &oldSessAgg)
 
-	//If err is a duplicate key error, oldSessAgg holds the existing aggregate
 	if err != nil {
-		mgoErr, ok := err.(*mgo.LastError)
-		if !ok {
-			return err
-		}
+		return err
+	}
 
-		//see https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.err
-		if mgoErr.Code != 11000 {
+	//If we overwrote an old agg, we need to decide whether we
+	//should write out the old aggregate or if we should merge
+	//our current aggregate in with it
+	if info.Updated == 1 {
+
+		flowStart, err := flow.FlowStartMilliseconds()
+		if err != nil {
 			return err
 		}
+		maxExpireTime := flowStart - s.sameSessionThreshold
 
 		//grab the latest FlowEnd from the old session aggregate
 		oldSessAggFlowEnd := oldSessAgg.FlowEndMillisecondsAB
@@ -97,49 +102,36 @@ func (s Stitcher) Stitch(flow ipfix.Flow) error {
 			oldSessAggFlowEnd = oldSessAgg.FlowEndMillisecondsBA
 		}
 
-		//there is a chance that the old session aggregate
+		//there is a good chance that the old session aggregate
 		//just hasn't been flushed out yet.
 
-		//If the old session happened within the inactive timeout and
+		//If the old session happened within the same session threshold and
 		//didn't end via a clean TCP teardown, then update the aggregate
-		if oldSessAggFlowEnd >= lastPossFlowEnd &&
+		if oldSessAggFlowEnd >= maxExpireTime &&
 			!(oldSessAgg.ProtocolIdentifier == protocols.TCP &&
 				(srcMapping == session.ASource && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow) ||
 				(srcMapping == session.BSource && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow)) {
 
 			//merge the two aggregates
-			err := sessAgg.Merge(&oldSessAgg)
+			err = sessAgg.Merge(&oldSessAgg)
 			if err != nil {
 				return err
 			}
 
-			err = s.sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
+			err = sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
 			if err != nil {
 				return err
 			}
 		} else {
-			//The old connection is outside the inactive timeout or
+			//The old connection is outside the same session threshold or
 			//ended with a clean TCP teardown
 
-			//set the stored session aggregate to our new aggregate
-			err := s.sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
-			if err != nil {
-				return err
-			}
-
 			//write out the old session aggregate
-			err = s.writer.Write(&oldSessAgg)
+			err = writer.Write(&oldSessAgg)
 			if err != nil {
 				return err
 			}
 		}
 	}
-
-	//check if this stitcher is working on the oldest flow
-	minStitcherID := exporter.lastPossFlowEnds.FindMinID()
-	if minStitcherID == s.id {
-		//TODO clear out old session aggregates
-	}
-
 	return nil
 }

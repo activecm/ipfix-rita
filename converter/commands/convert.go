@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/output"
-	"github.com/activecm/ipfix-rita/converter/partitioning"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
 )
@@ -39,52 +38,55 @@ func convert() error {
 	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection()), pollWait)
 	ctx, cancel := interruptContext()
 	defer cancel()
-	flowData, errors := reader.Drain(ctx)
+	flowData, inputErrors := reader.Drain(ctx)
 
-	var numWorkers int32 = 5
-	workerBuff := 5
-	partitioner := partitioning.NewHashPartitioner(numWorkers, workerBuff)
+	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
+	var numStitchers int32 = 5
+	stitcherBufferSize := 5
 
-	flowPartitions, errors2 := partitioner.Partition(ctx, flowData)
+	var writer output.SpewRITAConnWriter
 
-	exporterMap := stitching.NewExporterMap(numWorkers)
-	writer := output.SpewRITAConnWriter{}
+	stitchingManager := stitching.NewManager(sameSessionThreshold, stitcherBufferSize, numStitchers)
 
-	//TODO: Abstract to StitcherPool and handle errors
-	for id := range flowPartitions {
-		go func(ctx context.Context, env environment.Environment,
-			exporterMap stitching.ExporterMap, writer output.SessionWriter,
-			partition <-chan ipfix.Flow, int id) {
+	stitchingErrors := stitchingManager.RunAsync(flowData, env.DB, writer)
 
-			stitcher := stitching.NewStitcher(env, exporterMap, writer, id)
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case flow <- partition:
-					_ = stitcher.Stitch(flow)
-				}
+	for {
+		select {
+		case err, ok := <-inputErrors:
+			if !ok {
+				fmt.Println("Input Errors Closed")
+				inputErrors = nil
+				break
 			}
-		}(ctx, env, exporterMap, writer, flowPartitions[id], id)
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		case err, ok := <-stitchingErrors:
+			if !ok {
+				fmt.Println("Stitching Errors Closed")
+				stitchingErrors = nil
+				break
+			}
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		}
+		if inputErrors == nil && stitchingErrors == nil {
+			break
+		}
 	}
-
-	_ = flowPartitions
-	_ = errors2
-	_ = errors
+	fmt.Println("Main thread exiting")
 	return nil
 }
 
 func interruptContext() (context.Context, func()) {
 	// trap Ctrl+C and call cancel on the context
 	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+	sigChan := make(chan os.Signal, 2)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-sigChan:
+			fmt.Printf("\nRecieved CTRL-C\n")
 			cancel()
 		case <-ctx.Done():
 		}
 	}()
-	return ctx, func() { signal.Stop(sigChan); cancel() }
+	return ctx, func() { /*signal.Stop(sigChan);*/ cancel() }
 }

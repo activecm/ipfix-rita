@@ -28,6 +28,8 @@ func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 
 	go func(buffer Buffer, pollWait time.Duration, out chan<- ipfix.Flow, errors chan<- error) {
 		pollTicker := time.NewTicker(pollWait)
+
+		r.drainInner(ctx, buffer, out, errors)
 	Loop:
 		for {
 			select {
@@ -35,14 +37,7 @@ func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 				errors <- ctx.Err()
 				break Loop
 			case <-pollTicker.C:
-				flow := &Flow{}
-				for buffer.Next(flow) {
-					out <- flow
-					flow = &Flow{}
-				}
-				if buffer.Err() != nil {
-					errors <- buffer.Err()
-				}
+				r.drainInner(ctx, buffer, out, errors)
 			}
 		}
 		buffer.Close()
@@ -52,4 +47,20 @@ func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 	}(r.buffer, r.pollWait, out, errors)
 
 	return out, errors
+}
+
+func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- ipfix.Flow, errors chan<- error) {
+	flow := &Flow{}
+	for buffer.Next(flow) {
+		out <- flow
+		//ensure we stop even if there is more data
+		if ctx.Err() != nil {
+			errors <- ctx.Err()
+			break
+		}
+		flow = &Flow{}
+	}
+	if buffer.Err() != nil {
+		errors <- buffer.Err()
+	}
 }

@@ -23,6 +23,21 @@
   version = "v0.1.0"
 
 [[projects]]
+  name = "github.com/activecm/rita"
+  packages = [
+    "config",
+    "parser/parsetypes"
+  ]
+  revision = "1b0497268f56c8bb4abe4c7398580d139ede67eb"
+  version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/blang/semver"
+  packages = ["."]
+  revision = "2ee87856327ba09384cabd113bc6b5d174e9ec0f"
+  version = "v3.5.1"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -175,6 +190,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "03d29c15e63cc515724dc7f069c4e0f20c7674fefed9a99f62858c9095b4ffe0"
+  inputs-digest = "7bc1f9e359b70e3b9438540ffb5a438c3c54292711c580387fbb2a2d230e0549"
   solver-name = "gps-cdcl"
   solver-version = 1
