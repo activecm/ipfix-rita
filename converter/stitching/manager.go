@@ -3,6 +3,7 @@ package stitching
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 
 	"github.com/activecm/ipfix-rita/converter/database"
@@ -52,17 +53,17 @@ func (m Manager) runInner(input <-chan ipfix.Flow, errs chan<- error,
 	//stitchers will work on the same session.AggregateQuery. Additionally,
 	//since the data comes in in order from input, each stitcher sees
 	//ordered data.
-	partitions := make([]chan ipfix.Flow, m.numStitchers)         // input channel
-	stitchersDoneSignals := make([]chan struct{}, m.numStitchers) // synchro
+	partitions := make([]chan ipfix.Flow, 0, m.numStitchers)        // input channel
+	stitcherDoneSignals := make([]chan struct{}, 0, m.numStitchers) // synchro
 	stitchers := make([]stitcher, 0, m.numStitchers)
-	for i := range partitions {
-		partitions[i] = make(chan ipfix.Flow, m.stitcherBufferSize)
-		stitchersDoneSignals[i] = make(chan struct{})
-		stitchers[i] = newStitcher(i, m.sameSessionThreshold)
+	for i := 0; i < int(m.numStitchers); i++ {
+		partitions = append(partitions, make(chan ipfix.Flow, m.stitcherBufferSize))
+		stitcherDoneSignals = append(stitcherDoneSignals, make(chan struct{}))
+		stitchers = append(stitchers, newStitcher(i, m.sameSessionThreshold))
 
 		//start the stitchers
 		go stitchers[i].run(
-			partitions[i], errs, stitchersDoneSignals[i],
+			partitions[i], errs, stitcherDoneSignals[i],
 			exporters,
 			db.NewSessionsConnection(),
 			writer,
@@ -142,8 +143,8 @@ func (m Manager) runInner(input <-chan ipfix.Flow, errs chan<- error,
 		close(partitions[i])
 	}
 	//Wait for the stitchers to exit
-	for i := range stitchersDoneSignals {
-		<-stitchersDoneSignals[i]
+	for i := range stitcherDoneSignals {
+		<-stitcherDoneSignals[i]
 	}
 	//Stop the flushers since no more data is being created
 	//This should trigger a full flush of the database
@@ -154,6 +155,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, errs chan<- error,
 	}
 	//all senders on the errors channel have finished execution
 	close(errs)
+	fmt.Println("Stitching manager finished")
 }
 
 func (m Manager) selectStitcher(f ipfix.Flow) int {

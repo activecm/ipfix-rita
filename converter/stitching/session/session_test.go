@@ -258,6 +258,8 @@ func TestMergeOppositeDirectionSequential(t *testing.T) {
 	require.Equal(t, testFlowB.FlowEndReason(), sessB.FlowEndReasonBA)
 }
 
+//TODO: TestToRITASingleFlow
+
 func TestToRitaConnABSrcDest(t *testing.T) {
 	testFlowA := ipfix.NewFlowMock()
 	testFlowB := ipfix.NewFlowMock()

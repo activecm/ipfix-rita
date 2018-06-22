@@ -39,11 +39,12 @@ func (f flusher) run(ctx context.Context, doneSignal chan<- struct{},
 			}
 			close(doneSignal)
 			return
-		default:
-			//TODO: pull minMaxExpireTime from structure
-			minMaxExpireTime := uint64(0)
-			//f.flushSession(minMaxExpireTime, sessionsColl, writer)
-			_ = minMaxExpireTime
+			/*
+				default:
+					TODO: pull minMaxExpireTime from structure
+					minMaxExpireTime := uint64(0)
+					f.flushSession(minMaxExpireTime, sessionsColl, writer)
+			*/
 		}
 	}
 }

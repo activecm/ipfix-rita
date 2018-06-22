@@ -38,6 +38,34 @@ func NewDB(conf config.MongoDB) (DB, error) {
 
 	db.input = db.ssn.DB(conf.GetDatabase()).C(conf.GetCollection())
 	db.sessions = db.ssn.DB(conf.GetDatabase()).C(sessionsCollection)
+
+	err = db.sessions.EnsureIndex(mgo.Index{
+		Key: []string{
+			"IPAddressA", "transportPortA",
+			"IPAddressB", "transportPortB",
+			"protocolIdentifier", "exporter",
+		},
+		Unique: true,
+		Name:   "AggregateQuery",
+	})
+
+	if err != nil {
+		return db, err
+	}
+
+	err = db.sessions.EnsureIndex(mgo.Index{
+		Key: []string{
+			"exporter",
+			"flowEndMillisecondsAB",
+			"flowEndMillisecondsBA",
+		},
+		Name: "ExpirationQuery",
+	})
+
+	if err != nil {
+		return db, err
+	}
+
 	return db, nil
 }
 

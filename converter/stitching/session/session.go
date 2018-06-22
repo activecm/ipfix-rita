@@ -211,7 +211,8 @@ func (s *Aggregate) ToRITAConn(conn *parsetypes.Conn, localFunc func(string) boo
 	}
 
 	//if a started sending data before b, then a is the source
-	if s.FlowStartMillisecondsAB < s.FlowStartMillisecondsBA {
+	if s.FlowStartMillisecondsAB != 0 && (s.FlowStartMillisecondsBA == 0 ||
+		s.FlowStartMillisecondsAB < s.FlowStartMillisecondsBA) {
 		//host a is source
 		sessionStart := s.FlowStartMillisecondsAB
 		conn.TimeStamp = int64(sessionStart / 1000)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
@@ -49,46 +50,43 @@ func convert() error {
 
 	stitchingErrors := stitchingManager.RunAsync(flowData, env.DB, writer)
 
-	//Print errors to stderr while running
-	channelsDone := 0
-
-errorLoop:
 	for {
 		select {
 		case err, ok := <-inputErrors:
 			if !ok {
-				channelsDone++
-				if channelsDone == 2 {
-					break errorLoop
-				}
+				fmt.Println("Input Errors Closed")
+				inputErrors = nil
 				break
 			}
 			fmt.Fprintf(os.Stderr, "%+v\n", err)
 		case err, ok := <-stitchingErrors:
 			if !ok {
-				channelsDone++
-				if channelsDone == 2 {
-					break errorLoop
-				}
+				fmt.Println("Stitching Errors Closed")
+				stitchingErrors = nil
 				break
 			}
 			fmt.Fprintf(os.Stderr, "%+v\n", err)
 		}
+		if inputErrors == nil && stitchingErrors == nil {
+			break
+		}
 	}
+	fmt.Println("Main thread exiting")
 	return nil
 }
 
 func interruptContext() (context.Context, func()) {
 	// trap Ctrl+C and call cancel on the context
 	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+	sigChan := make(chan os.Signal, 2)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-sigChan:
+			fmt.Printf("\nRecieved CTRL-C\n")
 			cancel()
 		case <-ctx.Done():
 		}
 	}()
-	return ctx, func() { signal.Stop(sigChan); cancel() }
+	return ctx, func() { /*signal.Stop(sigChan);*/ cancel() }
 }
