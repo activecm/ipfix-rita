@@ -43,7 +43,7 @@ test: vendor docker-check
 # END TESTING
 
 # BEGIN VENDORING
-vendor: Gopkg.lock $(SRC)
+vendor: Gopkg.toml $(SRC)
 	dep ensure
 
 #Note: Vendor isn't split because root cannot run dep ensure --no-vendor
