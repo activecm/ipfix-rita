@@ -1,13 +1,15 @@
 package stitching_test
 
 import (
+	"runtime"
 	"testing"
-	"context"
 	"time"
+
 	"github.com/activecm/ipfix-rita/converter/environmenttest"
+	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching"
-	"github.com/activecm/ipfix-rita/converter/output"
-	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,101 +40,187 @@ Logstash Flow Sample
 
 Protocol with identifier
 {
-	1 : ICMP
-	6 : TCP
-	17 :UDP
-	58 : IPv6_ICMP
-	132 : SCTP
-	142 : ROHC
+	1:   ICMP
+	6:   TCP
+	17:  UDP
+	58:  IPv6_ICMP
+	132: SCTP
+	142: ROHC
 }
 
 */
 
-func TestSingleIcmpFlow(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
-
+//newTestingStitchingManager is a helper for creating
+//a stitching manager so tests don't get bogged down with setup code
+func newTestingStitchingManager() stitching.Manager {
 	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
-	var numStitchers int32 = 5
-	stitcherBufferSize := 5
-	var writer output.SpewRITAConnWriter
+	numStitchers := int32(5)                       //number of workers
+	stitcherBufferSize := 5                        //number of flows that are buffered for each worker
+	outputBufferSize := 5                          //number of session aggregates that are buffered for output
 
-	buff := input.NewIDBuffer(env.DB.NewInputConnection())
-	reader := input.NewReader(buff, 2*time.Second)
-
-	c := env.DB.NewInputConnection()
-
-	flow := input.Flow{}
-	flow.Host = "A"
-	flow.Netflow.FlowStartMilliseconds = "2018-05-04T22:36:40.766Z"
-	flow.Netflow.FlowEndMilliseconds = "2018-05-04T22:36:40.960Z"
-	flow.Netflow.ProtocolIdentifier = 1
-
-	err := c.Insert(
-		flow,
+	return stitching.NewManager(
+		sameSessionThreshold,
+		numStitchers,
+		stitcherBufferSize,
+		outputBufferSize,
 	)
-
-	require.Nil(t, err)
-
-	ctx,cancel := context.WithCancel(context.Background())
-	flows,errors := reader.Drain(ctx)
-
-	stitchingManager := stitching.NewManager(sameSessionThreshold, stitcherBufferSize, numStitchers)
-	stitchingErrors := stitchingManager.RunAsync(flows, env.DB, writer)
-	require.NotNil(t, stitchingErrors)
-	require.NotNil(t,errors)
-	require.NotNil(t, flows)
-	cancel()
 }
 
+func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.Aggregate) {
+	sourceIsA := flow.SourceIPAddress() < flow.DestinationIPAddress()
+	if sourceIsA {
+		require.Equal(t, flow.Exporter(), sess.Exporter)
+		require.Equal(t, flow.ProtocolIdentifier(), sess.ProtocolIdentifier)
 
-func TestTwoIcmpFlow(t *testing.T) {
+		//ensure Source -> Dest information matches A -> B
+		require.Equal(t, flow.SourceIPAddress(), sess.IPAddressA)
+		require.Equal(t, flow.DestinationIPAddress(), sess.IPAddressB)
+		require.Equal(t, flow.SourcePort(), sess.PortA)
+		require.Equal(t, flow.DestinationPort(), sess.PortB)
+		require.Equal(t, flow.OctetTotalCount(), sess.OctetTotalCountAB)
+		require.Equal(t, flow.PacketTotalCount(), sess.PacketTotalCountAB)
+		require.Equal(t, flow.FlowEndReason(), sess.FlowEndReasonAB)
+
+		startTime, err := flow.FlowStartMilliseconds()
+		require.Nil(t, err)
+		endTime, err := flow.FlowEndMilliseconds()
+		require.Nil(t, err)
+		require.Equal(t, startTime, sess.FlowStartMillisecondsAB)
+		require.Equal(t, endTime, sess.FlowEndMillisecondsAB)
+
+		//ensure B -> A information is Zero/ Nil
+		require.Zero(t, sess.OctetTotalCountBA)
+		require.Zero(t, sess.PacketTotalCountBA)
+		require.Zero(t, sess.FlowStartMillisecondsBA)
+		require.Zero(t, sess.FlowEndMillisecondsBA)
+		require.Equal(t, ipfix.Nil, sess.FlowEndReasonBA)
+	} else {
+		require.Equal(t, flow.Exporter(), sess.Exporter)
+		require.Equal(t, flow.ProtocolIdentifier(), sess.ProtocolIdentifier)
+
+		//ensure Source -> Dest information matches B -> A
+		require.Equal(t, flow.SourceIPAddress(), sess.IPAddressB)
+		require.Equal(t, flow.DestinationIPAddress(), sess.IPAddressA)
+		require.Equal(t, flow.SourcePort(), sess.PortB)
+		require.Equal(t, flow.DestinationPort(), sess.PortA)
+		require.Equal(t, flow.OctetTotalCount(), sess.OctetTotalCountBA)
+		require.Equal(t, flow.PacketTotalCount(), sess.PacketTotalCountBA)
+		require.Equal(t, flow.FlowEndReason(), sess.FlowEndReasonBA)
+
+		startTime, err := flow.FlowStartMilliseconds()
+		require.Nil(t, err)
+		endTime, err := flow.FlowEndMilliseconds()
+		require.Nil(t, err)
+		require.Equal(t, startTime, sess.FlowStartMillisecondsBA)
+		require.Equal(t, endTime, sess.FlowEndMillisecondsBA)
+
+		//ensure A -> B information is Zero/ Nil
+		require.Zero(t, sess.OctetTotalCountAB)
+		require.Zero(t, sess.PacketTotalCountAB)
+		require.Zero(t, sess.FlowStartMillisecondsAB)
+		require.Zero(t, sess.FlowEndMillisecondsAB)
+		require.Equal(t, ipfix.Nil, sess.FlowEndReasonAB)
+	}
+}
+
+func TestGoRoutineLeaks(t *testing.T) {
+	numGoRoutines := runtime.NumGoroutine()
+
+	//Set up for an integration test
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	stitchingManager := newTestingStitchingManager()
+	_, errs := stitchingManager.RunSync(
+		[]ipfix.Flow{
+			ipfix.NewFlowMock(),
+			ipfix.NewFlowMock(),
+		},
+		env.DB,
+	)
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+	cleanup()
+
+	//annoyingly, mgo may stay open for 15 seconds
+	//see: gopkg.in/mgo.v2/server.go:301
+	time.Sleep(15 * time.Second)
+	require.Equal(t, numGoRoutines, runtime.NumGoroutine())
+}
+
+func TestSingleIcmpFlow(t *testing.T) {
+	//Set up for an integration test
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
 
-	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
-	var numStitchers int32 = 5
-	stitcherBufferSize := 5
-	var writer output.SpewRITAConnWriter
+	//Create the input flow from random data
+	flow1 := ipfix.NewFlowMock()
+	//Ensure the source comes before the destination alphabetically
+	//to ensure the source is mapped to host "A", and the destination is
+	//mapped to host "B"
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	//Set the protocol to ICMP
+	flow1.MockProtocolIdentifier = protocols.ICMP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
 
-	buff := input.NewIDBuffer(env.DB.NewInputConnection())
-	reader := input.NewReader(buff, 2*time.Second)
+	//run the stitching manager
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
 
-	c := env.DB.NewInputConnection()
+	//ensure only one aggregate is created
+	require.Len(t, sessions, 1)
 
-	flow := input.Flow{}
-	flow.Host = "A"
-	flow.Netflow.FlowStartMilliseconds = "2018-05-04T22:36:40.766Z"
-	flow.Netflow.FlowEndMilliseconds = "2018-05-04T22:36:40.960Z"
-	flow.Netflow.ProtocolIdentifier = 1
-	flow.Netflow.SourceIPv4 = "192.168.1.1"
-	flow.Netflow.SourceIPv6 = "192.168.1.2"
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
 
-	flow1 := input.Flow{}
-	flow1.Host = "B"
-	flow1.Netflow.FlowStartMilliseconds = "2018-05-04T22:36:40.766Z"
-	flow1.Netflow.FlowEndMilliseconds = "2018-05-04T22:36:40.960Z"
-	flow1.Netflow.ProtocolIdentifier = 1
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+}
 
-	err := c.Insert(
-		flow,
-	)
+func TestTwoIcmpFlowSameSource(t *testing.T) {
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
 
-	require.Nil(t, err)
+	flow1 := ipfix.NewFlowMock()
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockSourcePort = 0
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	flow1.MockDestinationPort = 771
+	flow1.MockProtocolIdentifier = protocols.ICMP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
 
-	err1 := c.Insert(
-		flow1,
-	)
+	flow2 := ipfix.NewFlowMock()
+	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
+	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
+	flow2.MockSourcePort = flow1.MockSourcePort
+	flow2.MockDestinationPort = flow1.MockDestinationPort
+	flow2.MockExporter = flow1.MockExporter
+	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
+	flow2.MockFlowEndReason = flow1.MockFlowEndReason
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 100
+	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	require.Nil(t, err1)
-	ctx,cancel := context.WithCancel(context.Background())
-	flows,errors := reader.Drain(ctx)
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
-	stitchingManager := stitching.NewManager(sameSessionThreshold, stitcherBufferSize, numStitchers)
-	stitchingErrors := stitchingManager.RunAsync(flows, env.DB, writer)
+	//ensure two aggregates are created since its ICMP
+	require.Len(t, sessions, 2)
 
-	require.NotNil(t, stitchingErrors)
-	require.NotNil(t,errors)
-	require.NotNil(t, flows)
-	cancel()
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
 }
