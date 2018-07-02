@@ -14,7 +14,7 @@
     ".",
     "docker"
   ]
-  revision = "006c3e27fc1cfc47dd73b9baf1afa59ec8816ca9"
+  revision = "8708113dbf4d3a403c7995dc0a17d05e693ccc4c"
 
 [[projects]]
   name = "github.com/activecm/mgosec"

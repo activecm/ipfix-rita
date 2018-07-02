@@ -6,7 +6,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -116,19 +115,16 @@ func (f flusher) findMinMaxExpireTime() uint64 {
 	return minMaxExpireTime
 }
 
-func (f flusher) run(ctx context.Context, doneSignal chan<- struct{},
-	sessionsColl *mgo.Collection, writer output.SessionWriter) {
+func (f flusher) run(ctx context.Context, flusherDone *sync.WaitGroup,
+	sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) {
 
 	var lastMinMaxExpireTime uint64 = math.MaxUint64
+
+Loop:
 	for {
 		select {
 		case <-ctx.Done():
-			err := f.flushSession(uint64(math.MaxInt64), sessionsColl, writer)
-			for err == nil {
-				err = f.flushSession(uint64(math.MaxInt64), sessionsColl, writer)
-			}
-			close(doneSignal)
-			return
+			break Loop
 		case <-f.minChangedChan:
 			minMaxExpireTime := f.findMinMaxExpireTime()
 			//cache the minMaxExpireTime so we don't make extra db calls
@@ -136,24 +132,32 @@ func (f flusher) run(ctx context.Context, doneSignal chan<- struct{},
 				continue
 			}
 
-			err := f.flushSession(minMaxExpireTime, sessionsColl, writer)
-			for err == nil && ctx.Err() == nil {
-				err = f.flushSession(minMaxExpireTime, sessionsColl, writer)
-			}
-			//Exit as soon as possible if the cancel signal comes through
-			if ctx.Err() != nil {
-				continue
-			}
 			//TODO: ensure err is not found error
+			err := f.flushSession(minMaxExpireTime, sessionsColl, sessionsOut)
+			for err == nil && ctx.Err() == nil {
+				err = f.flushSession(minMaxExpireTime, sessionsColl, sessionsOut)
+			}
 
 			lastMinMaxExpireTime = minMaxExpireTime
+
+			//Exit as soon as possible if the cancel signal comes through
+			if ctx.Err() != nil {
+				break Loop
+			}
 
 			//wait for stitcherDone() This prevents thrashing the mutexes
 		}
 	}
+
+	err := f.flushSession(uint64(math.MaxInt64), sessionsColl, sessionsOut)
+	for err == nil {
+		err = f.flushSession(uint64(math.MaxInt64), sessionsColl, sessionsOut)
+	}
+	sessionsColl.Database.Session.Close()
+	flusherDone.Done()
 }
 
-func (f flusher) flushSession(maxExpireTime uint64, sessionsColl *mgo.Collection, writer output.SessionWriter) error {
+func (f flusher) flushSession(maxExpireTime uint64, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
 	var oldSession session.Aggregate
 	_, err := sessionsColl.Find(bson.M{
 		"flowEndMillisecondsAB": bson.M{
@@ -171,5 +175,6 @@ func (f flusher) flushSession(maxExpireTime uint64, sessionsColl *mgo.Collection
 		return err
 	}
 
-	return writer.Write(&oldSession)
+	sessionsOut <- &oldSession
+	return nil
 }

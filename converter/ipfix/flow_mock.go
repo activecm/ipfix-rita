@@ -57,14 +57,23 @@ func NewFlowMock() *FlowMock {
 		}
 		return uint8(a)
 	}
+
+	startTime := uint64(rand.Uint32())
+	endTime := uint64(rand.Uint32())
+	if endTime < startTime {
+		tmp := startTime
+		startTime = endTime
+		endTime = tmp
+	}
+
 	return &FlowMock{
 		MockExporter:              randIP(),
 		MockSourceIPAddress:       randIP(),
 		MockSourcePort:            randShort(),
 		MockDestinationIPAddress:  randIP(),
 		MockDestinationPort:       randShort(),
-		MockFlowStartMilliseconds: uint64(rand.Uint32()),
-		MockFlowEndMilliseconds:   uint64(rand.Uint32()),
+		MockFlowStartMilliseconds: startTime,
+		MockFlowEndMilliseconds:   endTime,
 		MockOctetTotalCount:       uint64(rand.Uint32()),
 		MockPacketTotalCount:      uint64(rand.Uint32()),
 		MockProtocolIdentifier:    protocols.Identifier(randByte()),
