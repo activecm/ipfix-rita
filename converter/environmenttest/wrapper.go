@@ -13,5 +13,10 @@ import (
 func SetupIntegrationTest(t *testing.T) (environment.Environment, func()) {
 	loader, mongoDB := NewMongoDBContainer(t)
 	env := NewIntegrationTestingEnvironment(t, mongoDB.GetMongoDBURI())
-	return env, func() { loader.StopService(context.Background(), mongoDB) }
+	cleanup := func() {
+		env.DB.Close()
+		loader.StopService(context.Background(), mongoDB)
+		loader.Close()
+	}
+	return env, cleanup
 }

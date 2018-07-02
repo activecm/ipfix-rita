@@ -41,17 +41,25 @@ func convert() error {
 	flowData, inputErrors := reader.Drain(ctx)
 
 	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
-	var numStitchers int32 = 5
+	numStitchers := int32(5)
 	stitcherBufferSize := 5
+	outputBufferSize := 5
 
 	var writer output.SpewRITAConnWriter
 
-	stitchingManager := stitching.NewManager(sameSessionThreshold, stitcherBufferSize, numStitchers)
+	stitchingManager := stitching.NewManager(sameSessionThreshold, numStitchers, stitcherBufferSize, outputBufferSize)
 
-	stitchingErrors := stitchingManager.RunAsync(flowData, env.DB, writer)
+	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(flowData, env.DB)
 
 	for {
 		select {
+		case sessionAgg, ok := <-stitchingOutput:
+			if !ok {
+				fmt.Println("Stitching Output Closed")
+				stitchingOutput = nil
+				break
+			}
+			writer.Write(sessionAgg)
 		case err, ok := <-inputErrors:
 			if !ok {
 				fmt.Println("Input Errors Closed")
@@ -67,7 +75,7 @@ func convert() error {
 			}
 			fmt.Fprintf(os.Stderr, "%+v\n", err)
 		}
-		if inputErrors == nil && stitchingErrors == nil {
+		if inputErrors == nil && stitchingOutput == nil && stitchingErrors == nil {
 			break
 		}
 	}

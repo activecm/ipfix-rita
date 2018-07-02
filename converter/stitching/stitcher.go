@@ -1,8 +1,9 @@
 package stitching
 
 import (
+	"sync"
+
 	"github.com/activecm/ipfix-rita/converter/ipfix"
-	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	mgo "gopkg.in/mgo.v2"
@@ -20,9 +21,10 @@ func newStitcher(id int, sameSessionThreshold uint64) stitcher {
 	}
 }
 
-func (s stitcher) run(input <-chan ipfix.Flow, errs chan<- error,
-	doneSignal chan<- struct{}, exporters exporterMap,
-	sessionsColl *mgo.Collection, writer output.SessionWriter) {
+func (s stitcher) run(input <-chan ipfix.Flow,
+	exporters exporterMap, sessionsColl *mgo.Collection,
+	sessionsOut chan<- *session.Aggregate, errs chan<- error,
+	stitcherDone *sync.WaitGroup) {
 
 	for inFlow := range input {
 		//The maxExpireTime was added to the flusher for this flow
@@ -35,7 +37,7 @@ func (s stitcher) run(input <-chan ipfix.Flow, errs chan<- error,
 		//We can ignore the ok check since we know the manager created the exporter
 		exporter, _ := exporters.get(inFlow.Exporter())
 
-		err := s.stitchFlow(inFlow, sessionsColl, writer)
+		err := s.stitchFlow(inFlow, sessionsColl, sessionsOut)
 		if err != nil {
 			errs <- err
 		}
@@ -47,11 +49,12 @@ func (s stitcher) run(input <-chan ipfix.Flow, errs chan<- error,
 		exporter.flusher.stitcherDone(s.id)
 	}
 
+	sessionsColl.Database.Session.Close()
 	//let the manager know this stitcher is finished processing flows.
-	close(doneSignal)
+	stitcherDone.Done()
 }
 
-func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, writer output.SessionWriter) error {
+func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
 	//If this is a junk connection throw it out and continue
 	proto := flow.ProtocolIdentifier()
 	if proto == protocols.TCP && flow.PacketTotalCount() < 2 {
@@ -69,7 +72,8 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, writ
 	//If the protocol is something out, write it out without stitching
 	if proto != protocols.TCP &&
 		proto != protocols.UDP {
-		return writer.Write(&sessAgg)
+		sessionsOut <- &sessAgg
+		return nil
 	}
 
 	//try to insert the new session aggregate.
@@ -127,10 +131,7 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, writ
 			//ended with a clean TCP teardown
 
 			//write out the old session aggregate
-			err = writer.Write(&oldSessAgg)
-			if err != nil {
-				return err
-			}
+			sessionsOut <- &sessAgg
 		}
 	}
 	return nil
