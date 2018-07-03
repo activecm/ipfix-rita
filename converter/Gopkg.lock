@@ -17,6 +17,12 @@
   revision = "8708113dbf4d3a403c7995dc0a17d05e693ccc4c"
 
 [[projects]]
+  name = "github.com/activecm/mgorus"
+  packages = ["."]
+  revision = "544a63f222470b2feb3b1142f7edb9a843f5120d"
+  version = "v0.1.0"
+
+[[projects]]
   name = "github.com/activecm/mgosec"
   packages = ["."]
   revision = "af42afa3ec74143661a863bdae62d36a93c6eca7"
@@ -26,7 +32,10 @@
   name = "github.com/activecm/rita"
   packages = [
     "config",
-    "parser/parsetypes"
+    "database",
+    "parser/fileparsetypes",
+    "parser/parsetypes",
+    "util"
   ]
   revision = "1b0497268f56c8bb4abe4c7398580d139ede67eb"
   version = "v1.0.1"
@@ -123,6 +132,12 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/rifflock/lfshook"
+  packages = ["."]
+  revision = "bf539943797a1f34c1f502d07de419b5238ae6c6"
+  version = "v2.3"
+
+[[projects]]
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   revision = "c155da19408a8799da419ed3eeb0cb5db0ad5dbc"
@@ -190,6 +205,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7bc1f9e359b70e3b9438540ffb5a438c3c54292711c580387fbb2a2d230e0549"
+  inputs-digest = "5f1745bef0516a7b4bc2fb05e861b2763afee2c94b0b03777f793c76ba59d865"
   solver-name = "gps-cdcl"
   solver-version = 1

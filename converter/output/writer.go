@@ -8,18 +8,25 @@ import (
 
 //SessionWriter writes session aggregates to their final destination
 type SessionWriter interface {
-	//Write writes the session aggregate to its final destination
-	Write(sess *session.Aggregate) error
+	//Write writes the session aggregate from the
+	//input channel to their final destination
+	Write(<-chan *session.Aggregate) <-chan error
 }
 
 //SpewRITAConnWriter writes session aggregates out to the terminal
 //as RITA conn objects
 type SpewRITAConnWriter struct{}
 
-//Write spews the session to the terminal as a RITA Conn object
-func (s SpewRITAConnWriter) Write(sess *session.Aggregate) error {
-	var conn parsetypes.Conn
-	sess.ToRITAConn(&conn, func(ipAddress string) bool { return false })
-	spew.Println(conn)
-	return nil
+//Write spews the sessions to the terminal as a RITA Conn object
+func (s SpewRITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
+	errs := make(chan error)
+	go func() {
+		for sess := range sessions {
+			var conn parsetypes.Conn
+			sess.ToRITAConn(&conn, func(ipAddress string) bool { return false })
+			spew.Println(conn)
+		}
+		close(errs)
+	}()
+	return errs
 }

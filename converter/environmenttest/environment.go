@@ -16,7 +16,7 @@ func NewIntegrationTestingEnvironment(t *testing.T, mongoDBURI string) environme
 		Logger: newTestingLogger(t),
 	}
 	var err error
-	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig())
+	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig(), envOut.GetRITAConfig())
 	if err != nil {
 		envOut.Error(err, nil)
 		t.FailNow()

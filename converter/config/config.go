@@ -59,6 +59,7 @@ type TLS interface {
 //RITA provides information for coordinating with RITA
 type RITA interface {
 	GetDBRoot() string
+	GetMetaDB() string
 }
 
 //IPFIX provides information for accessing IPFIX data

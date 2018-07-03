@@ -65,3 +65,4 @@ func (t testingIPFIXConfig) GetLocalNetworks() ([]net.IPNet, []error) {
 type testingRITAConfig struct{}
 
 func (r testingRITAConfig) GetDBRoot() string { return "RITA" }
+func (r testingRITAConfig) GetMetaDB() string { return "MetaDatabase" }

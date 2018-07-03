@@ -7,21 +7,26 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/mgosec"
+	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
 	mgo "gopkg.in/mgo.v2"
 )
 
 const sessionsCollection = "sessions"
+const metaDBDatabasesCollection = "databases"
+const ritaConnInputCollection = "conn"
 
 //DB extends mgo.Session with application specific functionality
 type DB struct {
-	ssn      *mgo.Session
-	input    *mgo.Collection
-	sessions *mgo.Collection
+	ssn             *mgo.Session
+	input           *mgo.Collection
+	sessions        *mgo.Collection
+	metaDBDatabases *mgo.Collection
+	ritaConf        config.RITA
 }
 
 //NewDB creates a mongodb session based on the mongo config
-func NewDB(conf config.MongoDB) (DB, error) {
+func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	db := DB{}
 	var err error
 	if conf.GetTLS().IsEnabled() {
@@ -38,6 +43,8 @@ func NewDB(conf config.MongoDB) (DB, error) {
 
 	db.input = db.ssn.DB(conf.GetDatabase()).C(conf.GetCollection())
 	db.sessions = db.ssn.DB(conf.GetDatabase()).C(sessionsCollection)
+	db.metaDBDatabases = db.ssn.DB(ritaConf.GetMetaDB()).C(metaDBDatabasesCollection)
+	db.ritaConf = ritaConf
 
 	err = db.sessions.EnsureIndex(mgo.Index{
 		Key: []string{
@@ -66,6 +73,19 @@ func NewDB(conf config.MongoDB) (DB, error) {
 		return db, err
 	}
 
+	err = db.metaDBDatabases.EnsureIndex(mgo.Index{
+		Key: []string{
+			"name",
+		},
+		Unique:   true,
+		DropDups: true,
+		Name:     "nameindex",
+	})
+
+	if err != nil {
+		return db, err
+	}
+
 	return db, nil
 }
 
@@ -81,6 +101,36 @@ func (db *DB) NewInputConnection() *mgo.Collection {
 func (db *DB) NewSessionsConnection() *mgo.Collection {
 	ssn := db.ssn.Copy()
 	return db.sessions.With(ssn)
+}
+
+//NewMetaDBDatabasesConnection returns a new socket connected to the
+//MetaDB databases collection
+func (db *DB) NewMetaDBDatabasesConnection() *mgo.Collection {
+	ssn := db.ssn.Copy()
+	return db.metaDBDatabases.With(ssn)
+}
+
+//NewOutputConnection returns a new socket connected to the
+//RITA output collection with a given DB suffix
+func (db *DB) NewOutputConnection(suffix string) (*mgo.Collection, error) {
+	ssn := db.ssn.Copy()
+	dbName := db.ritaConf.GetDBRoot()
+	if suffix != "" {
+		dbName = db.ritaConf.GetDBRoot() + "-" + suffix
+	}
+	connColl := ssn.DB(dbName).C(ritaConnInputCollection)
+	tmpConn := parsetypes.Conn{}
+	for _, index := range tmpConn.Indices() {
+		err := connColl.EnsureIndex(mgo.Index{
+			Key: []string{index},
+		})
+
+		if err != nil {
+			ssn.Close()
+			return nil, err
+		}
+	}
+	return connColl, nil
 }
 
 //Ping ensures the database connection is valid

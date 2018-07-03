@@ -34,7 +34,7 @@ func init() {
 			}
 			fmt.Printf("Loaded Configuration:\n%s\n", confStr)
 
-			db, err := database.NewDB(conf.GetMongoDBConfig())
+			db, err := database.NewDB(conf.GetMongoDBConfig(), conf.GetRITAConfig())
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}

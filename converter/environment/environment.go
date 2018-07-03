@@ -32,7 +32,7 @@ func NewDefaultEnvironment() (Environment, error) {
 	if err != nil {
 		return envOut, err
 	}
-	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig())
+	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig(), envOut.GetRITAConfig())
 	if err != nil {
 		return envOut, err
 	}
