@@ -50,10 +50,12 @@ Protocol with identifier
 
 */
 
+var milliseconds = uint64(1000 * 60 * 60)
+
 //newTestingStitchingManager is a helper for creating
 //a stitching manager so tests don't get bogged down with setup code
 func newTestingStitchingManager() stitching.Manager {
-	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
+	sameSessionThreshold :=  milliseconds //milliseconds
 	numStitchers := int32(5)                       //number of workers
 	stitcherBufferSize := 5                        //number of flows that are buffered for each worker
 	outputBufferSize := 5                          //number of session aggregates that are buffered for output
@@ -223,4 +225,182 @@ func TestTwoIcmpFlowSameSource(t *testing.T) {
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
+}
+
+func TestTwoIcmpFlowFlippedSource(t *testing.T){
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
+
+	flow1 := ipfix.NewFlowMock()
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockSourcePort = 0
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	flow1.MockDestinationPort = 771
+	flow1.MockProtocolIdentifier = protocols.ICMP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
+
+	flow2 := ipfix.NewFlowMock()
+	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
+	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
+	flow2.MockSourcePort = flow1.MockDestinationPort
+	flow2.MockDestinationPort = flow1.MockSourcePort
+	flow2.MockExporter = flow1.MockExporter
+	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
+	flow2.MockFlowEndReason = flow1.MockFlowEndReason
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 100
+	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
+
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+
+	//ensure two aggregates are created since its ICMP
+	require.Len(t, sessions, 2)
+
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
+
+	timeOut1 := sessions[0].FlowEndMillisecondsBA + milliseconds
+	timeOut2 := sessions[1].FlowStartMillisecondsAB
+
+	if timeOut2 >= timeOut1 {
+		t.Fatalf("The difference between the flowEnd of the first connection and the flowStart of the next must be less than the sameSessionTimeout")
+	}
+}
+
+func TestSingleUDPFlow(t *testing.T) {
+	//Set up for an integration test
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
+
+	//Create the input flow from random data
+	flow1 := ipfix.NewFlowMock()
+	//Ensure the source comes before the destination alphabetically
+	//to ensure the source is mapped to host "A", and the destination is
+	//mapped to host "B"
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	//Set the protocol to UDP
+	flow1.MockProtocolIdentifier = protocols.UDP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
+
+	//run the stitching manager
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
+
+	//ensure only one aggregate is created
+	require.Len(t, sessions, 1)
+
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+}
+
+func TestTwoUDPFlowSameSource(t *testing.T) {
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
+
+	flow1 := ipfix.NewFlowMock()
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockSourcePort = 0
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	flow1.MockDestinationPort = 771
+	flow1.MockProtocolIdentifier = protocols.UDP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
+
+	flow2 := ipfix.NewFlowMock()
+	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
+	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
+	flow2.MockSourcePort = flow1.MockSourcePort
+	flow2.MockDestinationPort = flow1.MockDestinationPort
+	flow2.MockExporter = flow1.MockExporter
+	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
+	flow2.MockFlowEndReason = flow1.MockFlowEndReason
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 100
+	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
+
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+
+	//ensure two aggregates are created since its UDP
+	require.Len(t, sessions, 2)
+
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
+
+	timeOut1 := sessions[0].FlowEndMillisecondsAB + milliseconds
+	timeOut2 := sessions[1].FlowStartMillisecondsAB
+
+	if timeOut2 >= timeOut1 {
+		t.Fatalf("The difference between the flowEnd of the first connection and the flowStart of the next must be less than the sameSessionTimeout")
+	}
+}
+
+func TestTwoUPDFlowFlippedSource(t *testing.T){
+	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	defer cleanup()
+
+	flow1 := ipfix.NewFlowMock()
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockSourcePort = 0
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	flow1.MockDestinationPort = 771
+	flow1.MockProtocolIdentifier = protocols.UDP
+	flow1.MockFlowEndReason = ipfix.IdleTimeout
+
+	flow2 := ipfix.NewFlowMock()
+	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
+	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
+	flow2.MockSourcePort = flow1.MockDestinationPort
+	flow2.MockDestinationPort = flow1.MockSourcePort
+	flow2.MockExporter = flow1.MockExporter
+	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
+	flow2.MockFlowEndReason = flow1.MockFlowEndReason
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 100
+	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
+
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+
+	//ensure two aggregates are created since its UDP
+	require.Len(t, sessions, 2)
+
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+	require.Len(t, errs, 0)
+
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
+
+	timeOut1 := sessions[0].FlowEndMillisecondsBA + milliseconds
+	timeOut2 := sessions[1].FlowStartMillisecondsAB
+
+	if timeOut2 >= timeOut1 {
+		t.Fatalf("The difference between the flowEnd of the first connection and the flowStart of the next must be less than the sameSessionTimeout")
+	}
 }
