@@ -19,6 +19,9 @@ MongoDB:
 RITA:
   # The resulting RITA databases will be displayed as "DBRoot-YYYY-MM-DD"
   DBRoot: IPFIX
+  
+  # This database holds information about the procesed files and databases.
+  MetaDB: MetaDatabase
 
 IPFIX:
   # CIDR ranges of networks to mark local

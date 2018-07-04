@@ -21,6 +21,7 @@ func TestNewYAMLConfig(t *testing.T) {
   SocketTimeout: 2
 RITA:
   DBRoot: Collector1
+  MetaDB: MetaDatabase
 IPFIX:
   LocalNetworks:
     - 192.168.0.0/16
@@ -50,6 +51,8 @@ IPFIX:
 	require.Equal(t, "ipfix", testConfig.GetMongoDBConfig().GetCollection())
 
 	require.Equal(t, "Collector1", testConfig.GetRITAConfig().GetDBRoot())
+
+	require.Equal(t, "MetaDatabase", testConfig.GetRITAConfig().GetMetaDB())
 
 	networks, errors := testConfig.GetIPFIXConfig().GetLocalNetworks()
 	require.Len(t, errors, 1)
@@ -82,6 +85,7 @@ func TestSaveYAMLConfig(t *testing.T) {
 		},
 		RITA: rita{
 			DBRoot: "Collector1",
+			MetaDB: "MetaDatabase",
 		},
 		IPFIX: ipfix{
 			LocalNets: []string{"192.168.0.0/16"},

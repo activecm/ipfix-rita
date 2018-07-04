@@ -20,6 +20,7 @@ func NewIDBuffer(input *mgo.Collection) Buffer {
 //Next returns false if there is no more data. Next may set an error when
 //it returns false. This error can be read with Err()
 func (b *idBuffer) Next(out *Flow) bool {
+	//TODO: Sanitize input (ensure data read in matches schema)
 	_, err := b.input.Find(nil).Sort("_id").Apply(
 		mgo.Change{
 			Remove: true,

@@ -45,21 +45,18 @@ func convert() error {
 	stitcherBufferSize := 5
 	outputBufferSize := 5
 
-	var writer output.SpewRITAConnWriter
-
 	stitchingManager := stitching.NewManager(sameSessionThreshold, numStitchers, stitcherBufferSize, outputBufferSize)
 
 	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(flowData, env.DB)
 
+	//var writer output.SpewRITAConnWriter
+	writer := output.RITAConnWriter{
+		Environment: env,
+	}
+	writingErrors := writer.Write(stitchingOutput)
+
 	for {
 		select {
-		case sessionAgg, ok := <-stitchingOutput:
-			if !ok {
-				fmt.Println("Stitching Output Closed")
-				stitchingOutput = nil
-				break
-			}
-			writer.Write(sessionAgg)
 		case err, ok := <-inputErrors:
 			if !ok {
 				fmt.Println("Input Errors Closed")
@@ -74,8 +71,15 @@ func convert() error {
 				break
 			}
 			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		case err, ok := <-writingErrors:
+			if !ok {
+				fmt.Println("Writing Errors Closed")
+				writingErrors = nil
+				break
+			}
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
 		}
-		if inputErrors == nil && stitchingOutput == nil && stitchingErrors == nil {
+		if inputErrors == nil && stitchingErrors == nil && writingErrors == nil {
 			break
 		}
 	}

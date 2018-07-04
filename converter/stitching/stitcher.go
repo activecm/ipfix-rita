@@ -113,8 +113,8 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 		//didn't end via a clean TCP teardown, then update the aggregate
 		if oldSessAggFlowEnd >= maxExpireTime &&
 			!(oldSessAgg.ProtocolIdentifier == protocols.TCP &&
-				(srcMapping == session.ASource && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow) ||
-				(srcMapping == session.BSource && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow)) {
+				(srcMapping == session.ASource && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
+					srcMapping == session.BSource && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow)) {
 
 			//merge the two aggregates
 			err = sessAgg.Merge(&oldSessAgg)

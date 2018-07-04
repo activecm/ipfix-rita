@@ -152,7 +152,9 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		//per exporter.
 
 		flowStartTime, err := inFlow.FlowStartMilliseconds()
-		if err != nil { //parsing errors (shouldn't)* happen
+		if err != nil {
+			//parsing errors happen when summary flows come in
+			//(They detail the overall flowset)
 			errs <- err
 			continue
 		}
