@@ -230,22 +230,36 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 //number of stitchers
 func (m Manager) selectStitcher(f ipfix.Flow) int {
 	hasher := fnv.New32()
-	hasher.Write([]byte(f.Exporter()))
-	hasher.Write([]byte(f.SourceIPAddress()))
-	hasher.Write([]byte(f.DestinationIPAddress()))
-
 	var buffer [2]byte
-	bufferSlice := buffer[:]
 
-	binary.LittleEndian.PutUint16(bufferSlice, f.SourcePort())
-	hasher.Write(bufferSlice)
+	hasher.Write([]byte(f.Exporter()))
 
-	binary.LittleEndian.PutUint16(bufferSlice, f.DestinationPort())
-	hasher.Write(bufferSlice)
-
-	bufferSlice = buffer[:1]
+	bufferSlice := buffer[:1]
 	bufferSlice[0] = uint8(f.ProtocolIdentifier())
 	hasher.Write(bufferSlice)
+
+	bufferSlice = buffer[:]
+	if f.SourceIPAddress() < f.DestinationIPAddress() {
+		hasher.Write([]byte(f.SourceIPAddress()))
+
+		binary.LittleEndian.PutUint16(bufferSlice, f.SourcePort())
+		hasher.Write(bufferSlice)
+
+		hasher.Write([]byte(f.DestinationIPAddress()))
+
+		binary.LittleEndian.PutUint16(bufferSlice, f.DestinationPort())
+		hasher.Write(bufferSlice)
+	} else {
+		hasher.Write([]byte(f.DestinationIPAddress()))
+
+		binary.LittleEndian.PutUint16(bufferSlice, f.DestinationPort())
+		hasher.Write(bufferSlice)
+
+		hasher.Write([]byte(f.SourceIPAddress()))
+
+		binary.LittleEndian.PutUint16(bufferSlice, f.SourcePort())
+		hasher.Write(bufferSlice)
+	}
 
 	partition := int32(hasher.Sum32()) % m.numStitchers
 	if partition < 0 {
