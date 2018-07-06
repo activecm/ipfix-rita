@@ -1,4 +1,4 @@
-package stitching_test
+package stitching
 
 import (
 	"runtime"
@@ -8,7 +8,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/environmenttest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/stretchr/testify/require"
 )
@@ -50,17 +49,90 @@ Protocol with identifier
 
 */
 
+func TestSelectStitcherFairness(t *testing.T) {
+	manager := newTestingStitchingManager()
+
+	//generate a bunch of data
+	//act like were distributing the data to the workers
+	//ensure the data is split roughly evenly
+	binCount := make(map[int]int)
+	for i := 0; i < 1000; i++ {
+		binCount[manager.selectStitcher(ipfix.NewFlowMock())]++
+	}
+	expected := 1000 / 5
+	delta := 25
+	for binNumber := range binCount {
+		diff := binCount[binNumber] - expected
+		if diff < 0 {
+			diff *= -1
+		}
+		require.True(t, diff < delta)
+	}
+}
+
+func TestSelectStitcherReproducible(t *testing.T) {
+	manager := newTestingStitchingManager()
+
+	flow1 := ipfix.NewFlowMock()
+	flow2 := ipfix.NewFlowMock()
+
+	//ensure the selectStitcher gives the same results
+	//if the flow key is the same
+	assignment1 := manager.selectStitcher(flow1)
+	assignment2 := manager.selectStitcher(flow2)
+	for i := 0; i < 100; i++ {
+		newFlow := ipfix.NewFlowMock()
+
+		newFlow.MockSourceIPAddress = flow1.SourceIPAddress()
+		newFlow.MockDestinationIPAddress = flow1.DestinationIPAddress()
+		newFlow.MockSourcePort = flow1.SourcePort()
+		newFlow.MockDestinationPort = flow1.DestinationPort()
+		newFlow.MockProtocolIdentifier = flow1.ProtocolIdentifier()
+		newFlow.MockExporter = flow1.Exporter()
+		require.Equal(t, assignment1, manager.selectStitcher(flow1))
+
+		newFlow.MockSourceIPAddress = flow2.SourceIPAddress()
+		newFlow.MockDestinationIPAddress = flow2.DestinationIPAddress()
+		newFlow.MockSourcePort = flow2.SourcePort()
+		newFlow.MockDestinationPort = flow2.DestinationPort()
+		newFlow.MockProtocolIdentifier = flow2.ProtocolIdentifier()
+		newFlow.MockExporter = flow2.Exporter()
+		require.Equal(t, assignment2, manager.selectStitcher(flow2))
+	}
+}
+
+func TestSelectStitcherFlippedFlowKeys(t *testing.T) {
+	manager := newTestingStitchingManager()
+
+	//repeat the test a few times since the data is random
+	for i := 0; i < 100; i++ {
+		flow1 := ipfix.NewFlowMock()
+		assignment1 := manager.selectStitcher(flow1)
+
+		//create a flow with a matching, flipped flow key
+		flow2 := ipfix.NewFlowMock()
+		flow2.MockSourceIPAddress = flow1.DestinationIPAddress()
+		flow2.MockDestinationIPAddress = flow1.SourceIPAddress()
+		flow2.MockSourcePort = flow1.DestinationPort()
+		flow2.MockDestinationPort = flow1.SourcePort()
+		flow2.MockProtocolIdentifier = flow1.ProtocolIdentifier()
+		flow2.MockExporter = flow1.Exporter()
+
+		require.Equal(t, assignment1, manager.selectStitcher(flow2))
+	}
+}
+
 var milliseconds = uint64(1000 * 60 * 60)
 
 //newTestingStitchingManager is a helper for creating
 //a stitching manager so tests don't get bogged down with setup code
-func newTestingStitchingManager() stitching.Manager {
-	sameSessionThreshold :=  milliseconds //milliseconds
-	numStitchers := int32(5)                       //number of workers
-	stitcherBufferSize := 5                        //number of flows that are buffered for each worker
-	outputBufferSize := 5                          //number of session aggregates that are buffered for output
+func newTestingStitchingManager() Manager {
+	sameSessionThreshold := milliseconds //milliseconds
+	numStitchers := int32(5)             //number of workers
+	stitcherBufferSize := 5              //number of flows that are buffered for each worker
+	outputBufferSize := 5                //number of session aggregates that are buffered for output
 
-	return stitching.NewManager(
+	return NewManager(
 		sameSessionThreshold,
 		numStitchers,
 		stitcherBufferSize,
@@ -285,7 +357,7 @@ func TestTwoIcmpFlowSameSource(t *testing.T) {
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
 }
 
-func TestTwoIcmpFlowFlippedSource(t *testing.T){
+func TestTwoIcmpFlowFlippedSource(t *testing.T) {
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
 
@@ -415,7 +487,7 @@ func TestTwoUDPFlowSameSource(t *testing.T) {
 	}
 }
 
-func TestTwoUPDFlowFlippedSource(t *testing.T){
+func TestTwoUPDFlowFlippedSource(t *testing.T) {
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
 
@@ -463,7 +535,7 @@ func TestTwoUPDFlowFlippedSource(t *testing.T){
 	}
 }
 
-func TestTwoUPDFlowOneAggregateZero(t *testing.T){
+func TestTwoUPDFlowOneAggregateZero(t *testing.T) {
 	//Todo : Needs to understand the condition to identify if its one aggreate only with two udp flow.
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
