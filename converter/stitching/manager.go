@@ -19,7 +19,7 @@ type Manager struct {
 	//when there is no clear way to decide. For example, if a UDP connection
 	//starts after a previous connection ended with the same Flow Key, within the
 	//sameSessionThreshold, the two connections will be treated as a single session.
-	sameSessionThreshold uint64
+	sameSessionThreshold int64
 	//numStitchers determines how many workers should process flows at at time
 	numStitchers int32
 	//stitcherBufferSize determines how many input flows should be buffered for
@@ -31,7 +31,7 @@ type Manager struct {
 }
 
 //NewManager creates a Manager with the given settings
-func NewManager(sameSessionThreshold uint64, numStitchers int32,
+func NewManager(sameSessionThreshold int64, numStitchers int32,
 	stitcherBufferSize, outputBufferSize int) Manager {
 
 	return Manager{
@@ -139,6 +139,14 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		)
 	}
 
+	/*
+		Debug Code
+		var lastFlow *mgologstash.Flow
+		var flowCount int
+		var startOutOfOrderFlows []*mgologstash.Flow
+		var endOutOfOrderFlows []*mgologstash.Flow
+	*/
+
 	//loop over the input until its closed
 	//If the input is coming from ipfix.mgologstash, the input channel will
 	//be closed when the program recieves CTRL-C
@@ -172,6 +180,25 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 		maxExpireTime := flowStartTime - m.sameSessionThreshold
 
+		/*
+			Debug Code
+			flowCount++
+			if lastFlow != nil {
+				flowEndTime, _ := inFlow.FlowEndMilliseconds()
+				lastFlowEndTime, _ := lastFlow.FlowEndMilliseconds()
+				if flowEndTime < lastFlowEndTime {
+					endOutOfOrderFlows = append(endOutOfOrderFlows, inFlow.(*mgologstash.Flow))
+				}
+				lastFlowStartTime, _ := lastFlow.FlowStartMilliseconds()
+				if flowStartTime < lastFlowStartTime {
+					startOutOfOrderFlows = append(startOutOfOrderFlows, inFlow.(*mgologstash.Flow))
+				}
+			}
+			//lastMaxExpireTime = maxExpireTime
+			lastFlow = inFlow.(*mgologstash.Flow)
+			//fmt.Println(flowStartTime)
+		*/
+
 		//cache the exporter address since we use it a number of times coming up
 		exporterAddress := inFlow.Exporter()
 
@@ -199,7 +226,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 			)
 		}
 
-		exporter.flusher.appendMaxExpireTime(stitcherID, maxExpireTime)
+		exporter.flusher.addMaxExpireTime(stitcherID, maxExpireTime)
 
 		//Send the flow to the assigned stitcher
 		//This may block if the stitcher's buffer is full.
@@ -218,6 +245,19 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	cancelFlushers()
 	//Wait for flushers to finish
 	flushersDone.Wait()
+
+	/*
+		Debug Code
+		fmt.Printf("FlowEnd Out of Order Count: %d\n", len(endOutOfOrderFlows))
+		for _, flow := range endOutOfOrderFlows {
+			spew.Println(flow)
+		}
+		fmt.Printf("FlowStart Out of Order Count: %d\n", len(startOutOfOrderFlows))
+		for _, flow := range startOutOfOrderFlows {
+			spew.Println(flow)
+		}
+		fmt.Printf("Flow Count: %d\n", flowCount)
+	*/
 
 	//all stichers and flushers are done, no more sessions can be produced
 	close(sessions)

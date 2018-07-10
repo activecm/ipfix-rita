@@ -1,7 +1,6 @@
 package stitching
 
 import (
-	"container/list"
 	"context"
 	"math"
 	"sync"
@@ -11,71 +10,80 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type expireTimeList struct {
-	mutex       *sync.Mutex
-	expireTimes *list.List
-}
-
 type flusher struct {
-	exporterAddress       string
-	maxExpireTimeMap      map[int]expireTimeList
-	maxExpireTimeMapMutex *sync.RWMutex
-	minChangedChan        chan bool
+	exporterAddress  string
+	maxExpireTimeMap map[int]*stickySortedClockList
+	mutex            *sync.RWMutex
+	minChangedChan   chan bool
 }
 
 func newFlusher(exporterAddress string) flusher {
 	return flusher{
-		exporterAddress:       exporterAddress,
-		maxExpireTimeMap:      make(map[int]expireTimeList),
-		maxExpireTimeMapMutex: new(sync.RWMutex),
-		minChangedChan:        make(chan bool, 1),
+		exporterAddress:  exporterAddress,
+		maxExpireTimeMap: make(map[int]*stickySortedClockList),
+		mutex:            new(sync.RWMutex),
+		minChangedChan:   make(chan bool, 1),
 	}
 }
 
-func (f flusher) appendMaxExpireTime(stitcherID int, maxExpireTime uint64) {
+func (f flusher) addMaxExpireTime(stitcherID int, maxExpireTime int64) {
 	//this function should only be called from a single thread
-	f.maxExpireTimeMapMutex.RLock()
-	clockList, ok := f.maxExpireTimeMap[stitcherID]
-	f.maxExpireTimeMapMutex.RUnlock()
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 
-	if !ok {
-		clockList = expireTimeList{
-			mutex:       new(sync.Mutex),
-			expireTimes: list.New(),
+	/*
+		Debug code
+		var sortedById [5]int
+
+		for sId := range f.maxExpireTimeMap {
+			sortedById[sId] = f.maxExpireTimeMap[sId].len()
 		}
-		clockList.expireTimes.PushBack(maxExpireTime)
+		for sId := range f.maxExpireTimeMap {
+			fmt.Printf("%d, ", sortedById[sId])
+		}
+		f.mutex.Unlock()
+		fmt.Printf("%d\n", f.findMinMaxExpireTime())
 
-		f.maxExpireTimeMapMutex.Lock()
+		f.mutex.Lock()
+		defer f.mutex.Unlock()
+	*/
+	clockList, ok := f.maxExpireTimeMap[stitcherID]
+
+	//first element
+	if !ok {
+		clockList = newStickySortedClockList(10)
 		f.maxExpireTimeMap[stitcherID] = clockList
-		f.maxExpireTimeMapMutex.Unlock()
-		return
 	}
 
-	//NEED MUTEX?
-	//Pushing onto an existing list will never effect findMinMaxExpireTime
-	//since the clock lists are always required to have one element if
-	//they exist.
+	//Do a sorted insert, possibly evicting a stickied record
+	clockList.addTime(maxExpireTime)
 
-	//May interact with stitcherDone? Mutex to be safe...
-	clockList.mutex.Lock()
-	clockList.expireTimes.PushBack(maxExpireTime)
-	clockList.mutex.Unlock()
+	//Tell the flusher thread to look for a new minimum max expire time
+	//since this maxExpireTime may be the new minimum
+	//
+	//We use a buffered channel so if a the min changes
+	//while the flusher is working, the flusher still knows
+	//the min may have changed
+	select {
+	//the flusher is blocked
+	case f.minChangedChan <- true:
+	//the flusher is still flushing old records
+	default:
+	}
 }
 
-func (f flusher) stitcherDone(stitcherID int) {
-	f.maxExpireTimeMapMutex.RLock()
+func (f flusher) removeMaxExpireTime(stitcherID int, maxExpireTime int64) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	//get the stitcher specific list
 	clockList := f.maxExpireTimeMap[stitcherID]
-	f.maxExpireTimeMapMutex.RUnlock()
 
-	//TODO: determine whether the list mutex is necessary
-	clockList.mutex.Lock()
-	defer clockList.mutex.Unlock()
-
-	if clockList.expireTimes.Len() == 1 {
-		return
-	}
-
-	clockList.expireTimes.Remove(clockList.expireTimes.Front())
+	//remove the maxExpireTime from the stitcher specific list
+	//this may not truely remove the time from the list if
+	//there are too few items in the list. Instead, it will be scheduled
+	//for eviction
+	clockList.removeTime(maxExpireTime)
 
 	//Tell the flusher thread to look for a new minimum max expire time
 	//since this stitcher may have held the last minimum max expire time
@@ -91,26 +99,23 @@ func (f flusher) stitcherDone(stitcherID int) {
 	}
 }
 
-func (f flusher) findMinMaxExpireTime() uint64 {
-	f.maxExpireTimeMapMutex.RLock()
-	defer f.maxExpireTimeMapMutex.RUnlock()
+func (f flusher) findMinMaxExpireTime() int64 {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 
 	firstIter := true
-	var minMaxExpireTime uint64
+	var minMaxExpireTime int64
 
 	for _, clockList := range f.maxExpireTimeMap {
-		clockList.mutex.Lock()
-		front := clockList.expireTimes.Front()
-		if front != nil {
-			maxExpireTimeForStitcher := front.Value.(uint64)
+		minMaxExpireTimeForStitcher, ok := clockList.getMinimumTime()
+		if ok {
 			if firstIter {
-				minMaxExpireTime = maxExpireTimeForStitcher
+				minMaxExpireTime = minMaxExpireTimeForStitcher
 				firstIter = false
-			} else if maxExpireTimeForStitcher < minMaxExpireTime {
-				minMaxExpireTime = maxExpireTimeForStitcher
+			} else if minMaxExpireTimeForStitcher < minMaxExpireTime {
+				minMaxExpireTime = minMaxExpireTimeForStitcher
 			}
 		}
-		clockList.mutex.Unlock()
 	}
 	return minMaxExpireTime
 }
@@ -118,46 +123,47 @@ func (f flusher) findMinMaxExpireTime() uint64 {
 func (f flusher) run(ctx context.Context, flusherDone *sync.WaitGroup,
 	sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) {
 
-	var lastMinMaxExpireTime uint64 = math.MaxUint64
-
 Loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break Loop
 		case <-f.minChangedChan:
-			minMaxExpireTime := f.findMinMaxExpireTime()
-			//cache the minMaxExpireTime so we don't make extra db calls
-			if lastMinMaxExpireTime == minMaxExpireTime {
-				continue
-			}
+			/*
+				The flusher is horribly broken.
+				minMaxExpireTime := f.findMinMaxExpireTime()
 
-			//TODO: ensure err is not found error
-			err := f.flushSession(minMaxExpireTime, sessionsColl, sessionsOut)
-			for err == nil && ctx.Err() == nil {
-				err = f.flushSession(minMaxExpireTime, sessionsColl, sessionsOut)
-			}
+				//Keep flushing until there is nothing left to flush
+				var err error
+				for err != mgo.ErrNotFound {
 
-			lastMinMaxExpireTime = minMaxExpireTime
+					//update minMaxExpireTime if it changes while we are flushing
+					select {
+					case <-f.minChangedChan:
+						minMaxExpireTime = f.findMinMaxExpireTime()
+					case <-ctx.Done():
+						break Loop
+					default:
+					}
 
-			//Exit as soon as possible if the cancel signal comes through
-			if ctx.Err() != nil {
-				break Loop
-			}
-
-			//wait for stitcherDone() This prevents thrashing the mutexes
+					err = f.flushSession(minMaxExpireTime, sessionsColl, sessionsOut)
+					//TODO: Hanle errors that are not mgo.ErrNotFound
+				}
+				//wait for addMaxExpireTime()/ removeMaxExpireTime() This prevents thrashing the mutexes
+			*/
 		}
 	}
 
-	err := f.flushSession(uint64(math.MaxInt64), sessionsColl, sessionsOut)
+	err := f.flushSession(math.MaxInt64, sessionsColl, sessionsOut)
 	for err == nil {
-		err = f.flushSession(uint64(math.MaxInt64), sessionsColl, sessionsOut)
+		err = f.flushSession(math.MaxInt64, sessionsColl, sessionsOut)
 	}
 	sessionsColl.Database.Session.Close()
 	flusherDone.Done()
 }
 
-func (f flusher) flushSession(maxExpireTime uint64, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
+func (f flusher) flushSession(maxExpireTime int64, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
+	//fmt.Printf("Flushing: %d\n", maxExpireTime)
 	var oldSession session.Aggregate
 	_, err := sessionsColl.Find(bson.M{
 		"flowEndMillisecondsAB": bson.M{
