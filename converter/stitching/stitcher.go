@@ -1,6 +1,7 @@
 package stitching
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/ipfix"
@@ -11,10 +12,10 @@ import (
 
 type stitcher struct {
 	id                   int
-	sameSessionThreshold uint64
+	sameSessionThreshold int64
 }
 
-func newStitcher(id int, sameSessionThreshold uint64) stitcher {
+func newStitcher(id int, sameSessionThreshold int64) stitcher {
 	return stitcher{
 		id:                   id,
 		sameSessionThreshold: sameSessionThreshold,
@@ -29,24 +30,19 @@ func (s stitcher) run(input <-chan ipfix.Flow,
 	for inFlow := range input {
 		//The maxExpireTime was added to the flusher for this flow
 		//in stitching.Manager. It was added in the Manager
-		//rather than at the beginning of the range loop since
+		//rather than at the beginning of the range loop in run() since
 		//there is no guarantee that this go routine will run immediately.
-		//A stitcher may have a flow with a lower maxExpireTime in its input buffer
-		//than the maxExpireTimes held by its peers.
 		//
-		//We can ignore the ok check since we know the manager created the exporter
+		//We can ignore the ok check since we know the manager created the exporter.
 		exporter, _ := exporters.get(inFlow.Exporter())
 
-		err := s.stitchFlow(inFlow, sessionsColl, sessionsOut)
+		err := s.stitchFlow(inFlow, sessionsColl, sessionsOut, exporter)
 		if err != nil {
 			errs <- err
 		}
 
-		//StitcherDone lets the flusher know that this stitcher is done
-		//processing this flow. The flusher can then update this stitcher's
-		//maxExpireTime with the maxExpireTime derived from the next flow
-		//that this stitcher will process from the same exporter.
-		exporter.flusher.stitcherDone(s.id)
+		s.notifyExporterStitchingIsFinished(exporter, inFlow)
+
 	}
 
 	sessionsColl.Database.Session.Close()
@@ -54,7 +50,7 @@ func (s stitcher) run(input <-chan ipfix.Flow,
 	stitcherDone.Done()
 }
 
-func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
+func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate, exporter exporter) error {
 	//If this is a junk connection throw it out and continue
 	proto := flow.ProtocolIdentifier()
 	if proto == protocols.TCP && flow.PacketTotalCount() < 2 {
@@ -124,6 +120,7 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 
 			err = sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
 			if err != nil {
+				fmt.Printf("DEBUG: Current minMaxExpireTime %d. This flow's maxExpiretime %d. %s", exporter.flusher.findMinMaxExpireTime(), maxExpireTime, oldSessAgg.ID)
 				return err
 			}
 		} else {
@@ -134,5 +131,21 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 			sessionsOut <- &sessAgg
 		}
 	}
+	return nil
+}
+
+func (s stitcher) notifyExporterStitchingIsFinished(exporter exporter, inFlow ipfix.Flow) error {
+
+	//recalculate the maxExpireTime
+	flowStart, err := inFlow.FlowStartMilliseconds()
+	if err != nil {
+		return err
+	}
+	maxExpireTime := flowStart - s.sameSessionThreshold
+
+	//removeMaxExpireTime lets the flusher know that this stitcher is done
+	//processing this flow. The flusher can then update this stitcher's
+	//minimum maxExpireTime from the flows in the stitcher's buffer
+	exporter.flusher.removeMaxExpireTime(s.id, maxExpireTime)
 	return nil
 }

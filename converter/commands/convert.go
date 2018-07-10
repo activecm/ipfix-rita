@@ -40,9 +40,9 @@ func convert() error {
 	defer cancel()
 	flowData, inputErrors := reader.Drain(ctx)
 
-	sameSessionThreshold := uint64(1000 * 60 * 60) //milliseconds
+	sameSessionThreshold := int64(1000 * 60) //milliseconds
 	numStitchers := int32(5)
-	stitcherBufferSize := 5
+	stitcherBufferSize := 50
 	outputBufferSize := 5
 
 	stitchingManager := stitching.NewManager(sameSessionThreshold, numStitchers, stitcherBufferSize, outputBufferSize)
@@ -63,21 +63,21 @@ func convert() error {
 				inputErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "%+v\n", err)
+			fmt.Fprintf(os.Stderr, "Input Error: %+v\n", err)
 		case err, ok := <-stitchingErrors:
 			if !ok {
 				fmt.Println("Stitching Errors Closed")
 				stitchingErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "%+v\n", err)
+			fmt.Fprintf(os.Stderr, "Stitching Error: %+v\n", err)
 		case err, ok := <-writingErrors:
 			if !ok {
 				fmt.Println("Writing Errors Closed")
 				writingErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "%+v\n", err)
+			fmt.Fprintf(os.Stderr, "Writing Error: %+v\n", err)
 		}
 		if inputErrors == nil && stitchingErrors == nil && writingErrors == nil {
 			break

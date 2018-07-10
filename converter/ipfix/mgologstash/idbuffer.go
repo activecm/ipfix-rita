@@ -1,6 +1,9 @@
 package mgologstash
 
-import mgo "gopkg.in/mgo.v2"
+import (
+	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+)
 
 //idBuffer works by selecting and removing the least recently inserted
 //record in an input collection
@@ -20,18 +23,26 @@ func NewIDBuffer(input *mgo.Collection) Buffer {
 //Next returns false if there is no more data. Next may set an error when
 //it returns false. This error can be read with Err()
 func (b *idBuffer) Next(out *Flow) bool {
-	//TODO: Sanitize input (ensure data read in matches schema)
-	_, err := b.input.Find(nil).Sort("_id").Apply(
-		mgo.Change{
-			Remove: true,
-		},
-		&out,
-	)
-	if err != nil {
-		if err != mgo.ErrNotFound {
-			b.err = err
+
+	getNextRecord := true
+	for getNextRecord {
+		var input bson.M
+		_, err := b.input.Find(nil).Sort("_id").Apply(
+			mgo.Change{
+				Remove: true,
+			},
+			&input,
+		)
+
+		if err != nil {
+			if err != mgo.ErrNotFound {
+				b.err = err
+			}
+			return false
 		}
-		return false
+
+		getNextRecord = !out.FillFromMgoMap(input)
+		//TODO: Figure out how to log the deserialization error
 	}
 
 	return true

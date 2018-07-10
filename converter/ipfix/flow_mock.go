@@ -17,11 +17,11 @@ type FlowMock struct {
 	MockDestinationIPAddress string
 	MockDestinationPort      uint16
 
-	MockFlowStartMilliseconds uint64
-	MockFlowEndMilliseconds   uint64
+	MockFlowStartMilliseconds int64
+	MockFlowEndMilliseconds   int64
 
-	MockOctetTotalCount  uint64
-	MockPacketTotalCount uint64
+	MockOctetTotalCount  int64
+	MockPacketTotalCount int64
 
 	MockProtocolIdentifier protocols.Identifier
 	MockIPClassOfService   uint8
@@ -58,8 +58,8 @@ func NewFlowMock() *FlowMock {
 		return uint8(a)
 	}
 
-	startTime := uint64(rand.Uint32())
-	endTime := uint64(rand.Uint32())
+	startTime := int64(rand.Uint32())
+	endTime := int64(rand.Uint32())
 	if endTime < startTime {
 		tmp := startTime
 		startTime = endTime
@@ -74,8 +74,8 @@ func NewFlowMock() *FlowMock {
 		MockDestinationPort:       randShort(),
 		MockFlowStartMilliseconds: startTime,
 		MockFlowEndMilliseconds:   endTime,
-		MockOctetTotalCount:       uint64(rand.Uint32()),
-		MockPacketTotalCount:      uint64(rand.Uint32()),
+		MockOctetTotalCount:       int64(rand.Uint32()),
+		MockPacketTotalCount:      int64(rand.Uint32()),
 		MockProtocolIdentifier:    protocols.Identifier(randByte()),
 		MockIPClassOfService:      randByte(),
 		MockVlanID:                randShort(),
@@ -116,22 +116,22 @@ func (f *FlowMock) IPClassOfService() uint8 {
 }
 
 //FlowStartMilliseconds is the time the flow started as a Unix timestamp
-func (f *FlowMock) FlowStartMilliseconds() (uint64, error) {
+func (f *FlowMock) FlowStartMilliseconds() (int64, error) {
 	return f.MockFlowStartMilliseconds, nil
 }
 
 //FlowEndMilliseconds is the time the flow ended as a Unix timestamp
-func (f *FlowMock) FlowEndMilliseconds() (uint64, error) {
+func (f *FlowMock) FlowEndMilliseconds() (int64, error) {
 	return f.MockFlowEndMilliseconds, nil
 }
 
 //OctetTotalCount returns the total amount of bytes sent (including IP headers and payload)
-func (f *FlowMock) OctetTotalCount() uint64 {
+func (f *FlowMock) OctetTotalCount() int64 {
 	return f.MockOctetTotalCount
 }
 
 //PacketTotalCount returns the number of packets sent from the source to the destination
-func (f *FlowMock) PacketTotalCount() uint64 {
+func (f *FlowMock) PacketTotalCount() int64 {
 	return f.MockPacketTotalCount
 }
 

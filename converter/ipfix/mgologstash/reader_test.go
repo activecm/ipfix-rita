@@ -20,13 +20,9 @@ func TestReader(t *testing.T) {
 	reader := mgologstash.NewReader(buff, 2*time.Second)
 
 	c := env.DB.NewInputConnection()
-	err := c.Insert(mgologstash.Flow{
-		Host: "A",
-	})
+	err := c.Insert(getTestFlow1())
 	require.Nil(t, err)
-	err = c.Insert(mgologstash.Flow{
-		Host: "B",
-	})
+	err = c.Insert(getTestFlow2())
 	require.Nil(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -35,14 +31,34 @@ func TestReader(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func(t *testing.T, flows <-chan ipfix.Flow, wg *sync.WaitGroup) {
-		f := <-flows
-		require.Equal(t, "A", f.Exporter())
+		f, ok := <-flows
+		require.True(t, ok)
+		outFlow, ok := f.(*mgologstash.Flow)
+		require.True(t, ok)
+
+		flow1 := getTestFlow1()
+		flow1.ID = outFlow.ID
+		require.Equal(t, flow1, outFlow)
 		t.Log("Read 1st record")
-		f = <-flows
-		require.Equal(t, "B", f.Exporter())
+
+		f, ok = <-flows
+		require.True(t, ok)
+		outFlow, ok = f.(*mgologstash.Flow)
+		require.True(t, ok)
+
+		flow2 := getTestFlow2()
+		flow2.ID = outFlow.ID
+		require.Equal(t, flow2, outFlow)
 		t.Log("Read 2nd record")
-		f = <-flows
-		require.Equal(t, "C", f.Exporter())
+
+		f, ok = <-flows
+		require.True(t, ok)
+		outFlow, ok = f.(*mgologstash.Flow)
+		require.True(t, ok)
+
+		flow3 := getTestFlow3()
+		flow3.ID = outFlow.ID
+		require.Equal(t, flow3, outFlow)
 		t.Log("Read delayed 3rd record")
 		wg.Done()
 	}(t, flows, &wg)
@@ -56,9 +72,7 @@ func TestReader(t *testing.T) {
 	}(t, errors, &wg)
 
 	time.Sleep(2 * time.Second)
-	err = c.Insert(mgologstash.Flow{
-		Host: "C",
-	})
+	err = c.Insert(getTestFlow3())
 	require.Nil(t, err)
 	t.Log("Wrote three records")
 	time.Sleep(2 * time.Second)

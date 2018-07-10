@@ -21,15 +21,15 @@ type Aggregate struct {
 	AggregateQuery `bson:",inline"`
 	ID             bson.ObjectId `bson:"_id,omitempty"`
 
-	FlowStartMillisecondsAB uint64 `bson:"flowStartMillisecondsAB"`
-	FlowEndMillisecondsAB   uint64 `bson:"flowEndMillisecondsAB"`
-	FlowStartMillisecondsBA uint64 `bson:"flowStartMillisecondsBA"`
-	FlowEndMillisecondsBA   uint64 `bson:"flowEndMillisecondsBA"`
+	FlowStartMillisecondsAB int64 `bson:"flowStartMillisecondsAB"`
+	FlowEndMillisecondsAB   int64 `bson:"flowEndMillisecondsAB"`
+	FlowStartMillisecondsBA int64 `bson:"flowStartMillisecondsBA"`
+	FlowEndMillisecondsBA   int64 `bson:"flowEndMillisecondsBA"`
 
-	OctetTotalCountAB  uint64 `bson:"octetTotalCountAB"`
-	OctetTotalCountBA  uint64 `bson:"octetTotalCountBA"`
-	PacketTotalCountAB uint64 `bson:"packetTotalCountAB"`
-	PacketTotalCountBA uint64 `bson:"packetTotalCountBA"`
+	OctetTotalCountAB  int64 `bson:"octetTotalCountAB"`
+	OctetTotalCountBA  int64 `bson:"octetTotalCountBA"`
+	PacketTotalCountAB int64 `bson:"packetTotalCountAB"`
+	PacketTotalCountBA int64 `bson:"packetTotalCountBA"`
 
 	FlowEndReasonAB ipfix.FlowEndReason `bson:"flowEndReasonAB"`
 	FlowEndReasonBA ipfix.FlowEndReason `bson:"flowEndReasonBA"`

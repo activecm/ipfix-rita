@@ -71,14 +71,14 @@ func TestClear(t *testing.T) {
 	require.Equal(t, uint16(0), sess.PortB)
 	require.Equal(t, protocols.Identifier(0), sess.ProtocolIdentifier)
 	require.Equal(t, "", sess.Exporter)
-	require.Equal(t, uint64(0), sess.FlowStartMillisecondsAB)
-	require.Equal(t, uint64(0), sess.FlowStartMillisecondsBA)
-	require.Equal(t, uint64(0), sess.FlowEndMillisecondsAB)
-	require.Equal(t, uint64(0), sess.FlowEndMillisecondsBA)
-	require.Equal(t, uint64(0), sess.OctetTotalCountAB)
-	require.Equal(t, uint64(0), sess.OctetTotalCountBA)
-	require.Equal(t, uint64(0), sess.PacketTotalCountAB)
-	require.Equal(t, uint64(0), sess.PacketTotalCountBA)
+	require.Equal(t, int64(0), sess.FlowStartMillisecondsAB)
+	require.Equal(t, int64(0), sess.FlowStartMillisecondsBA)
+	require.Equal(t, int64(0), sess.FlowEndMillisecondsAB)
+	require.Equal(t, int64(0), sess.FlowEndMillisecondsBA)
+	require.Equal(t, int64(0), sess.OctetTotalCountAB)
+	require.Equal(t, int64(0), sess.OctetTotalCountBA)
+	require.Equal(t, int64(0), sess.PacketTotalCountAB)
+	require.Equal(t, int64(0), sess.PacketTotalCountBA)
 	require.Equal(t, ipfix.Nil, sess.FlowEndReasonAB)
 	require.Equal(t, ipfix.Nil, sess.FlowEndReasonBA)
 }
@@ -306,7 +306,7 @@ func TestToRitaConnABSrcDest(t *testing.T) {
 	require.Equal(t, testFlowA.DestinationPort(), uint16(conn.DestinationPort))
 	require.Equal(t, "udp", conn.Proto)
 
-	require.Equal(t, testFlowA.MockFlowStartMilliseconds/1000, uint64(conn.TimeStamp))
+	require.Equal(t, testFlowA.MockFlowStartMilliseconds/1000, int64(conn.TimeStamp))
 	require.NotZero(t, conn.Duration)
 	require.Equal(
 		t,
@@ -314,11 +314,11 @@ func TestToRitaConnABSrcDest(t *testing.T) {
 		conn.Duration,
 	)
 
-	require.Equal(t, testFlowA.OctetTotalCount(), uint64(conn.OrigIPBytes))
-	require.Equal(t, testFlowA.PacketTotalCount(), uint64(conn.OrigPkts))
+	require.Equal(t, testFlowA.OctetTotalCount(), int64(conn.OrigIPBytes))
+	require.Equal(t, testFlowA.PacketTotalCount(), int64(conn.OrigPkts))
 
-	require.Equal(t, testFlowB.OctetTotalCount(), uint64(conn.RespIPBytes))
-	require.Equal(t, testFlowB.PacketTotalCount(), uint64(conn.RespPkts))
+	require.Equal(t, testFlowB.OctetTotalCount(), int64(conn.RespIPBytes))
+	require.Equal(t, testFlowB.PacketTotalCount(), int64(conn.RespPkts))
 
 	require.True(t, conn.LocalOrigin)
 	require.False(t, conn.LocalResponse)
@@ -379,7 +379,7 @@ func TestToRitaConnBASrcDest(t *testing.T) {
 	require.Equal(t, testFlowB.DestinationPort(), uint16(conn.DestinationPort))
 	require.Equal(t, "udp", conn.Proto)
 
-	require.Equal(t, testFlowB.MockFlowStartMilliseconds/1000, uint64(conn.TimeStamp))
+	require.Equal(t, testFlowB.MockFlowStartMilliseconds/1000, int64(conn.TimeStamp))
 	require.NotZero(t, conn.Duration)
 	require.Equal(
 		t,
@@ -387,11 +387,11 @@ func TestToRitaConnBASrcDest(t *testing.T) {
 		conn.Duration,
 	)
 
-	require.Equal(t, testFlowB.OctetTotalCount(), uint64(conn.OrigIPBytes))
-	require.Equal(t, testFlowB.PacketTotalCount(), uint64(conn.OrigPkts))
+	require.Equal(t, testFlowB.OctetTotalCount(), int64(conn.OrigIPBytes))
+	require.Equal(t, testFlowB.PacketTotalCount(), int64(conn.OrigPkts))
 
-	require.Equal(t, testFlowA.OctetTotalCount(), uint64(conn.RespIPBytes))
-	require.Equal(t, testFlowA.PacketTotalCount(), uint64(conn.RespPkts))
+	require.Equal(t, testFlowA.OctetTotalCount(), int64(conn.RespIPBytes))
+	require.Equal(t, testFlowA.PacketTotalCount(), int64(conn.RespPkts))
 
 	require.True(t, conn.LocalOrigin)
 	require.False(t, conn.LocalResponse)
