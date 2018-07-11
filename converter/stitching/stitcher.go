@@ -128,7 +128,8 @@ func (s stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session
 
 	//grab the earliest FlowStart from the new session aggregate
 	newSessAggFlowStart := newSessAgg.FlowStartMillisecondsAB
-	if newSessAgg.FlowStartMillisecondsBA < newSessAggFlowStart {
+	if newSessAggFlowStart == 0 || newSessAgg.FlowStartMillisecondsBA != 0 &&
+		newSessAgg.FlowStartMillisecondsBA < newSessAggFlowStart {
 		newSessAggFlowStart = newSessAgg.FlowStartMillisecondsBA
 	}
 
@@ -143,7 +144,8 @@ func (s stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session
 
 	//grab the earliest FlowStart from the old session aggregate
 	oldSessAggFlowStart := oldSessAgg.FlowStartMillisecondsAB
-	if oldSessAgg.FlowStartMillisecondsBA < oldSessAggFlowStart {
+	if oldSessAggFlowStart == 0 || oldSessAgg.FlowStartMillisecondsBA != 0 &&
+		oldSessAgg.FlowStartMillisecondsBA < oldSessAggFlowStart {
 		oldSessAggFlowStart = oldSessAgg.FlowStartMillisecondsBA
 	}
 
