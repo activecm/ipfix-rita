@@ -72,17 +72,10 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 		return err
 	}
 
-	//any warning level errors can be returned via nonFatalError
-	var nonFatalError error
-
 	//oldSessAgg successfully populated
 	if err == nil {
-		//if the timestamps match up
+		//if the timestamps match up and no weird EOF business is going on
 		if s.shouldMerge(&sessAgg, &oldSessAgg) {
-
-			//log weird cases but keep going
-			err = s.checkAbnormalMergeCases(&sessAgg, &oldSessAgg)
-			nonFatalError = err
 
 			//do the actual merge
 			err = sessAgg.Merge(&oldSessAgg)
@@ -117,10 +110,15 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 			return err
 		}
 	}
-	return nonFatalError // default nil
+	return nil
 }
 
 func (s stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session.Aggregate) bool {
+
+	if oldSessAgg.ProtocolIdentifier == protocols.TCP && (newSessAgg.FilledFromSourceA && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
+		newSessAgg.FilledFromSourceB && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow) {
+		return false
+	}
 
 	//grab the latest FlowEnd from the new session aggregate
 	newSessAggFlowEnd := newSessAgg.FlowEndMillisecondsAB
@@ -151,12 +149,4 @@ func (s stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session
 
 	return oldSessAggFlowStart <= oldSessAggMaxFlowStart &&
 		oldSessAggFlowEnd >= oldSessAggMinFlowEnd
-}
-
-func (s stitcher) checkAbnormalMergeCases(newSessAgg *session.Aggregate, oldSessAgg *session.Aggregate) error {
-	if newSessAgg.FilledFromSourceA && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
-		newSessAgg.FilledFromSourceB && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow {
-		return errors.New("encountered same side merge for TCP sessions with old FlowEndReason EndOfFlow")
-	}
-	return nil
 }
