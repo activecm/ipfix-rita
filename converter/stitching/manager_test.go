@@ -52,7 +52,7 @@ Protocol with identifier
 /*  **********  Helper Variables  **********  */
 
 var oneMinuteMillis = int64(1000 * 60)
-var thirtySecondsMillis = uint64(1000 * 30)
+var thirtySecondsMillis = int64(1000 * 30)
 
 /*  **********  Helper Functions  **********  */
 
@@ -532,7 +532,7 @@ func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	//The difference between the flowEnd of the first connection and the
 	//flow start of the next must be after the `sameSessionTimeout` has elapsed.
 	//in order for this test be considered "OutOfTimeout"
-	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5 * thirtySecondsMillis
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager()
@@ -622,7 +622,7 @@ func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//The difference between the flowEnd of the first connection and the
 	//flow start of the next must be after the `sameSessionTimeout` has elapsed.
 	//in order for this test be considered "OutOfTimeout"
-	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5 * thirtySecondsMillis
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager()
@@ -737,7 +737,7 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockExporter = flow1.MockExporter
 	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
 	flow2.MockFlowEndReason = flow1.MockFlowEndReason
-	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5 * thirtySecondsMillis
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager()
@@ -823,7 +823,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//The difference between the flowEnd of the first connection and the
 	//flow start of the next must be after the `sameSessionTimeout` has elapsed.
 	//in order for this test be considered "OutOfTimeout"
-	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5 * thirtySecondsMillis
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager()
@@ -842,7 +842,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	requireFlowsStitchedFlippedSides(t, flow1, flow2, sessions[0])
 }
 
-func TestSingleTCPIdleOutFlow(t *testing.T){
+func TestSingleTCPIdleOutFlow(t *testing.T) {
 	//Set up for an integration test
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
@@ -876,7 +876,7 @@ func TestSingleTCPIdleOutFlow(t *testing.T){
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 }
 
-func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T){
+func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
 
@@ -958,7 +958,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
 	requireFlowsStitchedFlippedSides(t, flow1, flow2, sessions[0])
 }
 
-func TestSingleTCPEOFFlow(t *testing.T){
+func TestSingleTCPEOFFlow(t *testing.T) {
 	//Set up for an integration test
 	env, cleanup := environmenttest.SetupIntegrationTest(t)
 	defer cleanup()
