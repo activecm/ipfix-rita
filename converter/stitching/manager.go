@@ -1,7 +1,6 @@
 package stitching
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
@@ -104,19 +103,6 @@ func (m Manager) RunAsync(input <-chan ipfix.Flow,
 func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	sessions chan<- *session.Aggregate, errs chan<- error) {
 
-	//Create a map of IPFIX/ netflow exporters
-	//Each exporter has a flusher object which handles
-	//removing expired sessions from the sessions collection
-	exporters := newExporterMap()
-
-	//We need some synchronization primitives to interact with each
-	//exporter's flusher
-	//We use the flusherContext to stop the flusher workers
-	flusherContext := context.Background()
-	flusherContext, cancelFlushers := context.WithCancel(flusherContext)
-	//We use the flushersDone WaitGroup to wait for the flushers to finish
-	flushersDone := new(sync.WaitGroup)
-
 	//In order to parallelize the stitching process, we need to maintain
 	//relative order for each thread. Hash partitioning ensures no two
 	//stitchers will work on the same session.AggregateQuery. Additionally,
@@ -134,100 +120,19 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		stitchersDone.Add(1)
 		//newStitcher(sticherID, sameSessionThreshold)
 		go newStitcher(i, m.sameSessionThreshold).run(
-			partitions[i], exporters, db.NewSessionsConnection(),
+			partitions[i], db.NewSessionsConnection(),
 			sessions, errs, stitchersDone,
 		)
 	}
 
-	/*
-		Debug Code
-		var lastFlow *mgologstash.Flow
-		var flowCount int
-		var startOutOfOrderFlows []*mgologstash.Flow
-		var endOutOfOrderFlows []*mgologstash.Flow
-	*/
+	var flowCount int
 
 	//loop over the input until its closed
 	//If the input is coming from ipfix.mgologstash, the input channel will
 	//be closed when the program recieves CTRL-C
 	for inFlow := range input {
+		flowCount++
 		stitcherID := m.selectStitcher(inFlow)
-
-		//Flows which ended before the "maxExpireTime" are not needed for this
-		//flow and can, therefore, be expired out. However, other flows
-		//currently queued up may need data before this maxExpireTime.
-		//The minimum maxExpireTime across stitchers is used as the expiration clock
-		//per exporter.
-
-		flowStartTime, err := inFlow.FlowStartMilliseconds()
-		if err != nil {
-			//parsing errors happen when summary flows come in
-			//(They detail the overall flowset)
-			errs <- err
-			continue
-		}
-
-		//The maxExpireTime is calulated by subtracting the sameSessionThreshold
-		//from this flow's flowStartTime. The maxExpireTime is compared against
-		//the FlowEnd times of the previous flows.
-		//
-		//As a thought experiment, replace maxExpireTime with "oldFlow.FlowEnd"
-		//and replace the equals sign with a greater than or equal sign.
-		//Then, add sameSessionThreshold to both sides.
-		//Now, we have oldFlow.FlowEnd + sameSessionThreshold >= newFlow.FlowStart,
-		//(newFlow.flowStart <= oldFlow.FlowEnd + sameSessionThreshold)
-		//Which is the key condition in deciding whether or not to merge two flows.
-
-		maxExpireTime := flowStartTime - m.sameSessionThreshold
-
-		/*
-			Debug Code
-			flowCount++
-			if lastFlow != nil {
-				flowEndTime, _ := inFlow.FlowEndMilliseconds()
-				lastFlowEndTime, _ := lastFlow.FlowEndMilliseconds()
-				if flowEndTime < lastFlowEndTime {
-					endOutOfOrderFlows = append(endOutOfOrderFlows, inFlow.(*mgologstash.Flow))
-				}
-				lastFlowStartTime, _ := lastFlow.FlowStartMilliseconds()
-				if flowStartTime < lastFlowStartTime {
-					startOutOfOrderFlows = append(startOutOfOrderFlows, inFlow.(*mgologstash.Flow))
-				}
-			}
-			//lastMaxExpireTime = maxExpireTime
-			lastFlow = inFlow.(*mgologstash.Flow)
-			//fmt.Println(flowStartTime)
-		*/
-
-		//cache the exporter address since we use it a number of times coming up
-		exporterAddress := inFlow.Exporter()
-
-		//We record the maxExpireTime here since total order is lost
-		//once the data goes to the stitchers. Order is only maintained per
-		//partition. For example, due to the nature of hash partitioning,
-		//one stitcher may take on more work than its peers for a short amount of time.
-		//The flows in its buffer have lesser maxExpireTimes than the subsequent
-		//flows assigned to its peers.
-		exporter, ok := exporters.get(exporterAddress)
-
-		//This is the first time we've seen this exporter
-		if !ok {
-			//Create a new exporter and register it in the map
-			exporter = newExporter(exporterAddress)
-			exporters.add(exporter)
-
-			//Launch a flusher to handle removing expired session aggregates
-			flushersDone.Add(1)
-			go exporter.flusher.run(
-				flusherContext,
-				flushersDone,
-				db.NewSessionsConnection(),
-				sessions,
-			)
-		}
-
-		exporter.flusher.addMaxExpireTime(stitcherID, maxExpireTime)
-
 		//Send the flow to the assigned stitcher
 		//This may block if the stitcher's buffer is full.
 		partitions[stitcherID] <- inFlow
@@ -240,25 +145,27 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	//Wait for the stitchers to exit
 	stitchersDone.Wait()
 
-	//Stop the flushers since no more data is being created
-	//This should trigger a full flush of the database
-	cancelFlushers()
-	//Wait for flushers to finish
-	flushersDone.Wait()
-
-	/*
-		Debug Code
-		fmt.Printf("FlowEnd Out of Order Count: %d\n", len(endOutOfOrderFlows))
-		for _, flow := range endOutOfOrderFlows {
-			spew.Println(flow)
+	//flush the rest of the sessions out
+	var unstitchedCount int
+	sessionsColl := db.NewSessionsConnection()
+	unstitchedSessionsIter := sessionsColl.Find(nil).Iter()
+	var sessionAgg session.Aggregate
+	for unstitchedSessionsIter.Next(&sessionAgg) {
+		unstitchedCount++
+		sessions <- &sessionAgg
+		err := sessionsColl.RemoveId(sessionAgg.ID)
+		if err != nil {
+			errs <- err
 		}
-		fmt.Printf("FlowStart Out of Order Count: %d\n", len(startOutOfOrderFlows))
-		for _, flow := range startOutOfOrderFlows {
-			spew.Println(flow)
-		}
-		fmt.Printf("Flow Count: %d\n", flowCount)
-	*/
+	}
+	if unstitchedSessionsIter.Err() != nil {
+		errs <- unstitchedSessionsIter.Err()
+	}
 
+	sessionsColl.Database.Session.Close()
+
+	fmt.Printf("Flows Read: %d\n", flowCount)
+	fmt.Printf("Flows Left Unstitched: %d\n", unstitchedCount)
 	//all stichers and flushers are done, no more sessions can be produced
 	close(sessions)
 	//all senders on the errors channel have finished execution

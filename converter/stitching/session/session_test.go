@@ -18,9 +18,9 @@ func TestFromFlowASource(t *testing.T) {
 	testFlow := ipfix.NewFlowMock()
 	testFlow.MockSourceIPAddress = "1.1.1.1"
 	testFlow.MockDestinationIPAddress = "2.2.2.2"
-	srcMapping, err := session.FromFlow(testFlow, &sess)
-	require.Equal(t, srcMapping, session.ASource)
+	err := session.FromFlow(testFlow, &sess)
 	require.Nil(t, err)
+	require.True(t, sess.FilledFromSourceA)
 	require.Equal(t, testFlow.SourceIPAddress(), sess.IPAddressA)
 	require.Equal(t, testFlow.SourcePort(), sess.PortA)
 	require.Equal(t, testFlow.DestinationIPAddress(), sess.IPAddressB)
@@ -34,14 +34,14 @@ func TestFromFlowASource(t *testing.T) {
 	require.Equal(t, testFlow.FlowEndReason(), sess.FlowEndReasonAB)
 }
 
-func TestFromFlowADest(t *testing.T) {
+func TestFromFlowBSource(t *testing.T) {
 	var sess session.Aggregate
 	testFlow := ipfix.NewFlowMock()
 	testFlow.MockSourceIPAddress = "2.2.2.2"
 	testFlow.MockDestinationIPAddress = "1.1.1.1"
-	srcMapping, err := session.FromFlow(testFlow, &sess)
-	require.Equal(t, srcMapping, session.BSource)
+	err := session.FromFlow(testFlow, &sess)
 	require.Nil(t, err)
+	require.True(t, sess.FilledFromSourceB)
 	require.Equal(t, testFlow.SourceIPAddress(), sess.IPAddressB)
 	require.Equal(t, testFlow.SourcePort(), sess.PortB)
 	require.Equal(t, testFlow.DestinationIPAddress(), sess.IPAddressA)
@@ -65,6 +65,8 @@ func TestClear(t *testing.T) {
 
 	sess.Clear()
 	require.Equal(t, bson.ObjectId(""), sess.ID)
+	require.False(t, sess.FilledFromSourceA)
+	require.False(t, sess.FilledFromSourceB)
 	require.Equal(t, "", sess.IPAddressA)
 	require.Equal(t, "", sess.IPAddressB)
 	require.Equal(t, uint16(0), sess.PortA)
@@ -129,9 +131,18 @@ func TestMergeSameDirectionSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
+	sessA.ID = bson.NewObjectId()
+	sessAIDCopy := sessA.ID
+	sessB.ID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
+
+	require.True(t, sessA.FilledFromSourceA)
+	require.False(t, sessA.FilledFromSourceB)
+
+	//Dont' mess with the object ID
+	require.Equal(t, sessAIDCopy, sessA.ID)
 
 	//Don't mess with the flow key
 	require.Equal(t, testFlowA.SourceIPAddress(), sessA.IPAddressA)
@@ -179,10 +190,15 @@ func TestMergeSameDirectionAntiSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
+	sessA.ID = bson.NewObjectId()
+	sessAIDCopy := sessA.ID
+	sessB.ID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
-
+	require.Equal(t, sessAIDCopy, sessA.ID)
+	require.True(t, sessA.FilledFromSourceA)
+	require.False(t, sessA.FilledFromSourceB)
 	//Don't mess with the flow key
 	require.Equal(t, testFlowA.SourceIPAddress(), sessA.IPAddressA)
 	require.Equal(t, testFlowA.SourcePort(), sessA.PortA)
@@ -229,10 +245,15 @@ func TestMergeOppositeDirectionSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
+	sessA.ID = bson.NewObjectId()
+	sessAIDCopy := sessA.ID
+	sessB.ID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
-
+	require.Equal(t, sessAIDCopy, sessA.ID)
+	require.True(t, sessA.FilledFromSourceA)
+	require.True(t, sessA.FilledFromSourceB)
 	//Don't mess with the flow key
 	require.Equal(t, testFlowA.SourceIPAddress(), sessA.IPAddressA)
 	require.Equal(t, testFlowA.SourcePort(), sessA.PortA)
