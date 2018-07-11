@@ -1,8 +1,9 @@
 package stitching
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
@@ -22,27 +23,15 @@ func newStitcher(id int, sameSessionThreshold int64) stitcher {
 	}
 }
 
-func (s stitcher) run(input <-chan ipfix.Flow,
-	exporters exporterMap, sessionsColl *mgo.Collection,
+func (s stitcher) run(input <-chan ipfix.Flow, sessionsColl *mgo.Collection,
 	sessionsOut chan<- *session.Aggregate, errs chan<- error,
 	stitcherDone *sync.WaitGroup) {
 
 	for inFlow := range input {
-		//The maxExpireTime was added to the flusher for this flow
-		//in stitching.Manager. It was added in the Manager
-		//rather than at the beginning of the range loop in run() since
-		//there is no guarantee that this go routine will run immediately.
-		//
-		//We can ignore the ok check since we know the manager created the exporter.
-		exporter, _ := exporters.get(inFlow.Exporter())
-
-		err := s.stitchFlow(inFlow, sessionsColl, sessionsOut, exporter)
+		err := s.stitchFlow(inFlow, sessionsColl, sessionsOut)
 		if err != nil {
 			errs <- err
 		}
-
-		s.notifyExporterStitchingIsFinished(exporter, inFlow)
-
 	}
 
 	sessionsColl.Database.Session.Close()
@@ -50,7 +39,7 @@ func (s stitcher) run(input <-chan ipfix.Flow,
 	stitcherDone.Done()
 }
 
-func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate, exporter exporter) error {
+func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
 	//If this is a junk connection throw it out and continue
 	proto := flow.ProtocolIdentifier()
 	if proto == protocols.TCP && flow.PacketTotalCount() < 2 {
@@ -59,93 +48,115 @@ func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sess
 
 	//Create a session aggregate from the flow
 	var sessAgg session.Aggregate
-	srcMapping, err := session.FromFlow(flow, &sessAgg)
+	err := session.FromFlow(flow, &sessAgg)
 	if err != nil {
 		return err
 	}
 
 	//We only know how to stitch TCP and UDP
 	//If the protocol is something out, write it out without stitching
-	if proto != protocols.TCP &&
-		proto != protocols.UDP {
+	if proto != protocols.TCP && proto != protocols.UDP {
 		sessionsOut <- &sessAgg
 		return nil
 	}
 
-	//try to insert the new session aggregate.
-	//overwrite and return the conflicting aggregate if an aggregate
-	//already exists with the same AggregateQuery (Flow Key + Exporter)
+	//try to find an unstitched session with the same AggregateQuery (Flow Key + Exporter)
+	//and remove it from the table if its found
 	var oldSessAgg session.Aggregate
-	info, err := sessionsColl.Find(&sessAgg.AggregateQuery).Apply(mgo.Change{
-		Upsert: true,
-		Update: &sessAgg,
+	_, err = sessionsColl.Find(&sessAgg.AggregateQuery).Apply(mgo.Change{
+		Remove: true,
 	}, &oldSessAgg)
 
-	if err != nil {
+	//if we don't expect the error, return it
+	if err != nil && err != mgo.ErrNotFound {
 		return err
 	}
 
-	//If we overwrote an old agg, we need to decide whether we
-	//should write out the old aggregate or if we should merge
-	//our current aggregate in with it
-	if info.Updated == 1 {
+	//any warning level errors can be returned via nonFatalError
+	var nonFatalError error
 
-		flowStart, err := flow.FlowStartMilliseconds()
-		if err != nil {
-			return err
-		}
-		maxExpireTime := flowStart - s.sameSessionThreshold
+	//oldSessAgg successfully populated
+	if err == nil {
+		//if the timestamps match up
+		if s.shouldMerge(&sessAgg, &oldSessAgg) {
 
-		//grab the latest FlowEnd from the old session aggregate
-		oldSessAggFlowEnd := oldSessAgg.FlowEndMillisecondsAB
-		if oldSessAgg.FlowEndMillisecondsBA > oldSessAggFlowEnd {
-			oldSessAggFlowEnd = oldSessAgg.FlowEndMillisecondsBA
-		}
+			//log weird cases but keep going
+			err = s.checkAbnormalMergeCases(&sessAgg, &oldSessAgg)
+			nonFatalError = err
 
-		//there is a good chance that the old session aggregate
-		//just hasn't been flushed out yet.
-
-		//If the old session happened within the same session threshold and
-		//didn't end via a clean TCP teardown, then update the aggregate
-		if oldSessAggFlowEnd >= maxExpireTime &&
-			!(oldSessAgg.ProtocolIdentifier == protocols.TCP &&
-				(srcMapping == session.ASource && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
-					srcMapping == session.BSource && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow)) {
-
-			//merge the two aggregates
+			//do the actual merge
 			err = sessAgg.Merge(&oldSessAgg)
 			if err != nil {
 				return err
 			}
 
-			err = sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
-			if err != nil {
-				fmt.Printf("DEBUG: Current minMaxExpireTime %d. This flow's maxExpiretime %d. %s", exporter.flusher.findMinMaxExpireTime(), maxExpireTime, oldSessAgg.ID)
-				return err
+			//if both sides of the session have been filled, write it out
+			if sessAgg.FilledFromSourceA && sessAgg.FilledFromSourceB {
+				sessionsOut <- &sessAgg
+			} else {
+				//otherwise update the database
+				err := sessionsColl.Insert(&sessAgg)
+				if err != nil {
+					return err
+				}
 			}
 		} else {
-			//The old connection is outside the same session threshold or
-			//ended with a clean TCP teardown
-
-			//write out the old session aggregate
-			sessionsOut <- &sessAgg
+			//write out the old one-sided aggregate and replace it
+			//TODO: count how many times this happens
+			sessionsOut <- &oldSessAgg
+			err := sessionsColl.Insert(&sessAgg)
+			if err != nil {
+				return err
+			}
+			return errors.New("session timing mismatch")
+		}
+	} else {
+		//no unstitched session found
+		err := sessionsColl.Insert(&sessAgg)
+		if err != nil {
+			return err
 		}
 	}
-	return nil
+	return nonFatalError // default nil
 }
 
-func (s stitcher) notifyExporterStitchingIsFinished(exporter exporter, inFlow ipfix.Flow) error {
+func (s stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session.Aggregate) bool {
 
-	//recalculate the maxExpireTime
-	flowStart, err := inFlow.FlowStartMilliseconds()
-	if err != nil {
-		return err
+	//grab the latest FlowEnd from the new session aggregate
+	newSessAggFlowEnd := newSessAgg.FlowEndMillisecondsAB
+	if newSessAgg.FlowEndMillisecondsBA > newSessAggFlowEnd {
+		newSessAggFlowEnd = newSessAgg.FlowEndMillisecondsBA
 	}
-	maxExpireTime := flowStart - s.sameSessionThreshold
 
-	//removeMaxExpireTime lets the flusher know that this stitcher is done
-	//processing this flow. The flusher can then update this stitcher's
-	//minimum maxExpireTime from the flows in the stitcher's buffer
-	exporter.flusher.removeMaxExpireTime(s.id, maxExpireTime)
+	//grab the earliest FlowStart from the new session aggregate
+	newSessAggFlowStart := newSessAgg.FlowStartMillisecondsAB
+	if newSessAgg.FlowStartMillisecondsBA < newSessAggFlowStart {
+		newSessAggFlowStart = newSessAgg.FlowStartMillisecondsBA
+	}
+
+	oldSessAggMinFlowEnd := newSessAggFlowStart - s.sameSessionThreshold
+	oldSessAggMaxFlowStart := newSessAggFlowEnd + s.sameSessionThreshold
+
+	//grab the latest FlowEnd from the old session aggregate
+	oldSessAggFlowEnd := oldSessAgg.FlowEndMillisecondsAB
+	if oldSessAgg.FlowEndMillisecondsBA > oldSessAggFlowEnd {
+		oldSessAggFlowEnd = oldSessAgg.FlowEndMillisecondsBA
+	}
+
+	//grab the earliest FlowStart from the old session aggregate
+	oldSessAggFlowStart := oldSessAgg.FlowStartMillisecondsAB
+	if oldSessAgg.FlowStartMillisecondsBA < oldSessAggFlowStart {
+		oldSessAggFlowStart = oldSessAgg.FlowStartMillisecondsBA
+	}
+
+	return oldSessAggFlowStart <= oldSessAggMaxFlowStart &&
+		oldSessAggFlowEnd >= oldSessAggMinFlowEnd
+}
+
+func (s stitcher) checkAbnormalMergeCases(newSessAgg *session.Aggregate, oldSessAgg *session.Aggregate) error {
+	if newSessAgg.FilledFromSourceA && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
+		newSessAgg.FilledFromSourceB && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow {
+		return errors.New("encountered same side merge for TCP sessions with old FlowEndReason EndOfFlow")
+	}
 	return nil
 }

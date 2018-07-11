@@ -33,6 +33,9 @@ type Aggregate struct {
 
 	FlowEndReasonAB ipfix.FlowEndReason `bson:"flowEndReasonAB"`
 	FlowEndReasonBA ipfix.FlowEndReason `bson:"flowEndReasonBA"`
+
+	FilledFromSourceA bool `bson:"filledFromSourceA"`
+	FilledFromSourceB bool `bson:"filledFromSourceB"`
 }
 
 //AggregateQuery represents the Flow Key + Exporter used to uniquely
@@ -49,31 +52,20 @@ type AggregateQuery struct {
 	Exporter string `bson:"exporter"`
 }
 
-//FlowAggregateAssignment describes whether a Flow's source and destination
-//are assigned to host A and B respectively, or if they are assigned
-//to host B and A respectively
-type FlowAggregateAssignment bool
-
-//ASource signifies the flow's source was mapped to IPAddressA
-const ASource FlowAggregateAssignment = true
-
-//BSource signifies the flow's source was mapped to IPAddressB
-const BSource FlowAggregateAssignment = false
-
 //FromFlow fills a SessionAggregate from a Flow.
 //Note: ID is unaffected by this function.
-func FromFlow(flow ipfix.Flow, sess *Aggregate) (FlowAggregateAssignment, error) {
+func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 	flowSource := flow.SourceIPAddress()
 	flowDest := flow.DestinationIPAddress()
 
 	flowStart, err := flow.FlowStartMilliseconds()
 	if err != nil {
-		return ASource, err
+		return err
 	}
 
 	flowEnd, err := flow.FlowEndMilliseconds()
 	if err != nil {
-		return ASource, err
+		return err
 	}
 
 	sess.ProtocolIdentifier = flow.ProtocolIdentifier()
@@ -91,7 +83,8 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) (FlowAggregateAssignment, error)
 		sess.PacketTotalCountAB = flow.PacketTotalCount()
 		sess.FlowEndReasonAB = flow.FlowEndReason()
 		sess.FlowEndReasonBA = ipfix.Nil
-		return ASource, nil
+		sess.FilledFromSourceA = true
+		return nil
 	}
 	//flowDest is IPAddressA
 	sess.IPAddressA = flowDest
@@ -104,7 +97,8 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) (FlowAggregateAssignment, error)
 	sess.PacketTotalCountBA = flow.PacketTotalCount()
 	sess.FlowEndReasonBA = flow.FlowEndReason()
 	sess.FlowEndReasonAB = ipfix.Nil
-	return BSource, nil
+	sess.FilledFromSourceB = true
+	return nil
 }
 
 //Merge merges another aggregate into this aggregate
@@ -122,6 +116,9 @@ func (s *Aggregate) Merge(other *Aggregate) error {
 	s.OctetTotalCountBA += other.OctetTotalCountBA
 	s.PacketTotalCountAB += other.PacketTotalCountAB
 	s.PacketTotalCountBA += other.PacketTotalCountBA
+
+	s.FilledFromSourceA = s.FilledFromSourceA || other.FilledFromSourceA
+	s.FilledFromSourceB = s.FilledFromSourceB || other.FilledFromSourceB
 
 	//if other has the field set, and s doesn't or other's is earlier
 	if other.FlowStartMillisecondsAB != 0 && (s.FlowStartMillisecondsAB == 0 ||
@@ -178,6 +175,9 @@ func (s *Aggregate) Clear() {
 
 	s.FlowEndReasonAB = ipfix.Nil
 	s.FlowEndReasonBA = ipfix.Nil
+
+	s.FilledFromSourceA = false
+	s.FilledFromSourceB = false
 }
 
 //ToRITAConn fills a RITA Conn record with the data held by the session aggregate.
