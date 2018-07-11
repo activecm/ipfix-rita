@@ -753,17 +753,13 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	stitchingManager := newTestingStitchingManager()
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
-	require.Len(t, sessions, 1)
+	require.Len(t, sessions, 2)
 
-	//ensure there were no errors
-	if len(errs) != 0 {
-		for i := range errs {
-			t.Error(errs[i])
-		}
-	}
-	require.Len(t, errs, 0)
+	//ensure the session timing mismatch error fires as a warning
+	require.Len(t, errs, 1)
 
-	requireFlowsStitchedSameSide(t, flow1, flow2, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
 }
 
 func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
@@ -839,17 +835,13 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	stitchingManager := newTestingStitchingManager()
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
-	require.Len(t, sessions, 1)
+	require.Len(t, sessions, 2)
 
-	//ensure there were no errors
-	if len(errs) != 0 {
-		for i := range errs {
-			t.Error(errs[i])
-		}
-	}
-	require.Len(t, errs, 0)
+	//ensure the session timing mismatch error fires as a warning
+	require.Len(t, errs, 1)
 
-	requireFlowsStitchedFlippedSides(t, flow1, flow2, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
+	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
 }
 
 func TestSingleTCPIdleOutFlow(t *testing.T) {
