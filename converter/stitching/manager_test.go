@@ -78,6 +78,8 @@ func newTestingStitchingManager() Manager {
 func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.Aggregate) {
 	sourceIsA := flow.SourceIPAddress() < flow.DestinationIPAddress()
 	if sourceIsA {
+		require.True(t, sess.FilledFromSourceA)
+		require.False(t, sess.FilledFromSourceB)
 		require.Equal(t, flow.Exporter(), sess.Exporter)
 		require.Equal(t, flow.ProtocolIdentifier(), sess.ProtocolIdentifier)
 
@@ -104,6 +106,8 @@ func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.
 		require.Zero(t, sess.FlowEndMillisecondsBA)
 		require.Equal(t, ipfix.Nil, sess.FlowEndReasonBA)
 	} else {
+		require.False(t, sess.FilledFromSourceA)
+		require.True(t, sess.FilledFromSourceB)
 		require.Equal(t, flow.Exporter(), sess.Exporter)
 		require.Equal(t, flow.ProtocolIdentifier(), sess.ProtocolIdentifier)
 
@@ -140,6 +144,8 @@ func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg
 		//assigned to AB side of the session aggregate
 		//require the other flow to have the same assignment
 		require.True(t, flow2.SourceIPAddress() < flow2.DestinationIPAddress())
+		require.True(t, sessAgg.FilledFromSourceA)
+		require.False(t, sessAgg.FilledFromSourceB)
 
 		//data shared between flow1, flow2, and sessAgg
 		require.Equal(t, flow1.Exporter(), sessAgg.Exporter)
@@ -189,6 +195,8 @@ func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg
 		//assigned to BA side of the session aggregate
 		//require the other flow to have the same assignment
 		require.True(t, flow2.SourceIPAddress() >= flow2.DestinationIPAddress())
+		require.False(t, sessAgg.FilledFromSourceA)
+		require.True(t, sessAgg.FilledFromSourceB)
 
 		//data shared between flow1, flow2, and sessAgg
 		require.Equal(t, flow1.Exporter(), sessAgg.Exporter)
@@ -239,6 +247,8 @@ func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg
 //requireFlowsStitchedFlippedSides ensures two flows were stitched into
 //opposite sides of a session aggregate
 func requireFlowsStitchedFlippedSides(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg *session.Aggregate) {
+	require.True(t, sessAgg.FilledFromSourceA)
+	require.True(t, sessAgg.FilledFromSourceB)
 	flow1SourceIsA := flow1.SourceIPAddress() < flow1.DestinationIPAddress()
 	if flow1SourceIsA {
 		//require the otherflow is assigned to the other side
