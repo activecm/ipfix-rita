@@ -42,7 +42,7 @@ func (s stitcher) run(input <-chan ipfix.Flow, sessionsColl *mgo.Collection,
 func (s stitcher) stitchFlow(flow ipfix.Flow, sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate) error {
 	//If this is a junk connection throw it out and continue
 	proto := flow.ProtocolIdentifier()
-	if proto == protocols.TCP && flow.PacketTotalCount() < 2 {
+	if proto == protocols.TCP && flow.PacketTotalCount() <= 2 {
 		return nil
 	}
 
