@@ -27,17 +27,21 @@ type Manager struct {
 	//outputBufferSize determines how many output session aggregates should
 	//be buffered overall
 	outputBufferSize int
+	//sessionsTableMaxSize determines the max amount of unmatched session aggregates
+	//that may exist in the sessions table/collection before a flush happens
+	sessionsTableMaxSize int
 }
 
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
-	stitcherBufferSize, outputBufferSize int) Manager {
+	stitcherBufferSize, outputBufferSize, sessionsTableMaxSize int) Manager {
 
 	return Manager{
 		sameSessionThreshold: sameSessionThreshold,
 		stitcherBufferSize:   stitcherBufferSize,
 		numStitchers:         numStitchers,
 		outputBufferSize:     outputBufferSize,
+		sessionsTableMaxSize: sessionsTableMaxSize,
 	}
 }
 
@@ -46,7 +50,7 @@ func NewManager(sameSessionThreshold int64, numStitchers int32,
 //An active connection to MongoDB is needed for this process.
 //This function is a synchronous wrapper around RunAsync.
 func (m Manager) RunSync(input []ipfix.Flow, db database.DB) ([]*session.Aggregate, []error) {
-	//feed the input input a channel for the manager
+	//run the input array through a channel for the runAsync method
 	inputChan := make(chan ipfix.Flow)
 	go func() {
 		for i := range input {
@@ -60,26 +64,20 @@ func (m Manager) RunSync(input []ipfix.Flow, db database.DB) ([]*session.Aggrega
 
 	//append the results to the output buffers
 	var sessions []*session.Aggregate
-	sessionsMutex := new(sync.Mutex)
 	var errs []error
-	errsMutex := new(sync.Mutex)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 	go func() {
 		for sessionAggregate := range sessionsChan {
-			sessionsMutex.Lock()
 			sessions = append(sessions, sessionAggregate)
-			sessionsMutex.Unlock()
 		}
 		wg.Done()
 	}()
 
 	go func() {
 		for err := range errsChan {
-			errsMutex.Lock()
 			errs = append(errs, err)
-			errsMutex.Unlock()
 		}
 		wg.Done()
 	}()
@@ -103,69 +101,82 @@ func (m Manager) RunAsync(input <-chan ipfix.Flow,
 func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	sessions chan<- *session.Aggregate, errs chan<- error) {
 
-	//In order to parallelize the stitching process, we need to maintain
-	//relative order for each thread. Hash partitioning ensures no two
-	//stitchers will work on the same session.AggregateQuery. Additionally,
-	//since the data comes in in order from input, each stitcher sees
-	//ordered data.
-	partitions := make([]chan ipfix.Flow, 0, m.numStitchers) // input channels
+	//In order to parallelize the stitching process, we use hash partitioning
+	//which ensures no two stitchers will work on the same session.AggregateQuery.
+
+	//Initialize the stitchers and start them off
+	stitchers := make([]*stitcher, m.numStitchers)
 
 	//We use the stichersDone WaitGroup to wait for the stitchers to finish
 	stitchersDone := new(sync.WaitGroup)
 
 	for i := 0; i < int(m.numStitchers); i++ {
-		partitions = append(partitions, make(chan ipfix.Flow, m.stitcherBufferSize))
-
 		//create and start the stitchers
+		stitchers[i] = newStitcher(i, m.stitcherBufferSize, m.sameSessionThreshold, db.NewSessionsConnection(), sessions, errs)
 		stitchersDone.Add(1)
-		//newStitcher(sticherID, sameSessionThreshold)
-		go newStitcher(i, m.sameSessionThreshold).run(
-			partitions[i], db.NewSessionsConnection(),
-			sessions, errs, stitchersDone,
-		)
+		go stitchers[i].start(stitchersDone)
 	}
 
+	//flusher ensures the sessions collection/table never
+	//exceeds a constant size and is responsible for flushing out
+	//flows which were never matched with other flows
+	flusher := newFlusher(
+		db.NewSessionsConnection(),
+		sessions,
+		m.sessionsTableMaxSize,
+		0.9, //.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
+	)
+
+	//keep track of how many flows we process
 	var flowCount int
 
 	//loop over the input until its closed
-	//If the input is coming from ipfix.mgologstash, the input channel will
+	//If the input is coming from ipfix.mgologstash and managed by
+	//convert.go, the input channel will
 	//be closed when the program recieves CTRL-C
 	for inFlow := range input {
 		flowCount++
+		//use the hash partitioner to assign the flow to a stitcher
 		stitcherID := m.selectStitcher(inFlow)
 		//Send the flow to the assigned stitcher
 		//This may block if the stitcher's buffer is full.
-		partitions[stitcherID] <- inFlow
+		stitchers[stitcherID].enqueue(inFlow)
+
+		//check if the sessions collection is too full
+		shouldFlush, err := flusher.shouldFlush()
+		if err != nil {
+			errs <- err
+			continue //we can't trust shouldFlush if there is an error
+		}
+
+		if shouldFlush {
+			//wait for the stitchers to run through their buffers
+			for i := 0; i < int(m.numStitchers); i++ {
+				stitchers[i].waitForFlush()
+			}
+
+			err := flusher.flush()
+			if err != nil {
+				errs <- err
+			}
+		}
 	}
 
-	//Let the stitchers know no more data is coming
-	for i := range partitions {
-		close(partitions[i])
+	//Start shutting down the the stitchers
+	for i := range stitchers {
+		stitchers[i].beginShutdown()
 	}
 	//Wait for the stitchers to exit
 	stitchersDone.Wait()
 
 	//flush the rest of the sessions out
-	var unstitchedCount int
-	sessionsColl := db.NewSessionsConnection()
-	unstitchedSessionsIter := sessionsColl.Find(nil).Iter()
-	var sessionAgg session.Aggregate
-	for unstitchedSessionsIter.Next(&sessionAgg) {
-		unstitchedCount++
-		sessions <- &sessionAgg
-		err := sessionsColl.RemoveId(sessionAgg.ID)
-		if err != nil {
-			errs <- err
-		}
-	}
-	if unstitchedSessionsIter.Err() != nil {
-		errs <- unstitchedSessionsIter.Err()
-	}
-
-	sessionsColl.Database.Session.Close()
+	flusher.flushAll()
 
 	fmt.Printf("Flows Read: %d\n", flowCount)
-	fmt.Printf("Flows Left Unstitched: %d\n", unstitchedCount)
+	fmt.Printf("1 Packet Flows Left Unstitched: %d\n", flusher.nPacketConnsFlushed[1])
+	fmt.Printf("2 Packet Flows Left Unstitched: %d\n", flusher.nPacketConnsFlushed[2])
+	fmt.Printf("Other Flows Left Unstitched: %d\n", flusher.oldConnsFlushed)
+
 	//all stichers and flushers are done, no more sessions can be produced
 	close(sessions)
 	//all senders on the errors channel have finished execution
@@ -186,6 +197,10 @@ func (m Manager) selectStitcher(f ipfix.Flow) int {
 	hasher.Write(bufferSlice)
 
 	bufferSlice = buffer[:]
+
+	//flows from A->B and from B->A should hash to the same value
+	//We impose an order such that the alphabetically lesser ip
+	//address is hashed first
 	if f.SourceIPAddress() < f.DestinationIPAddress() {
 		hasher.Write([]byte(f.SourceIPAddress()))
 
@@ -208,6 +223,7 @@ func (m Manager) selectStitcher(f ipfix.Flow) int {
 		hasher.Write(bufferSlice)
 	}
 
+	//theres no int abs function in go >.<"
 	partition := int32(hasher.Sum32()) % m.numStitchers
 	if partition < 0 {
 		partition = -partition

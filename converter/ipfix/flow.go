@@ -40,7 +40,7 @@ type FlowEndReason uint8
 
 const (
 	//IdleTimeout shows the Flow was terminated because it was considered to be idle.
-	IdleTimeout FlowEndReason = iota
+	IdleTimeout FlowEndReason = iota + 1
 	//ActiveTimeout shows the Flow was terminated for reporting purposes while it was
 	//still active, for example, after the maximum lifetime of unreported Flows was reached.
 	ActiveTimeout

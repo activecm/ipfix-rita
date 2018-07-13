@@ -44,8 +44,15 @@ func convert() error {
 	numStitchers := int32(5)
 	stitcherBufferSize := 50
 	outputBufferSize := 5
+	sessionsCollMaxSize := 5000
 
-	stitchingManager := stitching.NewManager(sameSessionThreshold, numStitchers, stitcherBufferSize, outputBufferSize)
+	stitchingManager := stitching.NewManager(
+		sameSessionThreshold,
+		numStitchers,
+		stitcherBufferSize,
+		outputBufferSize,
+		sessionsCollMaxSize,
+	)
 
 	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(flowData, env.DB)
 

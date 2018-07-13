@@ -52,8 +52,7 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 			"IPAddressB", "transportPortB",
 			"protocolIdentifier", "exporter",
 		},
-		Unique: true,
-		Name:   "AggregateQuery",
+		Name: "AggregateQuery",
 	})
 
 	if err != nil {
@@ -62,9 +61,8 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 
 	err = db.sessions.EnsureIndex(mgo.Index{
 		Key: []string{
-			"exporter",
-			"flowEndMillisecondsAB",
-			"flowEndMillisecondsBA",
+			"packetTotalCountAB",
+			"packetTotalCountBA",
 		},
 		Name: "ExpirationQuery",
 	})
