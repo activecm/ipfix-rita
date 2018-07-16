@@ -143,6 +143,9 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		stitchers[stitcherID].enqueue(inFlow)
 
 		//check if the sessions collection is too full
+		//TODO: Find a better way to monitor the size of the table
+		//instead of polling on every flow
+		//maybe just mod flowCount and check every so often
 		shouldFlush, err := flusher.shouldFlush()
 		if err != nil {
 			errs <- err
@@ -171,6 +174,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 	//flush the rest of the sessions out
 	flusher.flushAll()
+	flusher.close()
 
 	fmt.Printf("Flows Read: %d\n", flowCount)
 	fmt.Printf("1 Packet Flows Left Unstitched: %d\n", flusher.nPacketConnsFlushed[1])

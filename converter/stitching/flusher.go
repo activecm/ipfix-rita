@@ -39,6 +39,11 @@ func newFlusher(sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggreg
 	}
 }
 
+//close closes the underlying connection to MongoDB
+func (f *flusher) close() {
+	f.sessionsColl.Database.Session.Close()
+}
+
 //shouldFlush checks if the sessionsColl contains
 //postFlushMaxSize records or more
 func (f *flusher) shouldFlush() (bool, error) {

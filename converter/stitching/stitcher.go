@@ -99,8 +99,6 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 		return err
 	}
 
-	//TODO: Tests for multicast IPv4, broadcast IPV4, multicast IPv6
-
 	//We don't know how to stitch everything under the sun
 	//Unkown protocols and special addresses may cause us to bail on stitching
 	if s.shouldSkipStitching(flow) {
