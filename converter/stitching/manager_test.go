@@ -1,11 +1,12 @@
 package stitching
 
 import (
+	"os"
 	"runtime"
 	"testing"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/environmenttest"
+	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
@@ -18,6 +19,14 @@ var oneMinuteMillis = int64(1000 * 60)
 var thirtySecondsMillis = int64(1000 * 30)
 
 /*  **********  Helper Functions  **********  */
+
+//TestMain is responsible for setting up and tearing down any
+//resources needed by all tests
+func TestMain(m *testing.M) {
+	returnCode := m.Run()
+	integrationtest.CloseDependencies() //no effect if no integration tests run
+	os.Exit(returnCode)
+}
 
 //newTestingStitchingManager is a helper for creating
 //a stitching manager so tests don't get bogged down with setup code
@@ -375,10 +384,10 @@ func TestSelectStitcherFlippedFlowKeys(t *testing.T) {
 
 /*  **********  Stitching Manager Implementation Tests  **********  */
 func TestGoRoutineLeaks(t *testing.T) {
-	numGoRoutines := runtime.NumGoroutine()
-
 	//Set up for an integration test
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+
+	numGoRoutines := runtime.NumGoroutine()
 	stitchingManager := newTestingStitchingManager()
 	_, errs := stitchingManager.RunSync(
 		[]ipfix.Flow{
@@ -393,7 +402,6 @@ func TestGoRoutineLeaks(t *testing.T) {
 		}
 	}
 	require.Len(t, errs, 0)
-	cleanup()
 
 	//annoyingly, mgo may stay open for 15 seconds
 	//see: gopkg.in/mgo.v2/server.go:301
@@ -405,8 +413,7 @@ func TestGoRoutineLeaks(t *testing.T) {
 
 func TestSingleIcmpFlow(t *testing.T) {
 	//Set up for an integration test
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	//Create the input flow from random data
 	flow1 := ipfix.NewFlowMock()
@@ -438,8 +445,8 @@ func TestSingleIcmpFlow(t *testing.T) {
 }
 
 func TestTwoICMPFlowsSameSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -483,8 +490,8 @@ func TestTwoICMPFlowsSameSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -528,8 +535,8 @@ func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
 }
 
 func TestTwoICMPFlowsFlippedSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -573,8 +580,8 @@ func TestTwoICMPFlowsFlippedSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -620,8 +627,7 @@ func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 /*  **********  Stitching Manager UDP Tests  **********  */
 func TestSingleUDPFlow(t *testing.T) {
 	//Set up for an integration test
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	//Create the input flow from random data
 	flow1 := ipfix.NewFlowMock()
@@ -653,8 +659,8 @@ func TestSingleUDPFlow(t *testing.T) {
 }
 
 func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -692,8 +698,8 @@ func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -727,8 +733,8 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 }
 
 func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -770,8 +776,8 @@ func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -810,8 +816,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 
 func TestSingleTCPIdleOutFlow(t *testing.T) {
 	//Set up for an integration test
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	//Create the input flow from random data
 	flow1 := ipfix.NewFlowMock()
@@ -843,8 +848,8 @@ func TestSingleTCPIdleOutFlow(t *testing.T) {
 }
 
 func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -882,8 +887,8 @@ func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
 }
 
 func TwoTCPIdleOutFlowsSameSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -916,8 +921,8 @@ func TwoTCPIdleOutFlowsSameSourceOutOfTimeout(t *testing.T) {
 }
 
 func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -959,8 +964,8 @@ func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -998,8 +1003,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 
 func TestSingleTCPEOFFlow(t *testing.T) {
 	//Set up for an integration test
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	//Create the input flow from random data
 	flow1 := ipfix.NewFlowMock()
@@ -1031,8 +1035,8 @@ func TestSingleTCPEOFFlow(t *testing.T) {
 }
 
 func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1065,8 +1069,8 @@ func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
 }
 
 func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1099,8 +1103,8 @@ func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
 }
 
 func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv4(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1142,8 +1146,8 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv4(t *testing.T) {
 }
 
 func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv6(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "2001:db8:85a3:8d3:1319:8a2e:370:7348"
@@ -1185,8 +1189,8 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv6(t *testing.T) {
 }
 
 func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1223,8 +1227,8 @@ func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 }
 
 func TestIPv4Multicast(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1261,8 +1265,8 @@ func TestIPv4Multicast(t *testing.T) {
 }
 
 func TestIPv4Broadcast(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
@@ -1299,8 +1303,8 @@ func TestIPv4Broadcast(t *testing.T) {
 }
 
 func TestIPv6Multicast(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	flow1 := ipfix.NewFlowMock()
 	flow1.MockSourceIPAddress = "2001:db8:85a3:8d3:1319:8a2e:370:7348"
@@ -1337,5 +1341,3 @@ func TestIPv6Multicast(t *testing.T) {
 }
 
 //TODO: Write tests to ensure flusher is working
-//TODO: Write a better wrapper to build the MongoDB container once
-//resetting it for each test.
