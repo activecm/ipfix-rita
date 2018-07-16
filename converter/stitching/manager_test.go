@@ -1,6 +1,7 @@
 package stitching
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"testing"
@@ -35,7 +36,7 @@ func newTestingStitchingManager() Manager {
 	numStitchers := int32(5)                //number of workers
 	stitcherBufferSize := 5                 //number of flows that are buffered for each worker
 	outputBufferSize := 5                   //number of session aggregates that are buffered for output
-	sessionsTableMaxSize := 10              //number of unstitched flows that can be held for matching
+	sessionsTableMaxSize := 20              //number of unstitched flows that can be held for matching
 	return NewManager(
 		sameSessionThreshold,
 		numStitchers,
@@ -1340,4 +1341,87 @@ func TestIPv6Multicast(t *testing.T) {
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
 }
 
-//TODO: Write tests to ensure flusher is working
+func TestFlush1PacketFlowsFirst(t *testing.T) {
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+
+	flows := make([]ipfix.Flow, 0, 20)
+	for i := 0; i < 20; i++ {
+		flow := ipfix.NewFlowMock()
+		//ensure the flow makes it into the stitching table
+		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
+		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)
+		flow.MockProtocolIdentifier = protocols.UDP
+		if i == 8 || i == 15 {
+			flow.MockPacketTotalCount = 1
+		}
+		flows = append(flows, flow)
+	}
+
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync(flows, env.DB)
+
+	require.Len(t, sessions, 20)
+	require.Len(t, errs, 0)
+	require.Equal(t, int64(1), sessions[0].PacketTotalCountAB)
+	require.Equal(t, int64(1), sessions[1].PacketTotalCountAB)
+}
+
+func TestFlush2PacketFlowsSecond(t *testing.T) {
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+
+	flows := make([]ipfix.Flow, 0, 20)
+	for i := 0; i < 20; i++ {
+		flow := ipfix.NewFlowMock()
+		//ensure the flow makes it into the stitching table
+		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
+		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)
+		flow.MockProtocolIdentifier = protocols.UDP
+		if i == 8 {
+			flow.MockPacketTotalCount = 1
+		} else if i == 15 {
+			flow.MockPacketTotalCount = 2
+		}
+
+		flows = append(flows, flow)
+	}
+
+	stitchingManager := newTestingStitchingManager()
+	sessions, errs := stitchingManager.RunSync(flows, env.DB)
+
+	require.Len(t, sessions, 20)
+	require.Len(t, errs, 0)
+	require.Equal(t, int64(1), sessions[0].PacketTotalCountAB)
+	require.Equal(t, int64(2), sessions[1].PacketTotalCountAB)
+}
+
+func TestFlushOldestFlowsLast(t *testing.T) {
+	//Set up for an integration test
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+
+	flows := make([]ipfix.Flow, 0, 20)
+	for i := 0; i < 20; i++ {
+		flow := ipfix.NewFlowMock()
+		//ensure the flow makes it into the stitching table
+		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
+		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)
+		flow.MockProtocolIdentifier = protocols.UDP
+		if i == 8 {
+			flow.MockPacketTotalCount = 1
+		}
+
+		flows = append(flows, flow)
+	}
+
+	stitchingManager := newTestingStitchingManager()
+	stitchingManager.numStitchers = 1 //remove parallelism to test out order
+	sessions, errs := stitchingManager.RunSync(flows, env.DB)
+
+	require.Len(t, sessions, 20)
+	require.Len(t, errs, 0)
+	require.Equal(t, int64(1), sessions[0].PacketTotalCountAB)
+	//if numStitchers > 1 this is not guaranteed as another flow could
+	//have been processed before the first flow in input order
+	require.Equal(t, flows[0].DestinationIPAddress(), sessions[1].IPAddressB)
+}
