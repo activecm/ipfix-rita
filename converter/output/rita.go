@@ -7,6 +7,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
+	"github.com/pkg/errors"
 )
 
 //RITAConnWriter writes session aggregates to MongoDB
@@ -27,14 +28,14 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 
 		outColl, err := r.DB.NewOutputConnection("")
 		if err != nil {
-			errs <- err
+			errs <- errors.Wrap(err, "could not connect to output collection")
 			return
 		}
 
 		localNets, localNetsErrs := r.GetIPFIXConfig().GetLocalNetworks()
 		if len(localNetsErrs) != 0 {
 			for i := range localNetsErrs {
-				errs <- localNetsErrs[i]
+				errs <- errors.Wrap(localNetsErrs[i], "could not parse local network")
 			}
 		}
 
@@ -51,7 +52,7 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 			})
 			err := outColl.Insert(connRecord)
 			if err != nil {
-				errs <- err
+				errs <- errors.Wrapf(err, "could not insert record into RITA conn collection\n%+v", connRecord)
 			}
 		}
 

@@ -3,14 +3,13 @@ package mgologstash_test
 import (
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/environmenttest"
+	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuffer(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 	testFlow1 := getTestFlow1()
 	testFlow2 := getTestFlow2()
 

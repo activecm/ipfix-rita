@@ -24,8 +24,7 @@ func (m *mongoDB) GetConnectionString() string {
 
 func (m *mongoDB) GetAuthMechanism() (mgosec.AuthMechanism, error) {
 	mechanism, err := mgosec.ParseAuthMechanism(m.AuthMechanism)
-	err = errors.WithStack(err)
-	return mechanism, err
+	return mechanism, errors.Wrapf(err, "could not parse MongoDB AuthMechanism: %s", m.AuthMechanism)
 }
 
 func (m *mongoDB) GetTLS() config.TLS {

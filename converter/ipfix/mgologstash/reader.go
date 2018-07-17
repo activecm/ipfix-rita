@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/pkg/errors"
 )
 
 //Reader implements ipfix.Reader
@@ -24,43 +25,43 @@ func NewReader(buffer Buffer, pollWait time.Duration) ipfix.Reader {
 //Drain asynchronously drains a mgologstash.Buffer
 func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 	out := make(chan ipfix.Flow)
-	errors := make(chan error)
+	errs := make(chan error)
 
-	go func(buffer Buffer, pollWait time.Duration, out chan<- ipfix.Flow, errors chan<- error) {
+	go func(buffer Buffer, pollWait time.Duration, out chan<- ipfix.Flow, errs chan<- error) {
 		pollTicker := time.NewTicker(pollWait)
 
-		r.drainInner(ctx, buffer, out, errors)
+		r.drainInner(ctx, buffer, out, errs)
 	Loop:
 		for {
 			select {
 			case <-ctx.Done():
-				errors <- ctx.Err()
+				errs <- errors.Wrap(ctx.Err(), "reading from input buffer cancelled")
 				break Loop
 			case <-pollTicker.C:
-				r.drainInner(ctx, buffer, out, errors)
+				r.drainInner(ctx, buffer, out, errs)
 			}
 		}
 		buffer.Close()
 		pollTicker.Stop()
-		close(errors)
+		close(errs)
 		close(out)
-	}(r.buffer, r.pollWait, out, errors)
+	}(r.buffer, r.pollWait, out, errs)
 
-	return out, errors
+	return out, errs
 }
 
-func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- ipfix.Flow, errors chan<- error) {
+func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- ipfix.Flow, errs chan<- error) {
 	flow := &Flow{}
 	for buffer.Next(flow) {
 		out <- flow
 		//ensure we stop even if there is more data
 		if ctx.Err() != nil {
-			errors <- ctx.Err()
+			errs <- errors.Wrap(ctx.Err(), "reading from input buffer cancelled")
 			break
 		}
 		flow = &Flow{}
 	}
 	if buffer.Err() != nil {
-		errors <- buffer.Err()
+		errs <- errors.Wrap(buffer.Err(), "could not drain input buffer")
 	}
 }

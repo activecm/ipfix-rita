@@ -9,6 +9,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
+	"github.com/pkg/errors"
 )
 
 //Manager stitches together a series of ipfix.Flow objects into
@@ -114,7 +115,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		//create and start the stitchers
 		stitchers[i] = newStitcher(i, m.stitcherBufferSize, m.sameSessionThreshold, db.NewSessionsConnection(), sessions, errs)
 		stitchersDone.Add(1)
-		go stitchers[i].start(stitchersDone)
+		go stitchers[i].run(stitchersDone)
 	}
 
 	//flusher ensures the sessions collection/table never
@@ -144,11 +145,11 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 		//check if the sessions collection is too full
 		//TODO: Find a better way to monitor the size of the table
-		//instead of polling on every flow
+		//instead of polling on every flow.
 		//maybe just mod flowCount and check every so often
 		shouldFlush, err := flusher.shouldFlush()
 		if err != nil {
-			errs <- err
+			errs <- errors.Wrap(err, "could not check whether the sessions collection should be flushed")
 			continue //we can't trust shouldFlush if there is an error
 		}
 
@@ -160,7 +161,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 			err := flusher.flush()
 			if err != nil {
-				errs <- err
+				errs <- errors.Wrap(err, "could not flush the sessions collection")
 			}
 		}
 	}

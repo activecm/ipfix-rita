@@ -18,14 +18,13 @@ const ConfigPath = "/etc/ipfix-rita/config.yaml"
 func ReadConfigFile() ([]byte, error) {
 	f, err := os.Open(ConfigPath)
 	if err != nil {
-		err = errors.WithStack(err)
-		return nil, err
+		return nil, errors.Wrap(err, "could not open configuration file")
 	}
 	defer f.Close()
 	buf := bytes.NewBuffer(nil)
 	_, err = io.Copy(buf, f)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not read configuration file")
 	}
 	return buf.Bytes(), nil
 }
@@ -55,17 +54,19 @@ func (y *yamlConfig) GetIPFIXConfig() config.IPFIX {
 func NewYAMLConfig(data []byte) (config.Config, error) {
 	y := &yamlConfig{}
 	err := y.LoadConfig(data)
-	return y, err
+	return y, errors.Wrap(err, "could not parse configuration")
 }
 
 func (y *yamlConfig) LoadConfig(data []byte) error {
 	err := yaml2.Unmarshal(data, y)
-	err = errors.WithStack(err)
-	return err
+	return errors.Wrapf(
+		err, "could not unmarshal configuration\n"+
+			"configuration: %s\n"+
+			"destination type: %T", data, *y,
+	)
 }
 
 func (y *yamlConfig) SaveConfig() ([]byte, error) {
 	outBytes, err := yaml2.Marshal(y)
-	err = errors.WithStack(err)
-	return outBytes, err
+	return outBytes, errors.Wrapf(err, "could not marshal configuration:\n%+v", y)
 }

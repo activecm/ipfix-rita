@@ -2,19 +2,22 @@ package mgologstash_test
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/environmenttest"
+	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReader(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	buff := mgologstash.NewIDBuffer(env.DB.NewInputConnection())
 	reader := mgologstash.NewReader(buff, 2*time.Second)
@@ -26,59 +29,79 @@ func TestReader(t *testing.T) {
 	require.Nil(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	flows, errors := reader.Drain(ctx)
+	flows, errs := reader.Drain(ctx)
 
+	type testResult struct {
+		testPass bool
+		testDesc string
+		testData interface{}
+	}
+
+	flowTestResults := make(chan testResult, 50)
+	errorTestResults := make(chan testResult, 50)
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func(t *testing.T, flows <-chan ipfix.Flow, wg *sync.WaitGroup) {
+	go func(flowTestResults chan<- testResult, flows <-chan ipfix.Flow, wg *sync.WaitGroup) {
 		f, ok := <-flows
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flows available for reading", nil}
 		outFlow, ok := f.(*mgologstash.Flow)
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flow is *mgologstash.Flow", nil}
 
 		flow1 := getTestFlow1()
 		flow1.ID = outFlow.ID
-		require.Equal(t, flow1, outFlow)
-		t.Log("Read 1st record")
+		flowTestResults <- testResult{reflect.DeepEqual(flow1, outFlow), "flow1 read correctly", []interface{}{outFlow, flow1}}
 
 		f, ok = <-flows
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flows available for reading", nil}
 		outFlow, ok = f.(*mgologstash.Flow)
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flow is *mgologstash.Flow", nil}
 
 		flow2 := getTestFlow2()
 		flow2.ID = outFlow.ID
-		require.Equal(t, flow2, outFlow)
-		t.Log("Read 2nd record")
+		flowTestResults <- testResult{reflect.DeepEqual(flow2, outFlow), "flow2 read correctly", []interface{}{outFlow, flow2}}
 
 		f, ok = <-flows
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flows available for reading", nil}
 		outFlow, ok = f.(*mgologstash.Flow)
-		require.True(t, ok)
+		flowTestResults <- testResult{ok, "flow is *mgologstash.Flow", nil}
 
 		flow3 := getTestFlow3()
 		flow3.ID = outFlow.ID
-		require.Equal(t, flow3, outFlow)
-		t.Log("Read delayed 3rd record")
-		wg.Done()
-	}(t, flows, &wg)
+		flowTestResults <- testResult{reflect.DeepEqual(flow3, outFlow), "flow3 read correctly", []interface{}{outFlow, flow3}}
+		close(flowTestResults)
+	}(flowTestResults, flows, &wg)
 
-	wg.Add(1)
-	go func(t *testing.T, errors <-chan error, wg *sync.WaitGroup) {
-		e := <-errors
-		require.Equal(t, e, context.Canceled)
-		t.Log("Read context cancelled")
-		wg.Done()
-	}(t, errors, &wg)
+	go func(errorTestResults chan<- testResult, errs <-chan error, wg *sync.WaitGroup) {
+		e := <-errs
+		errorTestResults <- testResult{errors.Cause(e) == context.Canceled, "error cause is context.Cancelled", []interface{}{context.Canceled, errors.Cause(e)}}
+		close(errorTestResults)
+	}(errorTestResults, errs, &wg)
 
 	time.Sleep(2 * time.Second)
 	err = c.Insert(getTestFlow3())
 	require.Nil(t, err)
-	t.Log("Wrote three records")
 	time.Sleep(2 * time.Second)
 	cancel()
-	t.Log("Cancelled reader context")
-	wg.Wait()
+
+	for result := range flowTestResults {
+		if !result.testPass {
+			msg := fmt.Sprintf("FAIL: %s\n", result.testDesc)
+			if result.testData != nil {
+				msg = fmt.Sprintf("%sData: %s\n", msg, spew.Sdump(result.testData))
+			}
+			t.Fatal(msg)
+		}
+	}
+
+	for result := range errorTestResults {
+		if !result.testPass {
+			msg := fmt.Sprintf("FAIL: %s\n", result.testDesc)
+			if result.testData != nil {
+				msg = fmt.Sprintf("%s\tData: %+v\n", msg, result.testData)
+			}
+			t.Fatal(msg)
+		}
+	}
+
 	count, err := c.Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, count)

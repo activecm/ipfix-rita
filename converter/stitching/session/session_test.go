@@ -3,7 +3,7 @@ package session_test
 import (
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/environmenttest"
+	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
@@ -457,8 +457,7 @@ func TestToRITAProtos(t *testing.T) {
 }
 
 func TestMongoDBStorage(t *testing.T) {
-	env, cleanup := environmenttest.SetupIntegrationTest(t)
-	defer cleanup()
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	testFlowA := ipfix.NewFlowMock()
 	testFlowB := ipfix.NewFlowMock()
@@ -527,4 +526,5 @@ func TestMongoDBStorage(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, sessA, storedSessPostUpdate)
 
+	integrationtest.CloseDependencies()
 }

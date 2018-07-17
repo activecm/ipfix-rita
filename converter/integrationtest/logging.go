@@ -16,7 +16,7 @@ func newLogger(t *testing.T) logging.Logger {
 }
 
 func (l logger) Error(err error, fields logging.Fields) {
-	l.t.Errorf("%s\n%+v\n", err, fields)
+	l.t.Errorf("%+v\n%+v\n", err, fields)
 }
 
 func (l logger) Info(msg string, fields logging.Fields) {

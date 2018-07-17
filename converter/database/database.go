@@ -31,8 +31,10 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	var err error
 	if conf.GetTLS().IsEnabled() {
 		db.ssn, err = dialTLS(conf)
+		err = errors.Wrap(err, "could not connect to MongoDB over TLS")
 	} else {
 		db.ssn, err = dialInsecure(conf)
+		err = errors.Wrap(err, "could not connect to MongoDB (no TLS)")
 	}
 	if err != nil {
 		return db, err
@@ -56,7 +58,7 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	})
 
 	if err != nil {
-		return db, err
+		return db, errors.Wrap(err, "could not create AggregateQuery index")
 	}
 
 	err = db.sessions.EnsureIndex(mgo.Index{
@@ -68,7 +70,7 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	})
 
 	if err != nil {
-		return db, err
+		return db, errors.Wrap(err, "could not create ExpirationQuery index")
 	}
 
 	err = db.metaDBDatabases.EnsureIndex(mgo.Index{
@@ -81,7 +83,7 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	})
 
 	if err != nil {
-		return db, err
+		return db, errors.Wrap(err, "could not create MetaDB nameindex index")
 	}
 
 	return db, nil
@@ -125,7 +127,7 @@ func (db *DB) NewOutputConnection(suffix string) (*mgo.Collection, error) {
 
 		if err != nil {
 			ssn.Close()
-			return nil, err
+			return nil, errors.Wrapf(err, "could not create RITA conn index %s", index)
 		}
 	}
 	return connColl, nil
@@ -135,12 +137,12 @@ func (db *DB) NewOutputConnection(suffix string) (*mgo.Collection, error) {
 func (db *DB) Ping() error {
 	err := db.ssn.Ping()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not contact the database")
 	}
 	//see if theres any permissions problems
 	_, err = db.ssn.DatabaseNames()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not list the databases in the database")
 	}
 	return nil
 }
@@ -159,7 +161,7 @@ func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
 		pem, err := ioutil.ReadFile(caFilePath)
 		err = errors.WithStack(err)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "could not read CA file")
 		}
 
 		tlsConf.RootCAs = x509.NewCertPool()
@@ -167,12 +169,12 @@ func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
 	}
 	authMechanism, err := conf.GetAuthMechanism()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not parse auth mechanism for MongoDB")
 	}
 	ssn, err := mgosec.Dial(conf.GetConnectionString(), authMechanism, &tlsConf)
 	errors.WithStack(err)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not connect to MongoDB")
 	}
 	return ssn, err
 }
@@ -180,12 +182,12 @@ func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
 func dialInsecure(conf config.MongoDB) (*mgo.Session, error) {
 	authMechanism, err := conf.GetAuthMechanism()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not parse auth mechanism for MongoDB")
 	}
 	ssn, err := mgosec.DialInsecure(conf.GetConnectionString(), authMechanism)
 	err = errors.WithStack(err)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not connect to MongoDB")
 	}
 	return ssn, err
 }

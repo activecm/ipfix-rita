@@ -1,6 +1,7 @@
 package mgologstash
 
 import (
+	"github.com/pkg/errors"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -36,7 +37,7 @@ func (b *idBuffer) Next(out *Flow) bool {
 
 		if err != nil {
 			if err != mgo.ErrNotFound {
-				b.err = err
+				b.err = errors.Wrap(err, "could not fetch next record from input collection")
 			}
 			return false
 		}

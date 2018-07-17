@@ -60,12 +60,12 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 
 	flowStart, err := flow.FlowStartMilliseconds()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "Could not parse flow start milliseconds")
 	}
 
 	flowEnd, err := flow.FlowEndMilliseconds()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "Could not parse flow end milliseconds")
 	}
 
 	sess.ProtocolIdentifier = flow.ProtocolIdentifier()

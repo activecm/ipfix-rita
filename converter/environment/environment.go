@@ -5,6 +5,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/config/yaml"
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/logging"
+	"github.com/pkg/errors"
 )
 
 //Environment is used to embed the methods provided by
@@ -26,15 +27,15 @@ func NewDefaultEnvironment() (Environment, error) {
 	}
 	configBuff, err := yaml.ReadConfigFile()
 	if err != nil {
-		return envOut, err
+		return envOut, errors.Wrap(err, "could not read configuration file")
 	}
 	envOut.Config, err = yaml.NewYAMLConfig(configBuff)
 	if err != nil {
-		return envOut, err
+		return envOut, errors.Wrap(err, "could not parse configuration")
 	}
 	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig(), envOut.GetRITAConfig())
 	if err != nil {
-		return envOut, err
+		return envOut, errors.Wrap(err, "could not connect to database specified in configuration")
 	}
 	return envOut, nil
 }

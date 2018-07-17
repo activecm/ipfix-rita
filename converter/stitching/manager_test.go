@@ -726,8 +726,7 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	//ensure the session timing mismatch error fires as a warning
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
@@ -808,8 +807,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	//ensure the session timing mismatch error fires as a warning
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
@@ -996,7 +994,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
@@ -1063,7 +1061,7 @@ func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
@@ -1097,7 +1095,7 @@ func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])
@@ -1221,7 +1219,7 @@ func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 
 	require.Len(t, sessions, 2)
 
-	require.Len(t, errs, 1)
+	require.Len(t, errs, 0)
 
 	requireFlowStitchedWithZeroes(t, flow1, sessions[0])
 	requireFlowStitchedWithZeroes(t, flow2, sessions[1])

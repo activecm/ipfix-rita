@@ -14,8 +14,7 @@ func (i *ipfix) GetLocalNetworks() ([]net.IPNet, []error) {
 	for j := range i.LocalNets {
 		_, net, err := net.ParseCIDR(i.LocalNets[j])
 		if err != nil {
-			err = errors.WithStack(err)
-			errorList = append(errorList, err)
+			errorList = append(errorList, errors.WithStack(err))
 		} else {
 			nets = append(nets, *net)
 		}

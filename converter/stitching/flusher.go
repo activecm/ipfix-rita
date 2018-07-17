@@ -2,6 +2,7 @@ package stitching
 
 import (
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
+	"github.com/pkg/errors"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -49,7 +50,7 @@ func (f *flusher) close() {
 func (f *flusher) shouldFlush() (bool, error) {
 	count, err := f.sessionsColl.Count()
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "could not check if the sessions collection is full")
 	}
 	return count >= f.preFlushMaxSize, nil
 }
@@ -59,7 +60,7 @@ func (f *flusher) shouldFlush() (bool, error) {
 func (f *flusher) flush() error {
 	count, err := f.sessionsColl.Count()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not check if the sessions collection is empty")
 	}
 	if count <= f.preFlushMaxSize {
 		return nil
@@ -69,7 +70,12 @@ func (f *flusher) flush() error {
 		//flush out the garbage first
 		err := f.flushNPacketConnections(i, &count)
 		if err != nil {
-			return err
+			return errors.Wrapf(err,
+				"failed to flush %d packet connections from the sessions collection\n"+
+					"flush started at: %d\n"+
+					"current count: %d\n"+
+					"target count: %d", i, f.preFlushMaxSize, count, f.postFlushMaxSize,
+			)
 		}
 
 		//If we've flushed enough flows, return
@@ -80,14 +86,19 @@ func (f *flusher) flush() error {
 	//flush enough old flows to get to the postFlushMaxSize
 	err = f.flushOldest(&count, f.postFlushMaxSize)
 
-	return err
+	return errors.Wrapf(err,
+		"failed to flush oldest connections from the sessions collection\n"+
+			"flush started at: %d\n"+
+			"current count: %d\n"+
+			"target count: %d", f.preFlushMaxSize, count, f.postFlushMaxSize,
+	)
 }
 
 //flushAll flushes the entirety of the sessionsColl
 func (f *flusher) flushAll() error {
 	count, err := f.sessionsColl.Count()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not check if the sessions collection is empty")
 	}
 	if count == 0 {
 		return nil
@@ -96,11 +107,21 @@ func (f *flusher) flushAll() error {
 	for i := 1; i <= 2; i++ {
 		err := f.flushNPacketConnections(i, &count)
 		if err != nil {
-			return err
+			return errors.Wrapf(err,
+				"failed to flush %d packet connections from the sessions collection\n"+
+					"flush started at: %d\n"+
+					"current count: %d\n"+
+					"target count: %d", i, f.preFlushMaxSize, count, f.postFlushMaxSize,
+			)
 		}
 	}
 	err = f.flushOldest(&count, 0)
-	return err
+	return errors.Wrapf(err,
+		"failed to flush oldest connections from the sessions collection\n"+
+			"flush started at: %d\n"+
+			"current count: %d\n"+
+			"target count: %d", f.preFlushMaxSize, count, f.postFlushMaxSize,
+	)
 }
 
 //flushNPacketConnections flushes sessions which contain
@@ -125,7 +146,7 @@ func (f *flusher) flushNPacketConnections(n int, currentCount *int) error {
 	for flushIter.Next(sessAgg) {
 		err := f.sessionsColl.RemoveId(sessAgg.ID)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "could not remove session from sessions collection\n%+v", sessAgg)
 		}
 		*currentCount--
 		f.nPacketConnsFlushed[n]++
@@ -133,7 +154,7 @@ func (f *flusher) flushNPacketConnections(n int, currentCount *int) error {
 		f.sessionsOut <- sessAgg
 		sessAgg = new(session.Aggregate)
 	}
-	return flushIter.Err()
+	return errors.Wrapf(flushIter.Err(), "could not find all %d packet sessions to flush", n)
 }
 
 //flushOldest flushes records out of the sessionsColl
@@ -149,7 +170,7 @@ func (f *flusher) flushOldest(currentCount *int, targetCount int) error {
 	for flushIter.Next(sessAgg) && *currentCount > targetCount {
 		err := f.sessionsColl.RemoveId(sessAgg.ID)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "could not remove session from sessions collection\n%+v", sessAgg)
 		}
 		*currentCount--
 		f.oldConnsFlushed++
@@ -157,5 +178,5 @@ func (f *flusher) flushOldest(currentCount *int, targetCount int) error {
 		f.sessionsOut <- sessAgg
 		sessAgg = new(session.Aggregate)
 	}
-	return flushIter.Err()
+	return errors.Wrapf(flushIter.Err(), "could not find %d old sessions to flush", *currentCount-targetCount)
 }
