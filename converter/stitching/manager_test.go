@@ -9,6 +9,7 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestMain(m *testing.M) {
 
 //newTestingStitchingManager is a helper for creating
 //a stitching manager so tests don't get bogged down with setup code
-func newTestingStitchingManager() Manager {
+func newTestingStitchingManager(logger logging.Logger) Manager {
 	sameSessionThreshold := oneMinuteMillis //milliseconds
 	numStitchers := int32(5)                //number of workers
 	stitcherBufferSize := 5                 //number of flows that are buffered for each worker
@@ -43,6 +44,7 @@ func newTestingStitchingManager() Manager {
 		stitcherBufferSize,
 		outputBufferSize,
 		sessionsTableMaxSize,
+		logger,
 	)
 }
 
@@ -311,7 +313,7 @@ func requireFlowsStitchedFlippedSides(t *testing.T, flow1, flow2 ipfix.Flow, ses
 
 /*  **********  SelectStitcher Tests  **********  */
 func TestSelectStitcherFairness(t *testing.T) {
-	manager := newTestingStitchingManager()
+	manager := newTestingStitchingManager(logging.NewTestLogger(t))
 
 	//generate a bunch of data
 	//act like were distributing the data to the workers
@@ -332,7 +334,7 @@ func TestSelectStitcherFairness(t *testing.T) {
 }
 
 func TestSelectStitcherReproducible(t *testing.T) {
-	manager := newTestingStitchingManager()
+	manager := newTestingStitchingManager(logging.NewTestLogger(t))
 
 	flow1 := ipfix.NewFlowMock()
 	flow2 := ipfix.NewFlowMock()
@@ -363,7 +365,7 @@ func TestSelectStitcherReproducible(t *testing.T) {
 }
 
 func TestSelectStitcherFlippedFlowKeys(t *testing.T) {
-	manager := newTestingStitchingManager()
+	manager := newTestingStitchingManager(logging.NewTestLogger(t))
 
 	//repeat the test a few times since the data is random
 	for i := 0; i < 100; i++ {
@@ -389,7 +391,7 @@ func TestGoRoutineLeaks(t *testing.T) {
 	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	numGoRoutines := runtime.NumGoroutine()
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	_, errs := stitchingManager.RunSync(
 		[]ipfix.Flow{
 			ipfix.NewFlowMock(),
@@ -428,7 +430,7 @@ func TestSingleIcmpFlow(t *testing.T) {
 	flow1.MockFlowEndReason = ipfix.IdleTimeout
 
 	//run the stitching manager
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
 
 	//ensure only one aggregate is created
@@ -472,7 +474,7 @@ func TestTwoICMPFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	//ensure two aggregates are created since its ICMP
@@ -517,7 +519,7 @@ func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	//ensure two aggregates are created since its ICMP
@@ -562,7 +564,7 @@ func TestTwoICMPFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	//ensure two aggregates are created since its ICMP
@@ -607,7 +609,7 @@ func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	//ensure two aggregates are created since its ICMP
@@ -642,7 +644,7 @@ func TestSingleUDPFlow(t *testing.T) {
 	flow1.MockFlowEndReason = ipfix.IdleTimeout
 
 	//run the stitching manager
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
 
 	//ensure only one aggregate is created
@@ -682,7 +684,7 @@ func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -721,7 +723,7 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -759,7 +761,7 @@ func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -802,7 +804,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -829,7 +831,7 @@ func TestSingleTCPIdleOutFlow(t *testing.T) {
 	flow1.MockFlowEndReason = ipfix.IdleTimeout
 
 	//run the stitching manager
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
 
 	//ensure only one aggregate is created
@@ -869,7 +871,7 @@ func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -908,7 +910,7 @@ func TwoTCPIdleOutFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -946,7 +948,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -989,7 +991,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1016,7 +1018,7 @@ func TestSingleTCPEOFFlow(t *testing.T) {
 	flow1.MockFlowEndReason = ipfix.EndOfFlow
 
 	//run the stitching manager
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
 
 	//ensure only one aggregate is created
@@ -1056,7 +1058,7 @@ func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1090,7 +1092,7 @@ func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1128,7 +1130,7 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv4(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -1171,7 +1173,7 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv6(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 1)
@@ -1214,7 +1216,7 @@ func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + 5*thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1252,7 +1254,7 @@ func TestIPv4Multicast(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1290,7 +1292,7 @@ func TestIPv4Broadcast(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1328,7 +1330,7 @@ func TestIPv6Multicast(t *testing.T) {
 	flow2.MockFlowStartMilliseconds = flow1.MockFlowEndMilliseconds + thirtySecondsMillis
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, sessions, 2)
@@ -1356,7 +1358,7 @@ func TestFlush1PacketFlowsFirst(t *testing.T) {
 		flows = append(flows, flow)
 	}
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync(flows, env.DB)
 
 	require.Len(t, sessions, 20)
@@ -1385,7 +1387,7 @@ func TestFlush2PacketFlowsSecond(t *testing.T) {
 		flows = append(flows, flow)
 	}
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	sessions, errs := stitchingManager.RunSync(flows, env.DB)
 
 	require.Len(t, sessions, 20)
@@ -1412,7 +1414,7 @@ func TestFlushOldestFlowsLast(t *testing.T) {
 		flows = append(flows, flow)
 	}
 
-	stitchingManager := newTestingStitchingManager()
+	stitchingManager := newTestingStitchingManager(env.Logger)
 	stitchingManager.numStitchers = 1 //remove parallelism to test out order
 	sessions, errs := stitchingManager.RunSync(flows, env.DB)
 

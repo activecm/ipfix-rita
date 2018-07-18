@@ -12,7 +12,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +19,7 @@ func TestReader(t *testing.T) {
 	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
 
 	buff := mgologstash.NewIDBuffer(env.DB.NewInputConnection(), env.Logger)
-	reader := mgologstash.NewReader(buff, 2*time.Second)
+	reader := mgologstash.NewReader(buff, 2*time.Second, env.Logger)
 
 	c := env.DB.NewInputConnection()
 	err := c.Insert(getTestFlow1())
@@ -71,8 +70,8 @@ func TestReader(t *testing.T) {
 	}(flowTestResults, flows, &wg)
 
 	go func(errorTestResults chan<- testResult, errs <-chan error, wg *sync.WaitGroup) {
-		e := <-errs
-		errorTestResults <- testResult{errors.Cause(e) == context.Canceled, "error cause is context.Cancelled", []interface{}{context.Canceled, errors.Cause(e)}}
+		e, ok := <-errs
+		errorTestResults <- testResult{!ok, "no errors should be recieved", e}
 		close(errorTestResults)
 	}(errorTestResults, errs, &wg)
 

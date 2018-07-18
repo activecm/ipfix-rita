@@ -10,6 +10,7 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/environment"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
@@ -35,8 +36,8 @@ func convert() error {
 		return err
 	}
 	pollWait := 30 * time.Second
-	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection(), env.Logger), pollWait)
-	ctx, cancel := interruptContext()
+	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection(), env.Logger), pollWait, env.Logger)
+	ctx, cancel := interruptContext(env.Logger)
 	defer cancel()
 	flowData, inputErrors := reader.Drain(ctx)
 
@@ -52,6 +53,7 @@ func convert() error {
 		stitcherBufferSize,
 		outputBufferSize,
 		sessionsCollMaxSize,
+		env.Logger,
 	)
 
 	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(flowData, env.DB)
@@ -66,35 +68,35 @@ func convert() error {
 		select {
 		case err, ok := <-inputErrors:
 			if !ok {
-				fmt.Println("Input Errors Closed")
+				env.Info("input errors closed", nil)
 				inputErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "Input Error: %+v\n", err)
+			env.Error(err, logging.Fields{"component": "input"})
 		case err, ok := <-stitchingErrors:
 			if !ok {
-				fmt.Println("Stitching Errors Closed")
+				env.Info("stitching errors closed", nil)
 				stitchingErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "Stitching Error: %+v\n", err)
+			env.Error(err, logging.Fields{"component": "stitching"})
 		case err, ok := <-writingErrors:
 			if !ok {
-				fmt.Println("Writing Errors Closed")
+				env.Info("output errors closed", nil)
 				writingErrors = nil
 				break
 			}
-			fmt.Fprintf(os.Stderr, "Writing Error: %+v\n", err)
+			env.Error(err, logging.Fields{"component": "output"})
 		}
 		if inputErrors == nil && stitchingErrors == nil && writingErrors == nil {
 			break
 		}
 	}
-	fmt.Println("Main thread exiting")
+	env.Info("main thread exiting", nil)
 	return nil
 }
 
-func interruptContext() (context.Context, func()) {
+func interruptContext(log logging.Logger) (context.Context, func()) {
 	// trap Ctrl+C and call cancel on the context
 	ctx, cancel := context.WithCancel(context.Background())
 	sigChan := make(chan os.Signal, 2)
@@ -102,10 +104,10 @@ func interruptContext() (context.Context, func()) {
 	go func() {
 		select {
 		case <-sigChan:
-			fmt.Printf("\nRecieved CTRL-C\n")
+			log.Info("CTRL-C Received", nil)
 			cancel()
 		case <-ctx.Done():
 		}
 	}()
-	return ctx, func() { /*signal.Stop(sigChan);*/ cancel() }
+	return ctx, cancel /*func() { signal.Stop(sigChan); cancel() }*/
 }

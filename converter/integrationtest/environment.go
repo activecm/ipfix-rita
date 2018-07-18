@@ -5,6 +5,7 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/logging"
 )
 
 //newEnvironment creates a new environment.Environment
@@ -13,7 +14,7 @@ import (
 func newEnvironment(t *testing.T, mongoDBURI string) environment.Environment {
 	envOut := environment.Environment{
 		Config: newConfig(mongoDBURI),
-		Logger: newLogger(t),
+		Logger: logging.NewTestLogger(t),
 	}
 	var err error
 	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig(), envOut.GetRITAConfig())

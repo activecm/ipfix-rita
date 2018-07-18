@@ -2,12 +2,12 @@ package stitching
 
 import (
 	"encoding/binary"
-	"fmt"
 	"hash/fnv"
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/pkg/errors"
 )
@@ -31,11 +31,13 @@ type Manager struct {
 	//sessionsTableMaxSize determines the max amount of unmatched session aggregates
 	//that may exist in the sessions table/collection before a flush happens
 	sessionsTableMaxSize int
+	log                  logging.Logger
 }
 
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
-	stitcherBufferSize, outputBufferSize, sessionsTableMaxSize int) Manager {
+	stitcherBufferSize, outputBufferSize, sessionsTableMaxSize int,
+	log logging.Logger) Manager {
 
 	return Manager{
 		sameSessionThreshold: sameSessionThreshold,
@@ -43,6 +45,7 @@ func NewManager(sameSessionThreshold int64, numStitchers int32,
 		numStitchers:         numStitchers,
 		outputBufferSize:     outputBufferSize,
 		sessionsTableMaxSize: sessionsTableMaxSize,
+		log:                  log,
 	}
 }
 
@@ -154,6 +157,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		}
 
 		if shouldFlush {
+			m.log.Info("initiating session aggregate flush", nil)
 			//wait for the stitchers to run through their buffers
 			for i := 0; i < int(m.numStitchers); i++ {
 				stitchers[i].waitForFlush()
@@ -177,16 +181,22 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	flusher.flushAll()
 	flusher.close()
 
-	fmt.Printf("Flows Read: %d\n", flowCount)
-	fmt.Printf("1 Packet Flows Left Unstitched: %d\n", flusher.nPacketConnsFlushed[1])
-	fmt.Printf("2 Packet Flows Left Unstitched: %d\n", flusher.nPacketConnsFlushed[2])
-	fmt.Printf("Other Flows Left Unstitched: %d\n", flusher.oldConnsFlushed)
+	m.log.Info("stitching manager exiting", logging.Fields{
+		"flows read": flowCount,
+		"flows stitched": flowCount -
+			flusher.nPacketConnsFlushed[1] -
+			flusher.nPacketConnsFlushed[2] -
+			flusher.oldConnsFlushed,
+		"1 packet flows left unstitched": flusher.nPacketConnsFlushed[1],
+		"2 packet flows left unstitched": flusher.nPacketConnsFlushed[2],
+		"other flows left unstitched":    flusher.oldConnsFlushed,
+	})
 
 	//all stichers and flushers are done, no more sessions can be produced
 	close(sessions)
 	//all senders on the errors channel have finished execution
 	close(errs)
-	fmt.Println("Stitching manager finished")
+	m.log.Info("stitching manager exited", nil)
 }
 
 //selectStitcher hashes a flow's flow key and mods the result over the
