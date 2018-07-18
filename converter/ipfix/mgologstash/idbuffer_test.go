@@ -22,7 +22,7 @@ func TestBuffer(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 2, count)
 
-	buffer := mgologstash.NewIDBuffer(c)
+	buffer := mgologstash.NewIDBuffer(c, env.Logger)
 	var flow mgologstash.Flow
 
 	more := buffer.Next(&flow)
@@ -48,3 +48,5 @@ func TestBuffer(t *testing.T) {
 	buffer.Close()
 
 }
+
+//TODO: TestSkipInvalidFlows

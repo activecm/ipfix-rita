@@ -100,3 +100,5 @@ func TestInheritance(t *testing.T) {
 	_, ok := flow.(ipfix.Flow)
 	require.True(t, ok)
 }
+
+//TODO: TestFillFromBSONMap

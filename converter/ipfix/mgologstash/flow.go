@@ -37,47 +37,47 @@ type Flow struct {
 	} `bson:"netflow"`
 }
 
-//FillFromMgoMap reads the data from a bson map and inserts
+//FillFromBSONMap reads the data from a bson map and inserts
 //it into this flow, returning true if the conversion was successful.
 //This method is used for filtering input data. Otherwise,
 //the data could be read directly into the struct with mgo.
-func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
+func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
 	//fmt.Println("0")
 	idIface, ok := inputMap["_id"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key '_id'")
 	}
 	//fmt.Println("1")
 	id, ok := idIface.(bson.ObjectId)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to bson.ObjectID", idIface)
 	}
 	//fmt.Println("2")
 
 	hostIface, ok := inputMap["host"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'host'")
 	}
 	//fmt.Println("3")
 
 	host, ok := hostIface.(string)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to string", hostIface)
 	}
 	//fmt.Println("4")
 
 	netflowMapIface, ok := inputMap["netflow"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow'")
 	}
 	//fmt.Println("5")
 
 	netflowMap, ok := netflowMapIface.(bson.M)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to bson.M", netflowMapIface)
 	}
 	//fmt.Println("6")
 
@@ -89,28 +89,28 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 		//fmt.Println("7")
 		sourceIPv4, ok = sourceIPv4Iface.(string)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to string", sourceIPv4Iface)
 		}
 	} else if sourceIPv6Ok {
 		//fmt.Println("8")
 		sourceIPv6, ok = sourceIPv6Iface.(string)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to string", sourceIPv6Iface)
 		}
 	} else {
 		//fmt.Println("9")
-		return false
+		return errors.New("input map must contain key 'netflow.sourceIPv4Address' or 'netflow.sourceIPv6Address'")
 	}
 	//fmt.Println("10")
 
 	sourcePortIface, ok := netflowMap["sourceTransportPort"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.sourceTransportPort'")
 	}
 	//fmt.Println("11")
 	sourcePort, ok := sourcePortIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", sourcePortIface)
 	}
 	//fmt.Println("12")
 
@@ -122,56 +122,56 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 		//fmt.Println("13")
 		destIPv4, ok = destIPv4Iface.(string)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to string", destIPv4Iface)
 		}
 	} else if destIPv6Ok {
 		//fmt.Println("14")
 		destIPv6, ok = destIPv6Iface.(string)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
 		}
 	} else {
 		//fmt.Println("15")
-		return false
+		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
 	}
 	//fmt.Println("16")
 
 	destPortIface, ok := netflowMap["destinationTransportPort"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.destinationTransportPort'")
 	}
 	//fmt.Println("17")
 	destPort, ok := destPortIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", destPortIface)
 	}
 	//fmt.Println("18")
 
 	flowStartIface, ok := netflowMap["flowStartMilliseconds"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.flowStartMilliseconds'")
 	}
 	//fmt.Println("19")
 	flowStart, ok := flowStartIface.(string)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to string", flowStartIface)
 	}
 	//fmt.Println("20")
 
 	flowEndIface, ok := netflowMap["flowEndMilliseconds"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.flowEndMilliseconds'")
 	}
 	//fmt.Println("21")
 	flowEnd, ok := flowEndIface.(string)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to string", flowEndIface)
 	}
 	//fmt.Println("22")
 
 	octetTotalIface, ok := netflowMap["octetTotalCount"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.octetTotalCount'")
 	}
 	//fmt.Println("23")
 	octetTotal, ok := octetTotalIface.(int64)
@@ -180,7 +180,7 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 		//Go handles them as 64 bit ints, provide both casts
 		octetTotal32, ok := octetTotalIface.(int)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to int", octetTotalIface)
 		}
 		octetTotal = int64(octetTotal32)
 	}
@@ -188,7 +188,7 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 
 	packetTotalIface, ok := netflowMap["packetTotalCount"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.packetTotalCount'")
 	}
 	//fmt.Println("25")
 	packetTotal, ok := packetTotalIface.(int64)
@@ -197,7 +197,7 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 		//Go handles them as 64 bit ints, provide both casts
 		packetTotal32, ok := packetTotalIface.(int)
 		if !ok {
-			return false
+			return errors.Errorf("could not convert %+v to int", packetTotalIface)
 		}
 		packetTotal = int64(packetTotal32)
 	}
@@ -205,56 +205,56 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 
 	protocolIDIface, ok := netflowMap["protocolIdentifier"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.protocolIdentifier'")
 	}
 	//fmt.Println("27")
 	protocolID, ok := protocolIDIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", protocolIDIface)
 	}
 	//fmt.Println("28")
 
 	ipClassOfServiceIface, ok := netflowMap["ipClassOfService"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.ipClassOfService'")
 	}
 	//fmt.Println("29")
 	ipClassOfService, ok := ipClassOfServiceIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", ipClassOfServiceIface)
 	}
 	//fmt.Println("30")
 
 	vlanIDIface, ok := netflowMap["vlanId"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.vlanId'")
 	}
 	//fmt.Println("31")
 	vlanID, ok := vlanIDIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", vlanIDIface)
 	}
 	//fmt.Println("32")
 
 	flowEndReasonIface, ok := netflowMap["flowEndReason"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.flowEndReason'")
 	}
 	//fmt.Println("33")
 	flowEndReason, ok := flowEndReasonIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", flowEndReasonIface)
 	}
 	//fmt.Println("34")
 
 	versionIface, ok := netflowMap["version"]
 	if !ok {
-		return false
+		return errors.New("input map must contain key 'netflow.version'")
 	}
 	//fmt.Println("35")
 	version, ok := versionIface.(int)
 	if !ok {
-		return false
+		return errors.Errorf("could not convert %+v to int", versionIface)
 	}
 	//fmt.Println("36")
 
@@ -288,7 +288,7 @@ func (i *Flow) FillFromMgoMap(inputMap bson.M) bool {
 	i.Netflow.VlanID = uint16(vlanID)
 	i.Netflow.FlowEndReason = ipfix.FlowEndReason(flowEndReason)
 	i.Netflow.Version = uint8(version)
-	return true
+	return nil
 }
 
 //SourceIPAddress returns the source IPv4 or IPv6 address

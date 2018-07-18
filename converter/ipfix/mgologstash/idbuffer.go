@@ -1,6 +1,7 @@
 package mgologstash
 
 import (
+	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/pkg/errors"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -11,12 +12,14 @@ import (
 type idBuffer struct {
 	input *mgo.Collection
 	err   error
+	log   logging.Logger
 }
 
 //NewIDBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
-func NewIDBuffer(input *mgo.Collection) Buffer {
+func NewIDBuffer(input *mgo.Collection, log logging.Logger) Buffer {
 	return &idBuffer{
 		input: input,
+		log:   log,
 	}
 }
 
@@ -42,8 +45,12 @@ func (b *idBuffer) Next(out *Flow) bool {
 			return false
 		}
 
-		getNextRecord = !out.FillFromMgoMap(input)
-		//TODO: Figure out how to log the deserialization error
+		err = out.FillFromBSONMap(input)
+		if err == nil {
+			getNextRecord = false
+		} else {
+			b.log.Error(err, logging.Fields{"inputMap": input})
+		}
 	}
 
 	return true

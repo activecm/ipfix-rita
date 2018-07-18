@@ -35,7 +35,7 @@ func convert() error {
 		return err
 	}
 	pollWait := 30 * time.Second
-	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection()), pollWait)
+	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection(), env.Logger), pollWait)
 	ctx, cancel := interruptContext()
 	defer cancel()
 	flowData, inputErrors := reader.Drain(ctx)
