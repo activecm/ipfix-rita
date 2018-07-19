@@ -3,13 +3,31 @@ package mgologstash_test
 import (
 	"testing"
 
+	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuffer(t *testing.T) {
+func TestIDAtomicBuffer(t *testing.T) {
 	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	buffer := mgologstash.NewIDAtomicBuffer(env.DB.NewInputConnection(), env.Logger)
+	testBufferOrder(buffer, env, t)
+}
+
+func TestIDIterBuffer(t *testing.T) {
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	buffer := mgologstash.NewIDIterBuffer(env.DB.NewInputConnection(), env.Logger)
+	testBufferOrder(buffer, env, t)
+}
+
+func TestIDBulkBuffer(t *testing.T) {
+	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	buffer := mgologstash.NewIDBulkBuffer(env.DB.NewInputConnection(), env.Logger)
+	testBufferOrder(buffer, env, t)
+}
+
+func testBufferOrder(buffer mgologstash.Buffer, env environment.Environment, t *testing.T) {
 	testFlow1 := getTestFlow1()
 	testFlow2 := getTestFlow2()
 
@@ -21,8 +39,8 @@ func TestBuffer(t *testing.T) {
 	count, err := c.Count()
 	require.Nil(t, err)
 	require.Equal(t, 2, count)
+	c.Database.Session.Close()
 
-	buffer := mgologstash.NewIDBuffer(c, env.Logger)
 	var flow mgologstash.Flow
 
 	more := buffer.Next(&flow)

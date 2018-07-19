@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
@@ -41,21 +40,32 @@ func convert() error {
 	defer cancel()
 
 	pollWait := 30 * time.Second
-	var readers []ipfix.Reader
-	for i := 0; i < 3; i++ {
-		readers = append(readers,
-			input.NewReader(
-				input.NewIDBuffer(
-					env.DB.NewInputConnection(),
+	/*
+		var readers []ipfix.Reader
+		for i := 0; i < 1; i++ {
+			readers = append(readers,
+				input.NewReader(
+					input.NewIDBuffer(
+						env.DB.NewInputConnection(),
+						env.Logger,
+					),
+					pollWait,
 					env.Logger,
 				),
-				pollWait,
-				env.Logger,
-			),
-		)
-	}
+			)
+		}
 
-	inputData, inputErrors := ipfix.DrainNReaders(readers, ctx)
+		inputData, inputErrors := ipfix.DrainNReaders(readers, ctx)
+	*/
+	reader := input.NewReader(
+		input.NewIDBulkBuffer(
+			env.DB.NewInputConnection(),
+			env.Logger,
+		),
+		pollWait,
+		env.Logger,
+	)
+	inputData, inputErrors := reader.Drain(ctx)
 
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
 	numStitchers := int32(5)
