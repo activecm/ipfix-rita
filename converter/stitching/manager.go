@@ -2,6 +2,7 @@ package stitching
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"sync"
 
@@ -140,6 +141,13 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	//be closed when the program recieves CTRL-C
 	for inFlow := range input {
 		flowCount++
+
+		buffCounts := make(logging.Fields)
+		for i := range stitchers {
+			buffCounts[fmt.Sprintf("%d", i)] = len(stitchers[i].input)
+		}
+		m.log.Info("Stitcher Buffer Counts", buffCounts)
+
 		//use the hash partitioner to assign the flow to a stitcher
 		stitcherID := m.selectStitcher(inFlow)
 		//Send the flow to the assigned stitcher

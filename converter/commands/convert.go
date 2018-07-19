@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/ipfix"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
@@ -35,11 +36,26 @@ func convert() error {
 	if err != nil {
 		return err
 	}
-	pollWait := 30 * time.Second
-	reader := input.NewReader(input.NewIDBuffer(env.DB.NewInputConnection(), env.Logger), pollWait, env.Logger)
+
 	ctx, cancel := interruptContext(env.Logger)
 	defer cancel()
-	flowData, inputErrors := reader.Drain(ctx)
+
+	pollWait := 30 * time.Second
+	var readers []ipfix.Reader
+	for i := 0; i < 3; i++ {
+		readers = append(readers,
+			input.NewReader(
+				input.NewIDBuffer(
+					env.DB.NewInputConnection(),
+					env.Logger,
+				),
+				pollWait,
+				env.Logger,
+			),
+		)
+	}
+
+	inputData, inputErrors := ipfix.DrainNReaders(readers, ctx)
 
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
 	numStitchers := int32(5)
@@ -56,7 +72,7 @@ func convert() error {
 		env.Logger,
 	)
 
-	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(flowData, env.DB)
+	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(inputData, env.DB)
 
 	//var writer output.SpewRITAConnWriter
 	writer := output.RITAConnWriter{
