@@ -5,7 +5,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
-	"gopkg.in/mgo.v2/bson"
 )
 
 //Aggregate is used to aggregate multiple flows in to a session.
@@ -19,7 +18,7 @@ import (
 //two different session aggregates.
 type Aggregate struct {
 	AggregateQuery `bson:",inline"`
-	ID             bson.ObjectId `bson:"_id,omitempty"`
+	MatcherID      AggregateID `bson:"_id,omitempty"`
 
 	FlowStartMillisecondsAB int64 `bson:"flowStartMillisecondsAB"`
 	FlowEndMillisecondsAB   int64 `bson:"flowEndMillisecondsAB"`
@@ -38,6 +37,11 @@ type Aggregate struct {
 	FilledFromSourceB bool `bson:"filledFromSourceB"`
 }
 
+//AggregateID is a unique id given to Aggregates
+//Unfortunately, the AggregateQuery is not enough to
+//provide a unique index over Aggregates in a live data flow.
+type AggregateID interface{}
+
 //AggregateQuery represents the Flow Key + Exporter used to uniquely
 //identify each session aggregate
 type AggregateQuery struct {
@@ -53,7 +57,7 @@ type AggregateQuery struct {
 }
 
 //FromFlow fills a SessionAggregate from a Flow.
-//Note: ID is unaffected by this function.
+//Note: MatcherID is unaffected by this function.
 func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 	flowSource := flow.SourceIPAddress()
 	flowDest := flow.DestinationIPAddress()
@@ -151,7 +155,7 @@ func (s *Aggregate) Merge(other *Aggregate) error {
 
 //Clear sets an aggregate to its empty state
 func (s *Aggregate) Clear() {
-	s.ID = bson.ObjectId("")
+	s.MatcherID = nil
 
 	s.IPAddressA = ""
 	s.PortA = 0

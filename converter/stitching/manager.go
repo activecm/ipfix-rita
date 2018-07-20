@@ -2,13 +2,13 @@ package stitching
 
 import (
 	"encoding/binary"
-	"fmt"
 	"hash/fnv"
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/logging"
+	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/pkg/errors"
 )
@@ -106,6 +106,20 @@ func (m Manager) RunAsync(input <-chan ipfix.Flow,
 func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	sessions chan<- *session.Aggregate, errs chan<- error) {
 
+	//the matcher allows the stitchers to find session.Aggregates
+	//which may need to be stitched with other aggregates
+	matcher, err := mongomatch.NewMongoMatcher(
+		//.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
+		db, m.log, sessions, m.sessionsTableMaxSize, 0.9,
+	)
+	if err != nil {
+		errs <- errors.Wrap(err, "could not instantiate matcher")
+		close(sessions)
+		close(errs)
+		m.log.Info("stitching manager exited with error", nil)
+		return
+	}
+
 	//In order to parallelize the stitching process, we use hash partitioning
 	//which ensures no two stitchers will work on the same session.AggregateQuery.
 
@@ -117,20 +131,10 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 	for i := 0; i < int(m.numStitchers); i++ {
 		//create and start the stitchers
-		stitchers[i] = newStitcher(i, m.stitcherBufferSize, m.sameSessionThreshold, db.NewSessionsConnection(), sessions, errs)
+		stitchers[i] = newStitcher(i, m.stitcherBufferSize, m.sameSessionThreshold, matcher, sessions, errs)
 		stitchersDone.Add(1)
 		go stitchers[i].run(stitchersDone)
 	}
-
-	//flusher ensures the sessions collection/table never
-	//exceeds a constant size and is responsible for flushing out
-	//flows which were never matched with other flows
-	flusher := newFlusher(
-		db.NewSessionsConnection(),
-		sessions,
-		m.sessionsTableMaxSize,
-		0.9, //.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
-	)
 
 	//keep track of how many flows we process
 	var flowCount int
@@ -142,11 +146,14 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	for inFlow := range input {
 		flowCount++
 
-		buffCounts := make(logging.Fields)
-		for i := range stitchers {
-			buffCounts[fmt.Sprintf("%d", i)] = len(stitchers[i].input)
-		}
-		m.log.Info("Stitcher Buffer Counts", buffCounts)
+		/*
+			buffCounts := make(logging.Fields)
+			for i := range stitchers {
+				buffCounts[fmt.Sprintf("%d", i)] = len(stitchers[i].input)
+			}
+			m.log.Info("Stitcher Buffer Counts", buffCounts)
+			m.log.Info("Out Buffer Count", logging.Fields{"count": len(sessions)})
+		*/
 
 		//use the hash partitioner to assign the flow to a stitcher
 		stitcherID := m.selectStitcher(inFlow)
@@ -158,9 +165,10 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 		//TODO: Find a better way to monitor the size of the table
 		//instead of polling on every flow.
 		//maybe just mod flowCount and check every so often
-		shouldFlush, err := flusher.shouldFlush()
+
+		shouldFlush, err := matcher.ShouldFlush()
 		if err != nil {
-			errs <- errors.Wrap(err, "could not check whether the sessions collection should be flushed")
+			errs <- errors.Wrap(err, "could not check whether the matcher should be flushed")
 			continue //we can't trust shouldFlush if there is an error
 		}
 
@@ -171,9 +179,9 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 				stitchers[i].waitForFlush()
 			}
 
-			err := flusher.flush()
+			err := matcher.Flush()
 			if err != nil {
-				errs <- errors.Wrap(err, "could not flush the sessions collection")
+				errs <- errors.Wrap(err, "could not flush the matcher")
 			}
 		}
 	}
@@ -185,19 +193,11 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	//Wait for the stitchers to exit
 	stitchersDone.Wait()
 
-	//flush the rest of the sessions out
-	flusher.flushAll()
-	flusher.close()
+	//close the matcher and flush the rest of the sessions out
+	matcher.Close()
 
 	m.log.Info("stitching manager exiting", logging.Fields{
-		"flows read": flowCount,
-		"flows stitched": flowCount -
-			flusher.nPacketConnsFlushed[1] -
-			flusher.nPacketConnsFlushed[2] -
-			flusher.oldConnsFlushed,
-		"1 packet flows left unstitched": flusher.nPacketConnsFlushed[1],
-		"2 packet flows left unstitched": flusher.nPacketConnsFlushed[2],
-		"other flows left unstitched":    flusher.oldConnsFlushed,
+		"flows processed": flowCount,
 	})
 
 	//all stichers and flushers are done, no more sessions can be produced

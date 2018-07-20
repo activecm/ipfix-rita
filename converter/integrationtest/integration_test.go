@@ -10,7 +10,7 @@ import (
 func TestInitDependencies(t *testing.T) {
 	integrationDeps := integrationtest.GetDependencies(t)
 	require.NotNil(t, integrationDeps)
-	env := integrationDeps.GetFreshEnvironment(t)
+	env := integrationDeps.Env
 	require.NotNil(t, env.Config)
 	require.NotNil(t, env.Logger)
 	require.NotNil(t, env.DB.NewInputConnection())

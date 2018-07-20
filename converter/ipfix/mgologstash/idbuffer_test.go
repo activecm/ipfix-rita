@@ -10,19 +10,19 @@ import (
 )
 
 func TestIDAtomicBuffer(t *testing.T) {
-	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	env := integrationtest.GetDependencies(t).Env
 	buffer := mgologstash.NewIDAtomicBuffer(env.DB.NewInputConnection(), env.Logger)
 	testBufferOrder(buffer, env, t)
 }
 
 func TestIDIterBuffer(t *testing.T) {
-	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	env := integrationtest.GetDependencies(t).Env
 	buffer := mgologstash.NewIDIterBuffer(env.DB.NewInputConnection(), env.Logger)
 	testBufferOrder(buffer, env, t)
 }
 
 func TestIDBulkBuffer(t *testing.T) {
-	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	env := integrationtest.GetDependencies(t).Env
 	buffer := mgologstash.NewIDBulkBuffer(env.DB.NewInputConnection(), env.Logger)
 	testBufferOrder(buffer, env, t)
 }

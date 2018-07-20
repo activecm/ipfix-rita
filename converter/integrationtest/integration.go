@@ -13,10 +13,9 @@ import (
 //Dependencies holds the dependencies needed for conducting
 //an integration test
 type Dependencies struct {
-	loader         docker.Loader
-	mongoDB        dbtest.MongoDBContainer
-	env            environment.Environment
-	envInitialized bool
+	loader  docker.Loader
+	mongoDB dbtest.MongoDBContainer
+	Env     environment.Environment
 }
 
 //dependencies is a singleton of Dependencies
@@ -24,9 +23,13 @@ type Dependencies struct {
 //of GetDependencies
 var dependencies *Dependencies
 
+var dependenciesResetFuncs []func(*testing.T, *Dependencies)
+
 //GetDependencies returns a singleton instance of Dependencies.
 //If the short flag is supplied to Go test, GetDependencies
-//will cause the test to be skipped
+//will cause the test to be skipped. Any functions registered
+//with RegisterDependenciesResetFunc will be called before
+//the singleton is returned.
 func GetDependencies(t *testing.T) *Dependencies {
 	if testing.Short() {
 		t.Skip()
@@ -37,10 +40,29 @@ func GetDependencies(t *testing.T) *Dependencies {
 			fmt.Printf("%+v\n", err)
 			t.FailNow()
 		}
-		dependencies = &Dependencies{loader: loader, mongoDB: mongoDB}
+		dependencies = &Dependencies{
+			loader:  loader,
+			mongoDB: mongoDB,
+			Env:     newEnvironment(t, mongoDB.GetMongoDBURI()),
+		}
+
+		RegisterDependenciesResetFunc(resetInputColl)
+		RegisterDependenciesResetFunc(resetOutputColl)
+		RegisterDependenciesResetFunc(resetMetaDBDatabasesColl)
+	}
+
+	for i := range dependenciesResetFuncs {
+		dependenciesResetFuncs[i](t, dependencies)
 	}
 
 	return dependencies
+}
+
+//RegisterDependenciesResetFunc registers a function
+//which resets the Dependencies object to a fresh state
+//when GetDependencies is called
+func RegisterDependenciesResetFunc(resetFunc func(*testing.T, *Dependencies)) {
+	dependenciesResetFuncs = append(dependenciesResetFuncs, resetFunc)
 }
 
 //CloseDependencies tears down the dependencies created
@@ -48,59 +70,44 @@ func GetDependencies(t *testing.T) *Dependencies {
 //GetDependencies was never called.
 func CloseDependencies() {
 	if dependencies != nil {
-		if dependencies.envInitialized {
-			dependencies.env.DB.Close()
-		}
+		dependencies.Env.DB.Close()
 		dependencies.loader.StopService(context.Background(), dependencies.mongoDB)
 		dependencies.loader.Close()
 		dependencies = nil
 	}
 }
 
-//GetFreshEnvironment returns a singleton Environment tailored for testing.
-//This method clears out any data in the collections specified in
-//Environment.DB. As such, it is not thread-safe.
-func (deps *Dependencies) GetFreshEnvironment(t *testing.T) environment.Environment {
-	if !deps.envInitialized {
-		deps.env = newEnvironment(t, deps.mongoDB.GetMongoDBURI())
-		deps.envInitialized = true
-	}
-
+func resetInputColl(t *testing.T, deps *Dependencies) {
 	//clear out any old data
-	inputColl := deps.env.DB.NewInputConnection()
+	inputColl := deps.Env.DB.NewInputConnection()
 	_, err := inputColl.RemoveAll(nil)
 	if err != nil {
-		deps.env.Error(err, nil)
+		deps.Env.Error(err, nil)
 		t.FailNow()
 	}
 	inputColl.Database.Session.Close()
+}
 
-	outputColl, err := deps.env.DB.NewOutputConnection("")
+func resetOutputColl(t *testing.T, deps *Dependencies) {
+	outputColl, err := deps.Env.DB.NewOutputConnection("")
 	if err != nil {
-		deps.env.Error(err, nil)
+		deps.Env.Error(err, nil)
 		t.FailNow()
 	}
 	_, err = outputColl.RemoveAll(nil)
 	if err != nil {
-		deps.env.Error(err, nil)
+		deps.Env.Error(err, nil)
 		t.FailNow()
 	}
 	outputColl.Database.Session.Close()
+}
 
-	sessAggColl := deps.env.DB.NewSessionsConnection()
-	_, err = sessAggColl.RemoveAll(nil)
+func resetMetaDBDatabasesColl(t *testing.T, deps *Dependencies) {
+	dbsColl := deps.Env.DB.NewMetaDBDatabasesConnection()
+	_, err := dbsColl.RemoveAll(nil)
 	if err != nil {
-		deps.env.Error(err, nil)
-		t.FailNow()
-	}
-	sessAggColl.Database.Session.Close()
-
-	dbsColl := deps.env.DB.NewMetaDBDatabasesConnection()
-	_, err = dbsColl.RemoveAll(nil)
-	if err != nil {
-		deps.env.Error(err, nil)
+		deps.Env.Error(err, nil)
 		t.FailNow()
 	}
 	dbsColl.Database.Session.Close()
-	return deps.env
 }

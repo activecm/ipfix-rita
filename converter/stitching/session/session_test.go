@@ -6,6 +6,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
+	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestClear(t *testing.T) {
 	require.Equal(t, testFlow.Exporter(), sess.Exporter)
 
 	sess.Clear()
-	require.Equal(t, bson.ObjectId(""), sess.ID)
+	require.Equal(t, nil, sess.MatcherID)
 	require.False(t, sess.FilledFromSourceA)
 	require.False(t, sess.FilledFromSourceB)
 	require.Equal(t, "", sess.IPAddressA)
@@ -131,9 +132,9 @@ func TestMergeSameDirectionSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
-	sessA.ID = bson.NewObjectId()
-	sessAIDCopy := sessA.ID
-	sessB.ID = bson.NewObjectId()
+	sessA.MatcherID = bson.NewObjectId()
+	sessAMatcherIDCopy := sessA.MatcherID
+	sessB.MatcherID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
@@ -141,8 +142,8 @@ func TestMergeSameDirectionSequential(t *testing.T) {
 	require.True(t, sessA.FilledFromSourceA)
 	require.False(t, sessA.FilledFromSourceB)
 
-	//Dont' mess with the object ID
-	require.Equal(t, sessAIDCopy, sessA.ID)
+	//Dont' mess with the object MatcherID
+	require.Equal(t, sessAMatcherIDCopy, sessA.MatcherID)
 
 	//Don't mess with the flow key
 	require.Equal(t, testFlowA.SourceIPAddress(), sessA.IPAddressA)
@@ -190,13 +191,13 @@ func TestMergeSameDirectionAntiSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
-	sessA.ID = bson.NewObjectId()
-	sessAIDCopy := sessA.ID
-	sessB.ID = bson.NewObjectId()
+	sessA.MatcherID = bson.NewObjectId()
+	sessAMatcherIDCopy := sessA.MatcherID
+	sessB.MatcherID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
-	require.Equal(t, sessAIDCopy, sessA.ID)
+	require.Equal(t, sessAMatcherIDCopy, sessA.MatcherID)
 	require.True(t, sessA.FilledFromSourceA)
 	require.False(t, sessA.FilledFromSourceB)
 	//Don't mess with the flow key
@@ -245,13 +246,13 @@ func TestMergeOppositeDirectionSequential(t *testing.T) {
 	var sessB session.Aggregate
 	session.FromFlow(testFlowA, &sessA)
 	session.FromFlow(testFlowB, &sessB)
-	sessA.ID = bson.NewObjectId()
-	sessAIDCopy := sessA.ID
-	sessB.ID = bson.NewObjectId()
+	sessA.MatcherID = bson.NewObjectId()
+	sessAMatcherIDCopy := sessA.MatcherID
+	sessB.MatcherID = bson.NewObjectId()
 	err := sessA.Merge(&sessB)
 
 	require.Nil(t, err)
-	require.Equal(t, sessAIDCopy, sessA.ID)
+	require.Equal(t, sessAMatcherIDCopy, sessA.MatcherID)
 	require.True(t, sessA.FilledFromSourceA)
 	require.True(t, sessA.FilledFromSourceB)
 	//Don't mess with the flow key
@@ -457,7 +458,20 @@ func TestToRITAProtos(t *testing.T) {
 }
 
 func TestMongoDBStorage(t *testing.T) {
-	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	//clear out the Sessions collection used by the MongoMatcher
+	integrationtest.RegisterDependenciesResetFunc(
+		func(t *testing.T, deps *integrationtest.Dependencies) {
+			sessionsColl := deps.Env.DB.NewCollection(mongomatch.SessionsCollName)
+			_, err := sessionsColl.RemoveAll(nil)
+			if err != nil {
+				deps.Env.Error(err, nil)
+				t.FailNow()
+			}
+			sessionsColl.Database.Session.Close()
+		},
+	)
+	env := integrationtest.GetDependencies(t).Env
+	defer integrationtest.CloseDependencies()
 
 	testFlowA := ipfix.NewFlowMock()
 	testFlowB := ipfix.NewFlowMock()
@@ -491,7 +505,7 @@ func TestMongoDBStorage(t *testing.T) {
 	session.FromFlow(testFlowB, &sessB)
 
 	//store sessA as it stands
-	sessionsColl := env.DB.NewSessionsConnection()
+	sessionsColl := env.DB.NewCollection(mongomatch.SessionsCollName)
 	err := sessionsColl.Insert(&sessA)
 	require.Nil(t, err)
 
@@ -501,7 +515,7 @@ func TestMongoDBStorage(t *testing.T) {
 	require.Nil(t, err)
 
 	//The id was set by mongodb
-	sessA.ID = storedSessA.ID
+	sessA.MatcherID = storedSessA.MatcherID
 
 	//make sure sessA comes back the same (create, find, read)
 	require.Equal(t, sessA, storedSessA)
@@ -526,5 +540,4 @@ func TestMongoDBStorage(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, sessA, storedSessPostUpdate)
 
-	integrationtest.CloseDependencies()
 }

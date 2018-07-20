@@ -8,6 +8,7 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
+	"github.com/activecm/ipfix-rita/converter/stitching/matching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	mgo "gopkg.in/mgo.v2"
 )
@@ -26,7 +27,7 @@ var _, v6MulticastNet, _ = net.ParseCIDR("FF00::/8")
 type stitcher struct {
 	id                   int
 	sameSessionThreshold int64
-	sessionsColl         *mgo.Collection
+	matcher              matching.Matcher
 	sessionsOut          chan<- *session.Aggregate
 	errs                 chan<- error
 	input                chan ipfix.Flow
@@ -38,12 +39,12 @@ type stitcher struct {
 //newStitcher creates a new stitcher which uses the sessionsColl
 //to match flows into session aggregates
 func newStitcher(id, bufferSize int, sameSessionThreshold int64,
-	sessionsColl *mgo.Collection, sessionsOut chan<- *session.Aggregate,
+	matcher matching.Matcher, sessionsOut chan<- *session.Aggregate,
 	errs chan<- error) *stitcher {
 	return &stitcher{
 		id:                   id,
 		sameSessionThreshold: sameSessionThreshold,
-		sessionsColl:         sessionsColl,
+		matcher:              matcher,
 		sessionsOut:          sessionsOut,
 		errs:                 errs,
 		input:                make(chan ipfix.Flow, bufferSize),
@@ -62,7 +63,6 @@ func (s *stitcher) run(stitcherDone *sync.WaitGroup) {
 		s.inputDrained.Done()
 	}
 
-	s.sessionsColl.Database.Session.Close()
 	//let the manager know this stitcher is finished processing flows.
 	stitcherDone.Done()
 }
@@ -94,8 +94,8 @@ func (s *stitcher) waitForFlush() {
 //the sessionsOut channel.
 func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 	//Create a session aggregate from the flow
-	var sessAgg session.Aggregate
-	err := session.FromFlow(flow, &sessAgg)
+	var newSessAgg session.Aggregate
+	err := session.FromFlow(flow, &newSessAgg)
 	if err != nil {
 		return errors.Wrap(err, "could not create session.Aggregate from flow")
 	}
@@ -103,7 +103,7 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 	//We don't know how to stitch everything under the sun
 	//Unkown protocols and special addresses may cause us to bail on stitching
 	if s.shouldSkipStitching(flow) {
-		s.sessionsOut <- &sessAgg
+		s.sessionsOut <- &newSessAgg
 		return nil
 	}
 
@@ -113,7 +113,7 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 	matchFound := false
 
 	var oldSessAgg session.Aggregate
-	oldSessAggIter := s.sessionsColl.Find(&sessAgg.AggregateQuery).Iter()
+	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
 
 	//TODO: stitch with flow with closest timestamps rather than
 	//taking the first one that matches
@@ -122,25 +122,25 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 	for oldSessAggIter.Next(&oldSessAgg) && !matchFound {
 		//its possible these flows shouldn't be merged based on timestamps
 		//and FlowEndReasons
-		if s.shouldMerge(&sessAgg, &oldSessAgg) {
+		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
 			matchFound = true
 
-			//do the actual merge
-			err = sessAgg.Merge(&oldSessAgg)
+			//merge the session aggregates (adding data counts etc)
+			err = newSessAgg.Merge(&oldSessAgg)
 			if err != nil {
-				return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &sessAgg, &oldSessAgg)
+				return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &oldSessAgg)
 			}
-
 			//if both sides of the session have been filled, write it out
-			if sessAgg.FilledFromSourceA && sessAgg.FilledFromSourceB {
-				err := s.sessionsColl.RemoveId(oldSessAgg.ID)
+			if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB {
+				err := s.matcher.Remove(&oldSessAgg)
 				if err != nil {
 					return errors.Wrap(err, "could not remove old session aggregate")
 				}
-				s.sessionsOut <- &sessAgg
+				s.sessionsOut <- &newSessAgg
 			} else {
 				//otherwise update the database
-				err := s.sessionsColl.UpdateId(oldSessAgg.ID, &sessAgg)
+				newSessAgg.MatcherID = oldSessAgg.MatcherID
+				err := s.matcher.Update(&newSessAgg)
 				if err != nil {
 					return errors.Wrap(err, "could not update existing session aggregate")
 				}
@@ -155,7 +155,7 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 
 	//no matching unstitched session found
 	if !matchFound {
-		err := s.sessionsColl.Insert(&sessAgg)
+		err := s.matcher.Insert(&newSessAgg)
 		if err != nil {
 			return errors.Wrap(err, "could not insert new session aggregate")
 		}

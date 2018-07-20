@@ -16,7 +16,7 @@ import (
 )
 
 func TestReader(t *testing.T) {
-	env := integrationtest.GetDependencies(t).GetFreshEnvironment(t)
+	env := integrationtest.GetDependencies(t).Env
 
 	buff := mgologstash.NewIDAtomicBuffer(env.DB.NewInputConnection(), env.Logger)
 	reader := mgologstash.NewReader(buff, 2*time.Second, env.Logger)

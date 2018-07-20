@@ -12,13 +12,13 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
-const sessionsCollection = "sessions"
 const metaDBDatabasesCollection = "databases"
 const ritaConnInputCollection = "conn"
 
 //DB extends mgo.Session with application specific functionality
 type DB struct {
 	ssn             *mgo.Session
+	selectedDB      string
 	input           *mgo.Collection
 	sessions        *mgo.Collection
 	metaDBDatabases *mgo.Collection
@@ -43,35 +43,10 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	db.ssn.SetSyncTimeout(conf.GetSocketTimeout())
 	db.ssn.SetCursorTimeout(0)
 
-	db.input = db.ssn.DB(conf.GetDatabase()).C(conf.GetCollection())
-	db.sessions = db.ssn.DB(conf.GetDatabase()).C(sessionsCollection)
+	db.selectedDB = conf.GetDatabase()
+	db.input = db.ssn.DB(db.selectedDB).C(conf.GetCollection())
 	db.metaDBDatabases = db.ssn.DB(ritaConf.GetMetaDB()).C(metaDBDatabasesCollection)
 	db.ritaConf = ritaConf
-
-	err = db.sessions.EnsureIndex(mgo.Index{
-		Key: []string{
-			"IPAddressA", "transportPortA",
-			"IPAddressB", "transportPortB",
-			"protocolIdentifier", "exporter",
-		},
-		Name: "AggregateQuery",
-	})
-
-	if err != nil {
-		return db, errors.Wrap(err, "could not create AggregateQuery index")
-	}
-
-	err = db.sessions.EnsureIndex(mgo.Index{
-		Key: []string{
-			"packetTotalCountAB",
-			"packetTotalCountBA",
-		},
-		Name: "ExpirationQuery",
-	})
-
-	if err != nil {
-		return db, errors.Wrap(err, "could not create ExpirationQuery index")
-	}
 
 	err = db.metaDBDatabases.EnsureIndex(mgo.Index{
 		Key: []string{
@@ -89,18 +64,18 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	return db, nil
 }
 
+//NewCollection returns a new *mgo.Collection which refers
+//to a MongoDB collection in the selected database (conf.GetDatabase())
+//with the given name collName.
+func (db *DB) NewCollection(collName string) *mgo.Collection {
+	return db.ssn.Copy().DB(db.selectedDB).C(collName)
+}
+
 //NewInputConnection returns a new socket connected to the input
 //collection
 func (db *DB) NewInputConnection() *mgo.Collection {
 	ssn := db.ssn.Copy()
 	return db.input.With(ssn)
-}
-
-//NewSessionsConnection returns a new socket connected to the
-//session aggregate collection
-func (db *DB) NewSessionsConnection() *mgo.Collection {
-	ssn := db.ssn.Copy()
-	return db.sessions.With(ssn)
 }
 
 //NewMetaDBDatabasesConnection returns a new socket connected to the

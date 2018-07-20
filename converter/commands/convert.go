@@ -14,6 +14,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
+	//	_ "net/http/pprof" //Profiling
 )
 
 func init() {
@@ -31,6 +32,13 @@ func init() {
 }
 
 func convert() error {
+	/*
+		Profiling:
+		go func() {
+			fmt.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	*/
+
 	env, err := environment.NewDefaultEnvironment()
 	if err != nil {
 		return err
@@ -68,9 +76,9 @@ func convert() error {
 	inputData, inputErrors := reader.Drain(ctx)
 
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
-	numStitchers := int32(5)
+	numStitchers := int32(20)
 	stitcherBufferSize := 50
-	outputBufferSize := 5
+	outputBufferSize := int(numStitchers) * stitcherBufferSize
 	sessionsCollMaxSize := 5000
 
 	stitchingManager := stitching.NewManager(
