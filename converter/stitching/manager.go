@@ -31,13 +31,13 @@ type Manager struct {
 	outputBufferSize int
 	//sessionsTableMaxSize determines the max amount of unmatched session aggregates
 	//that may exist in the sessions table/collection before a flush happens
-	sessionsTableMaxSize int
+	sessionsTableMaxSize int64
 	log                  logging.Logger
 }
 
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
-	stitcherBufferSize, outputBufferSize, sessionsTableMaxSize int,
+	stitcherBufferSize, outputBufferSize int, sessionsTableMaxSize int64,
 	log logging.Logger) Manager {
 
 	return Manager{

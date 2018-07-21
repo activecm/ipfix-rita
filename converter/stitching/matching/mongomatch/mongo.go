@@ -1,6 +1,8 @@
 package mongomatch
 
 import (
+	"sync/atomic"
+
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
@@ -38,11 +40,11 @@ func (m mongoSessionIterator) Err() error {
 //matching.Matcher
 type mongoMatcher struct {
 	sessionsColl *mgo.Collection
-
+	currCount    int64
 	//flushing resources
 	sessionsOut      chan<- *session.Aggregate
-	preFlushMaxSize  int
-	postFlushMaxSize int
+	preFlushMaxSize  int64
+	postFlushMaxSize int64
 	//diagnostic information
 	nPacketConnsFlushed map[int]int
 	oldConnsFlushed     int
@@ -54,11 +56,16 @@ type mongoMatcher struct {
 //MongoDB collection
 func NewMongoMatcher(db database.DB, log logging.Logger,
 	sessionsOut chan<- *session.Aggregate,
-	maxSize int, flushToPercent float32) (matching.Matcher, error) {
+	maxSize int64, flushToPercent float32) (matching.Matcher, error) {
 
 	sessionsCollection := db.NewCollection(SessionsCollName)
+	currCount, err := sessionsCollection.Count()
+	if err != nil {
+		sessionsCollection.Database.Session.Close()
+		return nil, errors.Wrap(err, "could not count records in sessions collection")
+	}
 
-	err := sessionsCollection.EnsureIndex(mgo.Index{
+	err = sessionsCollection.EnsureIndex(mgo.Index{
 		Key: []string{
 			"IPAddressA", "transportPortA",
 			"IPAddressB", "transportPortB",
@@ -87,9 +94,10 @@ func NewMongoMatcher(db database.DB, log logging.Logger,
 
 	return &mongoMatcher{
 		sessionsColl:        sessionsCollection,
+		currCount:           int64(currCount),
 		sessionsOut:         sessionsOut,
 		preFlushMaxSize:     maxSize,
-		postFlushMaxSize:    int(float32(maxSize)*flushToPercent + 0.5),
+		postFlushMaxSize:    int64(float32(maxSize)*flushToPercent + 0.5),
 		nPacketConnsFlushed: make(map[int]int),
 		oldConnsFlushed:     0,
 		log:                 log,
@@ -97,7 +105,7 @@ func NewMongoMatcher(db database.DB, log logging.Logger,
 }
 
 func (m *mongoMatcher) Close() error {
-	err := m.flushAll()
+	err := m.flushTo(0)
 	if err != nil {
 		return err
 	}
@@ -118,97 +126,81 @@ func (m *mongoMatcher) Find(aggQuery *session.AggregateQuery) session.Iterator {
 func (m *mongoMatcher) Insert(sessAgg *session.Aggregate) error {
 	//the MatcherID for mongoMatcher is just the MongoDB _id field
 	//_id is set by the MongoDB server
-	return m.sessionsColl.Insert(sessAgg)
+	err := m.sessionsColl.Insert(sessAgg)
+	if err != nil {
+		return errors.Wrapf(err, "could not insert %+v", sessAgg)
+	}
+	atomic.AddInt64(&m.currCount, 1)
+	return nil
 }
 
 func (m *mongoMatcher) Remove(sessAgg *session.Aggregate) error {
-	return m.sessionsColl.RemoveId(sessAgg.MatcherID.(bson.ObjectId))
+	err := m.sessionsColl.RemoveId(sessAgg.MatcherID.(bson.ObjectId))
+	if err != nil {
+		return errors.Wrapf(err, "could not remove %+v", sessAgg)
+	}
+	atomic.AddInt64(&m.currCount, -1)
+	return nil
 }
 
 func (m *mongoMatcher) Update(sessAgg *session.Aggregate) error {
-	return m.sessionsColl.UpdateId(sessAgg.MatcherID.(bson.ObjectId), sessAgg)
+	err := m.sessionsColl.UpdateId(sessAgg.MatcherID.(bson.ObjectId), sessAgg)
+	return errors.Wrapf(err, "could not update %+v", sessAgg)
 }
 
 func (m *mongoMatcher) ShouldFlush() (bool, error) {
-	count, err := m.sessionsColl.Count()
-	if err != nil {
-		return false, errors.Wrap(err, "could not check if the sessions collection is full")
-	}
-	return count >= m.preFlushMaxSize, nil
+	return atomic.LoadInt64(&m.currCount) >= m.preFlushMaxSize, nil
 }
 
 func (m *mongoMatcher) Flush() error {
-	count, err := m.sessionsColl.Count()
-	if err != nil {
-		return errors.Wrap(err, "could not check if the sessions collection is empty")
-	}
-	if count <= m.preFlushMaxSize {
+	return m.flushTo(m.postFlushMaxSize)
+}
+
+func (m *mongoMatcher) flushTo(targetCount int64) error {
+	startCount := atomic.LoadInt64(&m.currCount)
+	if startCount <= targetCount {
 		return nil
 	}
+	defer func() {
+		m.log.Info("finished session aggregate flush", logging.Fields{
+			"start count":   startCount,
+			"current count": atomic.LoadInt64(&m.currCount),
+			"target count":  targetCount,
+		})
+	}()
 
 	for i := 1; i <= 2; i++ {
 		//flush out the garbage first
-		err = m.flushNPacketConnections(i, &count)
+		err := m.flushNPacketConnections(i)
 		if err != nil {
 			return errors.Wrapf(err,
 				"failed to flush %d packet connections from the sessions collection\n"+
 					"flush started at: %d\n"+
 					"current count: %d\n"+
-					"target count: %d", i, m.preFlushMaxSize, count, m.postFlushMaxSize,
+					"target count: %d", i, startCount, atomic.LoadInt64(&m.currCount), m.postFlushMaxSize,
 			)
 		}
 
 		//If we've flushed enough flows, return
-		if count <= m.postFlushMaxSize {
+		if atomic.LoadInt64(&m.currCount) <= targetCount {
 			return nil
 		}
 	}
 	//flush enough old flows to get to the postFlushMaxSize
-	err = m.flushOldest(&count, m.postFlushMaxSize)
+	err := m.flushOldest(targetCount)
 
 	return errors.Wrapf(err,
 		"failed to flush oldest connections from the sessions collection\n"+
 			"flush started at: %d\n"+
 			"current count: %d\n"+
-			"target count: %d", m.preFlushMaxSize, count, m.postFlushMaxSize,
-	)
-}
-
-//flushAll flushes the entirety of the sessionsColl
-func (m *mongoMatcher) flushAll() error {
-	count, err := m.sessionsColl.Count()
-	if err != nil {
-		return errors.Wrap(err, "could not check if the sessions collection is empty")
-	}
-	if count == 0 {
-		return nil
-	}
-
-	for i := 1; i <= 2; i++ {
-		err = m.flushNPacketConnections(i, &count)
-		if err != nil {
-			return errors.Wrapf(err,
-				"failed to flush %d packet connections from the sessions collection\n"+
-					"flush started at: %d\n"+
-					"current count: %d\n"+
-					"target count: %d", i, m.preFlushMaxSize, count, m.postFlushMaxSize,
-			)
-		}
-	}
-	err = m.flushOldest(&count, 0)
-
-	return errors.Wrapf(err,
-		"failed to flush oldest connections from the sessions collection\n"+
-			"flush started at: %d\n"+
-			"current count: %d\n"+
-			"target count: %d", m.preFlushMaxSize, count, m.postFlushMaxSize,
+			"target count: %d", startCount, atomic.LoadInt64(&m.currCount), targetCount,
 	)
 }
 
 //flushNPacketConnections flushes sessions which contain
 //exactly n packets, decrementing currentCount as the session
 //aggregates are removed
-func (m *mongoMatcher) flushNPacketConnections(n int, currentCount *int) error {
+func (m *mongoMatcher) flushNPacketConnections(n int) error {
 
 	flushIter := m.sessionsColl.Find(bson.M{
 		"$or": []bson.M{
@@ -225,11 +217,10 @@ func (m *mongoMatcher) flushNPacketConnections(n int, currentCount *int) error {
 
 	sessAgg := new(session.Aggregate)
 	for flushIter.Next(sessAgg) {
-		err := m.sessionsColl.RemoveId(sessAgg.MatcherID.(bson.ObjectId))
+		err := m.Remove(sessAgg)
 		if err != nil {
-			return errors.Wrapf(err, "could not remove session from sessions collection\n%+v", sessAgg)
+			return errors.Wrap(err, "could not flush session aggregate")
 		}
-		*currentCount--
 		m.nPacketConnsFlushed[n]++
 
 		m.sessionsOut <- sessAgg
@@ -244,20 +235,16 @@ func (m *mongoMatcher) flushNPacketConnections(n int, currentCount *int) error {
 //flushOldest prioritizes records by how long they have sat in the
 //collection as determined by the timestamp that is part of
 //MongoDB's ObjectId
-func (m *mongoMatcher) flushOldest(currentCount *int, targetCount int) error {
+func (m *mongoMatcher) flushOldest(targetCount int64) error {
 	flushIter := m.sessionsColl.Find(nil).Sort("_id").Iter()
 
 	sessAgg := new(session.Aggregate)
-	for flushIter.Next(sessAgg) && *currentCount > targetCount {
-		err := m.sessionsColl.RemoveId(sessAgg.MatcherID.(bson.ObjectId))
-		if err != nil {
-			return errors.Wrapf(err, "could not remove session from sessions collection\n%+v", sessAgg)
-		}
-		*currentCount--
+	for flushIter.Next(sessAgg) && atomic.LoadInt64(&m.currCount) > targetCount {
+		m.Remove(sessAgg)
 		m.oldConnsFlushed++
 
 		m.sessionsOut <- sessAgg
 		sessAgg = new(session.Aggregate)
 	}
-	return errors.Wrapf(flushIter.Err(), "could not find %d old sessions to flush", *currentCount-targetCount)
+	return errors.Wrapf(flushIter.Err(), "could not find %d old sessions to flush", atomic.LoadInt64(&m.currCount)-targetCount)
 }

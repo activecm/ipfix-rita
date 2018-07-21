@@ -79,7 +79,7 @@ func convert() error {
 	numStitchers := int32(20)
 	stitcherBufferSize := 50
 	outputBufferSize := int(numStitchers) * stitcherBufferSize
-	sessionsCollMaxSize := 5000
+	sessionsCollMaxSize := int64(5000)
 
 	stitchingManager := stitching.NewManager(
 		sameSessionThreshold,
