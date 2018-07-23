@@ -93,9 +93,10 @@ func convert() error {
 	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(inputData, env.DB)
 
 	//var writer output.SpewRITAConnWriter
-	writer := output.RITAConnWriter{
+	/*writer := output.RITAConnWriter{
 		Environment: env,
-	}
+	}*/
+	writer := output.NewRITAConnDateWriter(env)
 	writingErrors := writer.Write(stitchingOutput)
 
 	for {

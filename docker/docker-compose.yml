@@ -4,13 +4,13 @@ volumes:
 
 services:
   mongodb:
-        image: mongo:latest
+        image: mongo:3.6
         environment:
           - MONGO_DATA_DIR=/data/db
           - MONGO_LOG_DIR=/dev/null
         volumes:
           - db:/data/db
-        command: mongod --smallfiles --logpath=/dev/null # --quiet
+        command: mongod --logpath=/dev/null # --quiet
   logstash:
     image: ai-ipfix/logstash:${API_VERSION_TAG:-latest}
     build: ../collector/logstash

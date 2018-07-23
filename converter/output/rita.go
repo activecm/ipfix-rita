@@ -63,6 +63,7 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 
 func (r RITAConnWriter) createMetaDBRecord(dbName string) {
 	dbs := r.DB.NewMetaDBDatabasesConnection()
+	defer dbs.Database.Session.Close()
 	dbs.Insert(rita_db.DBMetaInfo{
 		Name:           dbName,
 		Analyzed:       false,
