@@ -8,13 +8,14 @@ import (
 	"syscall"
 	"time"
 
+	//_ "net/http/pprof" //Profiling
+
 	"github.com/activecm/ipfix-rita/converter/environment"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
-	//	_ "net/http/pprof" //Profiling
 )
 
 func init() {
@@ -33,12 +34,11 @@ func init() {
 
 func convert() error {
 	/*
-		Profiling:
+		//Profiling:
 		go func() {
 			fmt.Println(http.ListenAndServe("localhost:6060", nil))
 		}()
 	*/
-
 	env, err := environment.NewDefaultEnvironment()
 	if err != nil {
 		return err
@@ -48,23 +48,6 @@ func convert() error {
 	defer cancel()
 
 	pollWait := 30 * time.Second
-	/*
-		var readers []ipfix.Reader
-		for i := 0; i < 1; i++ {
-			readers = append(readers,
-				input.NewReader(
-					input.NewIDBuffer(
-						env.DB.NewInputConnection(),
-						env.Logger,
-					),
-					pollWait,
-					env.Logger,
-				),
-			)
-		}
-
-		inputData, inputErrors := ipfix.DrainNReaders(readers, ctx)
-	*/
 	reader := input.NewReader(
 		input.NewIDBulkBuffer(
 			env.DB.NewInputConnection(),

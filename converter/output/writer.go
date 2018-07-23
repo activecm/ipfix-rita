@@ -13,6 +13,21 @@ type SessionWriter interface {
 	Write(<-chan *session.Aggregate) <-chan error
 }
 
+//NullSessionWriter drops session aggregates so as to run the
+//pipeline leading to it at full speed
+type NullSessionWriter struct{}
+
+func (n NullSessionWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
+	errs := make(chan error)
+	go func() {
+		for _ = range sessions {
+
+		}
+		close(errs)
+	}()
+	return errs
+}
+
 //SpewRITAConnWriter writes session aggregates out to the terminal
 //as RITA conn objects
 type SpewRITAConnWriter struct{}

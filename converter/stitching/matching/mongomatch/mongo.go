@@ -39,8 +39,9 @@ func (m mongoSessionIterator) Err() error {
 //mongoMatcher uses a MongoDB collection to implement
 //matching.Matcher
 type mongoMatcher struct {
-	sessionsColl *mgo.Collection
-	currCount    int64
+	sessionsCollConnections []*mgo.Collection
+	currSession             int
+	currCount               int64
 	//flushing resources
 	sessionsOut      chan<- *session.Aggregate
 	preFlushMaxSize  int64
@@ -55,17 +56,22 @@ type mongoMatcher struct {
 //NewMongoMatcher creates a new Matcher which is backed by a
 //MongoDB collection
 func NewMongoMatcher(db database.DB, log logging.Logger,
-	sessionsOut chan<- *session.Aggregate,
+	sessionsOut chan<- *session.Aggregate, numStitchers int32,
 	maxSize int64, flushToPercent float32) (matching.Matcher, error) {
 
-	sessionsCollection := db.NewCollection(SessionsCollName)
-	currCount, err := sessionsCollection.Count()
-	if err != nil {
-		sessionsCollection.Database.Session.Close()
-		return nil, errors.Wrap(err, "could not count records in sessions collection")
+	//create a pool of database connections
+	var sessionsCollConnections []*mgo.Collection
+	for i := 0; i < int(numStitchers); i++ {
+		sessionsCollConnections = append(
+			sessionsCollConnections,
+			db.NewCollection(SessionsCollName),
+		)
 	}
 
-	err = sessionsCollection.EnsureIndex(mgo.Index{
+	//grab a connection to initialize the database
+	sessionsCollection := sessionsCollConnections[0]
+
+	err := sessionsCollection.EnsureIndex(mgo.Index{
 		Key: []string{
 			"IPAddressA", "transportPortA",
 			"IPAddressB", "transportPortB",
@@ -75,7 +81,9 @@ func NewMongoMatcher(db database.DB, log logging.Logger,
 	})
 
 	if err != nil {
-		sessionsCollection.Database.Session.Close()
+		for i := range sessionsCollConnections {
+			sessionsCollConnections[i].Database.Session.Close()
+		}
 		return nil, errors.Wrap(err, "could not create AggregateQuery index")
 	}
 
@@ -88,19 +96,30 @@ func NewMongoMatcher(db database.DB, log logging.Logger,
 	})
 
 	if err != nil {
-		sessionsCollection.Database.Session.Close()
+		for i := range sessionsCollConnections {
+			sessionsCollConnections[i].Database.Session.Close()
+		}
 		return nil, errors.Wrap(err, "could not create ExpirationQuery index")
 	}
 
+	currCount, err := sessionsCollection.Count()
+	if err != nil {
+		for i := range sessionsCollConnections {
+			sessionsCollConnections[i].Database.Session.Close()
+		}
+		return nil, errors.Wrap(err, "could not count records in sessions collection")
+	}
+
 	return &mongoMatcher{
-		sessionsColl:        sessionsCollection,
-		currCount:           int64(currCount),
-		sessionsOut:         sessionsOut,
-		preFlushMaxSize:     maxSize,
-		postFlushMaxSize:    int64(float32(maxSize)*flushToPercent + 0.5),
-		nPacketConnsFlushed: make(map[int]int),
-		oldConnsFlushed:     0,
-		log:                 log,
+		sessionsCollConnections: sessionsCollConnections,
+		currSession:             0,
+		currCount:               int64(currCount),
+		sessionsOut:             sessionsOut,
+		preFlushMaxSize:         maxSize,
+		postFlushMaxSize:        int64(float32(maxSize)*flushToPercent + 0.5),
+		nPacketConnsFlushed:     make(map[int]int),
+		oldConnsFlushed:         0,
+		log:                     log,
 	}, nil
 }
 
@@ -109,7 +128,9 @@ func (m *mongoMatcher) Close() error {
 	if err != nil {
 		return err
 	}
-	m.sessionsColl.Database.Session.Close()
+	for i := range m.sessionsCollConnections {
+		m.sessionsCollConnections[i].Database.Session.Close()
+	}
 
 	m.log.Info("mongo matcher exiting", logging.Fields{
 		"1 packet flows left unstitched": m.nPacketConnsFlushed[1],
@@ -120,13 +141,13 @@ func (m *mongoMatcher) Close() error {
 }
 
 func (m *mongoMatcher) Find(aggQuery *session.AggregateQuery) session.Iterator {
-	return newMongoSessionIterator(m.sessionsColl.Find(aggQuery).Iter())
+	return newMongoSessionIterator(m.getNextSessionsCollConnection().Find(aggQuery).Iter())
 }
 
 func (m *mongoMatcher) Insert(sessAgg *session.Aggregate) error {
 	//the MatcherID for mongoMatcher is just the MongoDB _id field
 	//_id is set by the MongoDB server
-	err := m.sessionsColl.Insert(sessAgg)
+	err := m.getNextSessionsCollConnection().Insert(sessAgg)
 	if err != nil {
 		return errors.Wrapf(err, "could not insert %+v", sessAgg)
 	}
@@ -135,7 +156,7 @@ func (m *mongoMatcher) Insert(sessAgg *session.Aggregate) error {
 }
 
 func (m *mongoMatcher) Remove(sessAgg *session.Aggregate) error {
-	err := m.sessionsColl.RemoveId(sessAgg.MatcherID.(bson.ObjectId))
+	err := m.getNextSessionsCollConnection().RemoveId(sessAgg.MatcherID.(bson.ObjectId))
 	if err != nil {
 		return errors.Wrapf(err, "could not remove %+v", sessAgg)
 	}
@@ -144,7 +165,7 @@ func (m *mongoMatcher) Remove(sessAgg *session.Aggregate) error {
 }
 
 func (m *mongoMatcher) Update(sessAgg *session.Aggregate) error {
-	err := m.sessionsColl.UpdateId(sessAgg.MatcherID.(bson.ObjectId), sessAgg)
+	err := m.getNextSessionsCollConnection().UpdateId(sessAgg.MatcherID.(bson.ObjectId), sessAgg)
 	return errors.Wrapf(err, "could not update %+v", sessAgg)
 }
 
@@ -202,7 +223,7 @@ func (m *mongoMatcher) flushTo(targetCount int64) error {
 //aggregates are removed
 func (m *mongoMatcher) flushNPacketConnections(n int) error {
 
-	flushIter := m.sessionsColl.Find(bson.M{
+	flushIter := m.getNextSessionsCollConnection().Find(bson.M{
 		"$or": []bson.M{
 			bson.M{
 				"packetTotalCountAB": n,
@@ -236,7 +257,7 @@ func (m *mongoMatcher) flushNPacketConnections(n int) error {
 //collection as determined by the timestamp that is part of
 //MongoDB's ObjectId
 func (m *mongoMatcher) flushOldest(targetCount int64) error {
-	flushIter := m.sessionsColl.Find(nil).Sort("_id").Iter()
+	flushIter := m.getNextSessionsCollConnection().Find(nil).Sort("_id").Iter()
 
 	sessAgg := new(session.Aggregate)
 	for flushIter.Next(sessAgg) && atomic.LoadInt64(&m.currCount) > targetCount {
@@ -247,4 +268,10 @@ func (m *mongoMatcher) flushOldest(targetCount int64) error {
 		sessAgg = new(session.Aggregate)
 	}
 	return errors.Wrapf(flushIter.Err(), "could not find %d old sessions to flush", atomic.LoadInt64(&m.currCount)-targetCount)
+}
+
+func (m *mongoMatcher) getNextSessionsCollConnection() *mgo.Collection {
+	conn := m.sessionsCollConnections[m.currSession]
+	m.currSession = (m.currSession + 1) % len(m.sessionsCollConnections)
+	return conn
 }

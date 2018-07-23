@@ -110,7 +110,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	//which may need to be stitched with other aggregates
 	matcher, err := mongomatch.NewMongoMatcher(
 		//.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
-		db, m.log, sessions, m.sessionsTableMaxSize, 0.9,
+		db, m.log, sessions, m.numStitchers, m.sessionsTableMaxSize, 0.9,
 	)
 	if err != nil {
 		errs <- errors.Wrap(err, "could not instantiate matcher")
@@ -154,7 +154,6 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 			m.log.Info("Stitcher Buffer Counts", buffCounts)
 			m.log.Info("Out Buffer Count", logging.Fields{"count": len(sessions)})
 		*/
-
 		//use the hash partitioner to assign the flow to a stitcher
 		stitcherID := m.selectStitcher(inFlow)
 		//Send the flow to the assigned stitcher
