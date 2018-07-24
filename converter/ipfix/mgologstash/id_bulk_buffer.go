@@ -37,7 +37,7 @@ func (b *idBulkBuffer) Next(out *Flow) bool {
 			b.buffer = b.buffer[:0]
 
 			//refill the buffer
-			err := b.input.Find(nil).Sort("_id").Batch(len(b.buffer)).Limit(len(b.buffer)).All(&b.buffer)
+			err := b.input.Find(nil).Sort("_id").Batch(cap(b.buffer)).Limit(cap(b.buffer)).All(&b.buffer)
 			if err != nil {
 				if err != mgo.ErrNotFound {
 					b.err = errors.Wrap(err, "could not fetch next batch of records from input collection")
