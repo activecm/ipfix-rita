@@ -23,7 +23,7 @@ func TestIDIterBuffer(t *testing.T) {
 
 func TestIDBulkBuffer(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
-	buffer := mgologstash.NewIDBulkBuffer(env.DB.NewInputConnection(), env.Logger)
+	buffer := mgologstash.NewIDBulkBuffer(env.DB.NewInputConnection(), 1000, env.Logger)
 	testBufferOrder(buffer, env, t)
 }
 

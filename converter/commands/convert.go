@@ -51,6 +51,7 @@ func convert() error {
 	reader := input.NewReader(
 		input.NewIDBulkBuffer(
 			env.DB.NewInputConnection(),
+			1000, //input buffer size
 			env.Logger,
 		),
 		pollWait,
@@ -61,15 +62,23 @@ func convert() error {
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
 	numStitchers := int32(20)
 	stitcherBufferSize := 50
+	matcherSize := int64(5000)
+
+	//the output buffer should be able to handle the same amount
+	//as the total input buffer
 	outputBufferSize := int(numStitchers) * stitcherBufferSize
-	sessionsCollMaxSize := int64(5000)
+	//if more data could come out of the matcher via flushing
+	//than the input buffer, use that to guide the output buffer size
+	if outputBufferSize < int(matcherSize/2) {
+		outputBufferSize = int(matcherSize / 2)
+	}
 
 	stitchingManager := stitching.NewManager(
 		sameSessionThreshold,
 		numStitchers,
 		stitcherBufferSize,
 		outputBufferSize,
-		sessionsCollMaxSize,
+		matcherSize,
 		env.Logger,
 	)
 
@@ -79,6 +88,7 @@ func convert() error {
 	/*writer := output.RITAConnWriter{
 		Environment: env,
 	}*/
+	//writer := output.NullSessionWriter{}
 	writer := output.NewRITAConnDateWriter(env)
 	writingErrors := writer.Write(stitchingOutput)
 

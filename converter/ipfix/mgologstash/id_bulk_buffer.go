@@ -18,10 +18,10 @@ type idBulkBuffer struct {
 }
 
 //NewIDBulkBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
-func NewIDBulkBuffer(input *mgo.Collection, log logging.Logger) Buffer {
+func NewIDBulkBuffer(input *mgo.Collection, bufferSize int, log logging.Logger) Buffer {
 	return &idBulkBuffer{
 		input:  input,
-		buffer: make([]bson.M, 0, 1000),
+		buffer: make([]bson.M, 0, bufferSize),
 		log:    log,
 	}
 }
@@ -37,7 +37,7 @@ func (b *idBulkBuffer) Next(out *Flow) bool {
 			b.buffer = b.buffer[:0]
 
 			//refill the buffer
-			err := b.input.Find(nil).Sort("_id").Batch(1000).Limit(1000).All(&b.buffer)
+			err := b.input.Find(nil).Sort("_id").Batch(len(b.buffer)).Limit(len(b.buffer)).All(&b.buffer)
 			if err != nil {
 				if err != mgo.ErrNotFound {
 					b.err = errors.Wrap(err, "could not fetch next batch of records from input collection")

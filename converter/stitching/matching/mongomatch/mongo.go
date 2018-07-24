@@ -219,8 +219,7 @@ func (m *mongoMatcher) flushTo(targetCount int64) error {
 }
 
 //flushNPacketConnections flushes sessions which contain
-//exactly n packets, decrementing currentCount as the session
-//aggregates are removed
+//exactly n packets in one direction and 0 in the other
 func (m *mongoMatcher) flushNPacketConnections(n int) error {
 
 	flushIter := m.getNextSessionsCollConnection().Find(bson.M{

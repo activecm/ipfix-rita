@@ -8,7 +8,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
+	"github.com/activecm/ipfix-rita/converter/stitching/matching/rammatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/pkg/errors"
 )
@@ -108,17 +108,19 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 	//the matcher allows the stitchers to find session.Aggregates
 	//which may need to be stitched with other aggregates
-	matcher, err := mongomatch.NewMongoMatcher(
-		//.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
-		db, m.log, sessions, m.numStitchers, m.sessionsTableMaxSize, 0.9,
-	)
-	if err != nil {
-		errs <- errors.Wrap(err, "could not instantiate matcher")
-		close(sessions)
-		close(errs)
-		m.log.Info("stitching manager exited with error", nil)
-		return
-	}
+	/*
+		matcher, err := mongomatch.NewMongoMatcher(
+			//.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
+			db, m.log, sessions, m.numStitchers, m.sessionsTableMaxSize, 0.9,
+		)
+		if err != nil {
+			errs <- errors.Wrap(err, "could not instantiate matcher")
+			close(sessions)
+			close(errs)
+			m.log.Info("stitching manager exited with error", nil)
+			return
+		}*/
+	matcher := rammatch.NewRAMMatcher(m.log, sessions, uint64(m.sessionsTableMaxSize), 0.9)
 
 	//In order to parallelize the stitching process, we use hash partitioning
 	//which ensures no two stitchers will work on the same session.AggregateQuery.
