@@ -3,17 +3,18 @@ package commands
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	//_ "net/http/pprof" //Profiling
+	_ "net/http/pprof" //Profiling
 
 	"github.com/activecm/ipfix-rita/converter/environment"
 	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/activecm/ipfix-rita/converter/output"
+	buffered "github.com/activecm/ipfix-rita/converter/output/rita/buffered/dates"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/urfave/cli"
 )
@@ -33,12 +34,12 @@ func init() {
 }
 
 func convert() error {
-	/*
-		//Profiling:
-		go func() {
-			fmt.Println(http.ListenAndServe("localhost:6060", nil))
-		}()
-	*/
+
+	//Profiling:
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	env, err := environment.NewDefaultEnvironment()
 	if err != nil {
 		return err
@@ -48,10 +49,11 @@ func convert() error {
 	defer cancel()
 
 	pollWait := 30 * time.Second
+	inputBufferSize := 10000
 	reader := input.NewReader(
 		input.NewIDBulkBuffer(
 			env.DB.NewInputConnection(),
-			1000, //input buffer size
+			inputBufferSize,
 			env.Logger,
 		),
 		pollWait,
@@ -60,25 +62,26 @@ func convert() error {
 	inputData, inputErrors := reader.Drain(ctx)
 
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
-	numStitchers := int32(20)
-	stitcherBufferSize := 50
-	matcherSize := int64(5000)
+	numStitchers := 20
+	stitcherBufferSize := inputBufferSize / numStitchers
+
+	matcherSize := 5000
 
 	//the output buffer should be able to handle the same amount
 	//as the total input buffer
-	outputBufferSize := int(numStitchers) * stitcherBufferSize
+	outputBufferSize := inputBufferSize
 	//if more data could come out of the matcher via flushing
 	//than the input buffer, use that to guide the output buffer size
-	if outputBufferSize < int(matcherSize/2) {
-		outputBufferSize = int(matcherSize / 2)
+	if outputBufferSize < matcherSize/2 {
+		outputBufferSize = matcherSize / 2
 	}
 
 	stitchingManager := stitching.NewManager(
 		sameSessionThreshold,
-		numStitchers,
+		int32(numStitchers),
 		stitcherBufferSize,
 		outputBufferSize,
-		matcherSize,
+		int64(matcherSize),
 		env.Logger,
 	)
 
@@ -89,7 +92,11 @@ func convert() error {
 		Environment: env,
 	}*/
 	//writer := output.NullSessionWriter{}
-	writer := output.NewRITAConnDateWriter(env)
+	//writer := dates.NewRITAConnDateWriter(env)
+
+	autoFlushTime := 1 * time.Minute
+	writer := buffered.NewBufferedRITAConnDateWriter(env, outputBufferSize, autoFlushTime)
+
 	writingErrors := writer.Write(stitchingOutput)
 
 	for {

@@ -1,4 +1,4 @@
-package output
+package simple
 
 import (
 	"net"
@@ -8,6 +8,7 @@ import (
 	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
+	"gopkg.in/mgo.v2/bson"
 )
 
 //RITAConnWriter writes session aggregates to MongoDB
@@ -56,18 +57,30 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 			}
 		}
 
-		r.createMetaDBRecord(outColl.Database.Name)
+		r.ensureMetaDBRecordExists(outColl.Database.Name)
 	}()
 	return errs
 }
 
-func (r RITAConnWriter) createMetaDBRecord(dbName string) {
+func (r *RITAConnWriter) ensureMetaDBRecordExists(dbName string) error {
 	dbs := r.DB.NewMetaDBDatabasesConnection()
 	defer dbs.Database.Session.Close()
-	dbs.Insert(rita_db.DBMetaInfo{
+
+	numRecords, err := dbs.Find(bson.M{"name": dbName}).Count()
+	if err != nil {
+		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
+	}
+	if numRecords != 0 {
+		return nil
+	}
+	err = dbs.Insert(rita_db.DBMetaInfo{
 		Name:           dbName,
 		Analyzed:       false,
 		ImportVersion:  "v1.0.0+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
 	})
+	if err != nil {
+		return errors.Wrapf(err, "could not insert MetaDB record with name: %s", dbName)
+	}
+	return nil
 }
