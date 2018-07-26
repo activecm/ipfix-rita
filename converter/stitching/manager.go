@@ -29,24 +29,30 @@ type Manager struct {
 	//outputBufferSize determines how many output session aggregates should
 	//be buffered overall
 	outputBufferSize int
-	//sessionsTableMaxSize determines the max amount of unmatched session aggregates
+	//matcherMaxSize determines the max amount of unmatched session aggregates
 	//that may exist in the sessions table/collection before a flush happens
-	sessionsTableMaxSize int64
-	log                  logging.Logger
+	matcherMaxSize int64
+	//matcherFlushToPercent determines how much the matcher data
+	//will flush when a flush happens. The matcher will flush to
+	//matcherMaxSize * matcherFlushToPercent.
+	matcherFlushToPercent float64
+
+	log logging.Logger
 }
 
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
-	stitcherBufferSize, outputBufferSize int, sessionsTableMaxSize int64,
-	log logging.Logger) Manager {
+	stitcherBufferSize, outputBufferSize int, matcherMaxSize int64,
+	matcherFlushToPercent float64, log logging.Logger) Manager {
 
 	return Manager{
-		sameSessionThreshold: sameSessionThreshold,
-		stitcherBufferSize:   stitcherBufferSize,
-		numStitchers:         numStitchers,
-		outputBufferSize:     outputBufferSize,
-		sessionsTableMaxSize: sessionsTableMaxSize,
-		log:                  log,
+		sameSessionThreshold:  sameSessionThreshold,
+		stitcherBufferSize:    stitcherBufferSize,
+		numStitchers:          numStitchers,
+		outputBufferSize:      outputBufferSize,
+		matcherMaxSize:        matcherMaxSize,
+		matcherFlushToPercent: matcherFlushToPercent,
+		log: log,
 	}
 }
 
@@ -108,19 +114,7 @@ func (m Manager) runInner(input <-chan input.Flow, db database.DB,
 
 	//the matcher allows the stitchers to find session.Aggregates
 	//which may need to be stitched with other aggregates
-	/*
-		matcher, err := mongomatch.NewMongoMatcher(
-			//.9 means flush down to .9 * m.sessionsTableMaxSize aggregates
-			db, m.log, sessions, m.numStitchers, m.sessionsTableMaxSize, 0.9,
-		)
-		if err != nil {
-			errs <- errors.Wrap(err, "could not instantiate matcher")
-			close(sessions)
-			close(errs)
-			m.log.Info("stitching manager exited with error", nil)
-			return
-		}*/
-	matcher := rammatch.NewRAMMatcher(m.log, sessions, uint64(m.sessionsTableMaxSize), 0.9)
+	matcher := rammatch.NewRAMMatcher(m.log, sessions, uint64(m.matcherMaxSize), m.matcherFlushToPercent)
 
 	//In order to parallelize the stitching process, we use hash partitioning
 	//which ensures no two stitchers will work on the same session.AggregateQuery.
@@ -162,11 +156,7 @@ func (m Manager) runInner(input <-chan input.Flow, db database.DB,
 		//This may block if the stitcher's buffer is full.
 		stitchers[stitcherID].enqueue(inFlow)
 
-		//check if the sessions collection is too full
-		//TODO: Find a better way to monitor the size of the table
-		//instead of polling on every flow.
-		//maybe just mod flowCount and check every so often
-
+		//check if the matcher is too full
 		shouldFlush, err := matcher.ShouldFlush()
 		if err != nil {
 			errs <- errors.Wrap(err, "could not check whether the matcher should be flushed")

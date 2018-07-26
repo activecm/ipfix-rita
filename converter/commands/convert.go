@@ -40,6 +40,8 @@ func convert() error {
 	ctx, _ := interruptContext(env.Logger)
 
 	//TODO: Decide whether or not to expose these options
+	//TODO: Decide on how to scale these options depending on the specs
+	//of the computer
 
 	//pollWait is how long to wait before checking if the input buffer has
 	//more data
@@ -68,7 +70,7 @@ func convert() error {
 	//whether two flows should be stitched together or not.
 	//If the time between one flow ending and the other flow starting
 	//exceeds sameSessionThreshold, they will not be stitched together.
-	sameSessionThreshold := int64(1000 * 60) //milliseconds
+	sameSessionThreshold := 1000 * 60 //milliseconds
 
 	//how many stitching workers to use. The stitching workers
 	//are assigned work by hash partitioning. Flows which may be stitched
@@ -88,7 +90,9 @@ func convert() error {
 	//of the results. However, a larger matcher likely takes
 	//more resources (RAM/ CPU) to run at the same level of performance.
 	matcherSize := 5000
-	//TODO matcher flush percentage
+	//when the matcher must flush connection records out,
+	//the matcher will flush to matcherFlushToPercent * matcherSize
+	matcherFlushToPercent := 0.9
 
 	//outputBufferSize is used to set the size of the buffered channel
 	//leading to the output.SessionWriter. It should be able to handle
@@ -107,11 +111,12 @@ func convert() error {
 	//for providing the (CRUD+Flush) data structure needed for
 	//stitching.
 	stitchingManager := stitching.NewManager(
-		sameSessionThreshold,
+		int64(sameSessionThreshold),
 		int32(numStitchers),
 		stitcherBufferSize,
 		outputBufferSize,
 		int64(matcherSize),
+		matcherFlushToPercent,
 		env.Logger,
 	)
 

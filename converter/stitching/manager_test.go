@@ -38,13 +38,15 @@ func newTestingStitchingManager(logger logging.Logger) Manager {
 	numStitchers := int32(5)                //number of workers
 	stitcherBufferSize := 5                 //number of flows that are buffered for each worker
 	outputBufferSize := 5                   //number of session aggregates that are buffered for output
-	sessionsTableMaxSize := int64(20)       //number of unstitched flows that can be held for matching
+	matcherMaxSize := int64(20)             //number of unstitched flows that can be held for matching
+	matcherFlushToPercent := 0.9
 	return NewManager(
 		sameSessionThreshold,
 		numStitchers,
 		stitcherBufferSize,
 		outputBufferSize,
-		sessionsTableMaxSize,
+		matcherMaxSize,
+		matcherFlushToPercent,
 		logger,
 	)
 }

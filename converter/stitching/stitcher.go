@@ -35,7 +35,7 @@ type stitcher struct {
 	inputDrained *sync.WaitGroup
 }
 
-//newStitcher creates a new stitcher which uses the sessionsColl
+//newStitcher creates a new stitcher which uses the matcher
 //to match flows into session aggregates
 func newStitcher(id, bufferSize int, sameSessionThreshold int64,
 	matcher matching.Matcher, sessionsOut chan<- *session.Aggregate,
@@ -87,7 +87,7 @@ func (s *stitcher) waitForFlush() {
 }
 
 //stitchFlow implements the main stitching logic. The method
-//uses the sessionsColl as a lookup table to match flows
+//uses the matcher as a lookup table to match flows
 //against each other. Once a flow has been matched in both
 //directions, the resulting session aggregate is sent to
 //the sessionsOut channel.
@@ -107,7 +107,7 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	}
 
 	//matchFound is true when another session is found with the same
-	//AggregateQuery in the sessions collection, and the
+	//AggregateQuery in the matcher, and the
 	//sessions qualify for merging/ stitching
 	matchFound := false
 

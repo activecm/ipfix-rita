@@ -58,11 +58,11 @@ type ramMatcher struct {
 
 //NewRAMMatcher returns a new matcher which operates entirely in RAM
 func NewRAMMatcher(log logging.Logger, sessionsOut chan<- *session.Aggregate,
-	maxSize uint64, flushToPercent float32) matching.Matcher {
+	maxSize uint64, flushToPercent float64) matching.Matcher {
 	return &ramMatcher{
 		sessionsOut:      sessionsOut,
 		preFlushMaxSize:  maxSize,
-		postFlushMaxSize: uint64(float32(maxSize)*flushToPercent + 0.5),
+		postFlushMaxSize: uint64(float64(maxSize)*flushToPercent + 0.5),
 		log:              log,
 	}
 }
