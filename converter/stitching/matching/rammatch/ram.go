@@ -157,8 +157,12 @@ func (r *ramMatcher) Flush() error {
 }
 
 func (r *ramMatcher) flushTo(targetCount uint64) error {
-	//TODO: subtract off the smallest MatcherID from every record
+	//thought: subtract off the smallest MatcherID from every record
 	//and the insertTracker to prevent overflow of insertTracker
+	//response: It will take over 500 million years to overflow
+	//insertTracker at a rate of 100000 flows processed per second
+	//http://www.wolframalpha.com/input/?i=((2%5E64+-1)%2F+100000)+seconds+to+years
+
 	startCount := atomic.LoadUint64(&r.count)
 	if startCount <= targetCount {
 		return nil
