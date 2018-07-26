@@ -58,25 +58,16 @@ Loop:
 		select {
 		case <-b.stopChan:
 			break Loop
+		case <-b.resetTimer:
+			timer.Reset(b.deadlineInterval)
 		case <-timer.C:
-
-			//non blocking read to check the flag
-			var shouldResetTimer bool
-			select {
-			case shouldResetTimer = <-b.resetTimer:
-			default:
+			err := b.bufferedColl.Flush()
+			if err != nil {
+				b.errs <- err
+				continue //retry
 			}
 
-			if !shouldResetTimer {
-				err := b.bufferedColl.Flush()
-				if err != nil {
-					b.errs <- err
-					continue //retry
-				}
-			}
-
-			//we need to reset the timer whether or not we performed a flush
-			//so we don't repeatedly flush
+			//we need to reset the timer so we don't repeatedly flush
 			timer.Reset(b.deadlineInterval)
 		}
 	}
