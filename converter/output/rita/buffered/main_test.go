@@ -14,7 +14,10 @@ const testCollectionName = "BUFFERED_TEST_COLLECTION"
 func TestMain(m *testing.M) {
 	integrationtest.RegisterDependenciesResetFunc(func(t *testing.T, deps *integrationtest.Dependencies) {
 		coll := deps.Env.DB.NewHelperCollection(testCollectionName)
-		coll.DropCollection()
+		count, err := coll.Count()
+		if count != 0 && err == nil {
+			coll.DropCollection()
+		}
 		coll.Database.Session.Close()
 	})
 	returnCode := m.Run()
