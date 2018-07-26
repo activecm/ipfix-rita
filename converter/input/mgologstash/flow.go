@@ -30,8 +30,6 @@ type Flow struct {
 		PacketTotalCount int64 `bson:"packetTotalCount"`
 
 		ProtocolIdentifier protocols.Identifier `bson:"protocolIdentifier"`
-		IPClassOfService   uint8                `bson:"ipClassOfService"`
-		VlanID             uint16               `bson:"vlanId"`
 		FlowEndReason      input.FlowEndReason  `bson:"flowEndReason"`
 		Version            uint8                `bson:"version"`
 	} `bson:"netflow"`
@@ -213,27 +211,9 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 		return errors.Errorf("could not convert %+v to int", protocolIDIface)
 	}
 	//fmt.Println("28")
-
-	ipClassOfServiceIface, ok := netflowMap["ipClassOfService"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.ipClassOfService'")
-	}
 	//fmt.Println("29")
-	ipClassOfService, ok := ipClassOfServiceIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", ipClassOfServiceIface)
-	}
 	//fmt.Println("30")
-
-	vlanIDIface, ok := netflowMap["vlanId"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.vlanId'")
-	}
 	//fmt.Println("31")
-	vlanID, ok := vlanIDIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", vlanIDIface)
-	}
 	//fmt.Println("32")
 
 	flowEndReasonIface, ok := netflowMap["flowEndReason"]
@@ -284,8 +264,6 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	i.Netflow.OctetTotalCount = octetTotal
 	i.Netflow.PacketTotalCount = packetTotal
 	i.Netflow.ProtocolIdentifier = protocols.Identifier(protocolID)
-	i.Netflow.IPClassOfService = uint8(ipClassOfService)
-	i.Netflow.VlanID = uint16(vlanID)
 	i.Netflow.FlowEndReason = input.FlowEndReason(flowEndReason)
 	i.Netflow.Version = uint8(version)
 	return nil
@@ -322,12 +300,6 @@ func (i *Flow) ProtocolIdentifier() protocols.Identifier {
 	return i.Netflow.ProtocolIdentifier
 }
 
-//IPClassOfService is the value of the TOS field in the IPv4 packet header or
-//the value of the Traffic Class field in the IPv6 packet header.
-func (i *Flow) IPClassOfService() uint8 {
-	return i.Netflow.IPClassOfService
-}
-
 //FlowStartMilliseconds is the time the flow started as a Unix timestamp
 func (i *Flow) FlowStartMilliseconds() (int64, error) {
 	t, err := time.Parse(time.RFC3339Nano, i.Netflow.FlowStartMilliseconds)
@@ -356,11 +328,6 @@ func (i *Flow) OctetTotalCount() int64 {
 //PacketTotalCount returns the number of packets sent from the source to the destination
 func (i *Flow) PacketTotalCount() int64 {
 	return i.Netflow.PacketTotalCount
-}
-
-//VlanID returns which Vlan the flow took place on at the time of observation
-func (i *Flow) VlanID() uint16 {
-	return i.Netflow.VlanID
 }
 
 //FlowEndReason returns why the metering process stopped recording the flow

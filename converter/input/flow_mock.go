@@ -24,8 +24,6 @@ type FlowMock struct {
 	MockPacketTotalCount int64
 
 	MockProtocolIdentifier protocols.Identifier
-	MockIPClassOfService   uint8
-	MockVlanID             uint16
 	MockFlowEndReason      FlowEndReason
 	MockVersion            uint8
 }
@@ -77,8 +75,6 @@ func NewFlowMock() *FlowMock {
 		MockOctetTotalCount:       int64(rand.Uint32()),
 		MockPacketTotalCount:      int64(rand.Uint32()),
 		MockProtocolIdentifier:    protocols.Identifier(randByte()),
-		MockIPClassOfService:      randByte(),
-		MockVlanID:                randShort(),
 		MockFlowEndReason:         FlowEndReason(rand.Intn(4)),
 		MockVersion:               10,
 	}
@@ -109,12 +105,6 @@ func (f *FlowMock) ProtocolIdentifier() protocols.Identifier {
 	return f.MockProtocolIdentifier
 }
 
-//IPClassOfService is the value of the TOS field in the IPv4 packet header or
-//the value of the Traffic Class field in the IPv6 packet header.
-func (f *FlowMock) IPClassOfService() uint8 {
-	return f.MockIPClassOfService
-}
-
 //FlowStartMilliseconds is the time the flow started as a Unix timestamp
 func (f *FlowMock) FlowStartMilliseconds() (int64, error) {
 	return f.MockFlowStartMilliseconds, nil
@@ -133,11 +123,6 @@ func (f *FlowMock) OctetTotalCount() int64 {
 //PacketTotalCount returns the number of packets sent from the source to the destination
 func (f *FlowMock) PacketTotalCount() int64 {
 	return f.MockPacketTotalCount
-}
-
-//VlanID returns which Vlan the flow took place on at the time of observation
-func (f *FlowMock) VlanID() uint16 {
-	return f.MockVlanID
 }
 
 //FlowEndReason returns why the metering process stopped recording the flow

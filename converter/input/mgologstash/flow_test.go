@@ -23,8 +23,6 @@ func getTestFlow1() *mgologstash.Flow {
 	flow.Netflow.OctetTotalCount = int64(math.MaxUint32 + 1)
 	flow.Netflow.PacketTotalCount = int64(math.MaxUint32 + 1)
 	flow.Netflow.ProtocolIdentifier = protocols.UDP
-	flow.Netflow.IPClassOfService = 3
-	flow.Netflow.VlanID = 4
 	flow.Netflow.FlowEndReason = input.ActiveTimeout
 	flow.Netflow.Version = 5
 	return flow
@@ -43,8 +41,6 @@ func getTestFlow2() *mgologstash.Flow {
 	flow.Netflow.OctetTotalCount = int64(math.MaxUint32 - 1)
 	flow.Netflow.PacketTotalCount = int64(math.MaxUint32 - 1)
 	flow.Netflow.ProtocolIdentifier = protocols.TCP
-	flow.Netflow.IPClassOfService = 30
-	flow.Netflow.VlanID = 44
 	flow.Netflow.FlowEndReason = input.IdleTimeout
 	flow.Netflow.Version = 54
 	return flow
@@ -63,8 +59,6 @@ func getTestFlow3() *mgologstash.Flow {
 	flow.Netflow.OctetTotalCount = math.MaxInt64
 	flow.Netflow.PacketTotalCount = math.MaxInt64
 	flow.Netflow.ProtocolIdentifier = protocols.TCP
-	flow.Netflow.IPClassOfService = 50
-	flow.Netflow.VlanID = 12
 	flow.Netflow.FlowEndReason = input.ActiveTimeout
 	flow.Netflow.Version = 1
 	return flow

@@ -14,9 +14,6 @@ type Flow interface {
 	DestinationPort() uint16
 	//ProtocolIdentifier returns which transport protocol was used
 	ProtocolIdentifier() protocols.Identifier
-	//IPClassOfService is the value of the TOS field in the IPv4 packet header or
-	//the value of the Traffic Class field in the IPv6 packet header.
-	IPClassOfService() uint8
 	//FlowStartMilliseconds is the time the flow started as a Unix timestamp
 	FlowStartMilliseconds() (int64, error)
 	//FlowEndMilliseconds is the time the flow ended as a Unix timestamp
@@ -25,8 +22,6 @@ type Flow interface {
 	OctetTotalCount() int64
 	//PacketTotalCount returns the number of packets sent from the source to the destination
 	PacketTotalCount() int64
-	//VlanID returns which Vlan the flow took place on at the time of observation
-	VlanID() uint16
 	//FlowEndReason returns why the metering process stopped recording the flow
 	FlowEndReason() FlowEndReason
 	//Version returns the IPFIX/Netflow version
