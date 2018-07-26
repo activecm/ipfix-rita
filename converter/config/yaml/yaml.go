@@ -11,7 +11,7 @@ import (
 )
 
 //ConfigPath declares the location of the IPFIX-RITA yaml configuration file
-const ConfigPath = "/etc/ipfix-rita/config.yaml"
+const ConfigPath = "/etc/ipfix-rita/converter.yaml"
 
 //ReadConfigFile opens the ConfigPath for reading and returns the
 //contents of the file or an error

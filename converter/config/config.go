@@ -2,7 +2,6 @@ package config
 
 import (
 	"net"
-	"time"
 
 	"github.com/activecm/mgosec"
 )
@@ -46,7 +45,6 @@ type MongoDB interface {
 	GetTLS() TLS
 	GetDatabase() string
 	GetCollection() string
-	GetSocketTimeout() time.Duration
 }
 
 //TLS provides information for contacting MongoDB over TLS

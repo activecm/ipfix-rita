@@ -1,8 +1,6 @@
 package yaml
 
 import (
-	"time"
-
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/mgosec"
 	"github.com/pkg/errors"
@@ -10,12 +8,11 @@ import (
 
 //mongoDB implements config.MongoDB
 type mongoDB struct {
-	ConnectionString string        `yaml:"ConnectionString"`
-	AuthMechanism    string        `yaml:"AuthenticationMechanism"`
-	TLS              tls           `yaml:"TLS"`
-	Database         string        `yaml:"Database"`
-	Collection       string        `yaml:"Collection"`
-	SocketTimeout    time.Duration `yaml:"SocketTimeout"`
+	ConnectionString string `yaml:"ConnectionString"`
+	AuthMechanism    string `yaml:"AuthenticationMechanism"`
+	TLS              tls    `yaml:"TLS"`
+	Database         string `yaml:"Database"`
+	Collection       string `yaml:"Collection"`
 }
 
 func (m *mongoDB) GetConnectionString() string {
@@ -56,8 +53,4 @@ func (m *mongoDB) GetDatabase() string {
 
 func (m *mongoDB) GetCollection() string {
 	return m.Collection
-}
-
-func (m *mongoDB) GetSocketTimeout() time.Duration {
-	return m.SocketTimeout * time.Hour
 }

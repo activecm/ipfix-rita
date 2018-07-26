@@ -2,7 +2,6 @@ package yaml
 
 import (
 	"testing"
-	"time"
 
 	"github.com/activecm/mgosec"
 	"github.com/stretchr/testify/require"
@@ -18,7 +17,6 @@ func TestNewYAMLConfig(t *testing.T) {
     CAFile: /etc/mycert
   Database: logstash
   Collection: ipfix
-  SocketTimeout: 2
 RITA:
   DBRoot: Collector1
   MetaDB: MetaDatabase
@@ -37,8 +35,6 @@ IPFIX:
 	mechanism, err := testConfig.GetMongoDBConfig().GetAuthMechanism()
 	require.Nil(t, err)
 	require.Equal(t, mgosec.ScramSha1, mechanism)
-
-	require.Equal(t, 2*time.Hour, testConfig.GetMongoDBConfig().GetSocketTimeout())
 
 	require.True(t, testConfig.GetMongoDBConfig().GetTLS().IsEnabled())
 
@@ -79,9 +75,8 @@ func TestSaveYAMLConfig(t *testing.T) {
 				VerifyCertificate: true,
 				CAFile:            "/etc/mycert",
 			},
-			Database:      "logstash",
-			Collection:    "ipfix",
-			SocketTimeout: 2,
+			Database:   "logstash",
+			Collection: "ipfix",
 		},
 		RITA: rita{
 			DBRoot: "Collector1",

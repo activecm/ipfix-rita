@@ -1,0 +1,55 @@
+version: '3.3'
+
+# Support docker stack and docker-compose
+# configs for docker stack and bind mounts
+# for docker-compose
+configs:
+  converter_config:
+    file: ./etc/converter/config.yaml
+  logstash_mongo_config:
+    file: ./etc/collector/logstash/mongo.conf
+
+volumes:
+  db:
+  collector_template_cache:
+
+services:
+  # To use an external MongoDB server remove the
+  # mongodb service definition and change the
+  # settings in ./etc/converter-config.yaml and
+  # ./etc/collector/logstash/mongo.conf
+  mongodb:
+    image: mongo:3.6
+    command: mongod --logpath=/dev/null # --quiet
+    restart: unless-stopped
+    ports:
+      - 27017:27017/tcp # MongoDB server
+    environment:
+      - MONGO_DATA_DIR=/data/db
+      - MONGO_LOG_DIR=/dev/null
+    volumes:
+      - db:/data/db
+
+  logstash:
+    image: quay.io/activecm/ipfix-rita-logstash:${IPFIX_RITA_VERSION:-latest}
+    build: ../collector/logstash
+    restart: unless-stopped
+    ports:
+      - 2055:2055/udp # IPFIX/Netflow endpoint udp
+    volumes:
+      - collector_template_cache:/usr/share/logstash/template_cache
+      - "./etc/collector/logstash/mongo.conf:/usr/share/logstash/pipeline/mongo.conf:ro"
+    configs:
+      - source: logstash_mongo_config
+        target: /usr/share/logstash/pipeline/mongo.conf
+
+  converter:
+    image: quay.io/activecm/ipfix-rita-converter:${IPFIX_RITA_VERSION:-latest}
+    build: ../converter
+    command: run
+    restart: unless-stopped
+    volumes:
+      - "./etc/converter/config.yaml:/etc/ipfix-rita/config.yaml:ro"
+    configs:
+      - source: converter_config
+        target: /etc/ipfix-rita/config.yaml

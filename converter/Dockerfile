@@ -10,10 +10,12 @@ FROM scratch
 
 # Use WORKDIR to create /etc/ipfix-rita since "mkdir" doesn't exist in scratch
 WORKDIR /etc/ipfix-rita
-COPY --from=ipfix-rita-builder /etc/ipfix-rita/* .
+
+# Use a bind mount of docker config in swarm mode instead
+# of copying the default configuration into the image.
+# COPY --from=ipfix-rita-builder /etc/ipfix-rita/* .
 
 WORKDIR /
 
 COPY --from=ipfix-rita-builder /usr/local/bin/ipfix-rita-converter ipfix-rita-converter
 ENTRYPOINT ["/ipfix-rita-converter"]
-

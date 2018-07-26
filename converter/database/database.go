@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"time"
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/mgosec"
@@ -44,8 +45,8 @@ func NewDB(mongoConfiguration config.MongoDB, ritaConfiguration config.RITA) (DB
 	if err != nil {
 		return db, err
 	}
-	db.ssn.SetSocketTimeout(mongoConfiguration.GetSocketTimeout())
-	db.ssn.SetSyncTimeout(mongoConfiguration.GetSocketTimeout())
+	db.ssn.SetSocketTimeout(1 * time.Hour)
+	db.ssn.SetSyncTimeout(1 * time.Hour)
 	db.ssn.SetCursorTimeout(0)
 
 	db.inputDB = mongoConfiguration.GetDatabase()

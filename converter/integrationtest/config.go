@@ -2,7 +2,6 @@ package integrationtest
 
 import (
 	"net"
-	"time"
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/mgosec"
@@ -44,8 +43,6 @@ func (m mongoDBConfig) GetTLS() config.TLS { return m.tls }
 
 func (m mongoDBConfig) GetDatabase() string   { return "IPFIX" }
 func (m mongoDBConfig) GetCollection() string { return "in" }
-
-func (m mongoDBConfig) GetSocketTimeout() time.Duration { return 5 * time.Minute }
 
 //testingTLSConfig implements config.TLS
 type testingTLSConfig struct{}

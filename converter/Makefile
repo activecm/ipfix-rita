@@ -3,7 +3,7 @@ BINARY := ipfix-rita-converter
 PREFIX := /usr/local
 
 ETC := /etc/ipfix-rita
-CONFIG := /config.yaml
+CONFIG := /converter.yaml
 
 TESTFLAGS := -p=1 -v
 
