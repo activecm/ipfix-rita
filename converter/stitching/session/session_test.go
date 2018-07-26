@@ -4,13 +4,10 @@ import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/input"
-	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/stretchr/testify/require"
-	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -457,6 +454,9 @@ func TestToRITAProtos(t *testing.T) {
 	require.Equal(t, "unknown_transport", conn.Proto)
 }
 
+/*
+//not needed since MongoMatch (a Matcher based on MongoDB) was removed
+
 func TestMongoDBStorage(t *testing.T) {
 	//clear out the Sessions collection used by the MongoMatcher
 	integrationtest.RegisterDependenciesResetFunc(
@@ -539,5 +539,5 @@ func TestMongoDBStorage(t *testing.T) {
 	err = sessionsColl.Find(&sessA.AggregateQuery).One(&storedSessPostUpdate)
 	require.Nil(t, err)
 	require.Equal(t, sessA, storedSessPostUpdate)
-
 }
+*/

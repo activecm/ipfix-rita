@@ -11,7 +11,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/stretchr/testify/require"
 )
@@ -26,19 +25,6 @@ var thirtySecondsMillis = int64(1000 * 30)
 //TestMain is responsible for setting up and tearing down any
 //resources needed by all tests
 func TestMain(m *testing.M) {
-
-	//clear out the Sessions collection used by the MongoMatcher
-	integrationtest.RegisterDependenciesResetFunc(
-		func(t *testing.T, deps *integrationtest.Dependencies) {
-			sessionsColl := deps.Env.DB.NewHelperCollection(mongomatch.SessionsCollName)
-			_, err := sessionsColl.RemoveAll(nil)
-			if err != nil {
-				deps.Env.Error(err, nil)
-				t.FailNow()
-			}
-			sessionsColl.Database.Session.Close()
-		},
-	)
 
 	returnCode := m.Run()
 	integrationtest.CloseDependencies() //no effect if no integration tests run
