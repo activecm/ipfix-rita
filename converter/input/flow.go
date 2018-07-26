@@ -1,8 +1,8 @@
-package ipfix
+package input
 
 import "github.com/activecm/ipfix-rita/converter/protocols"
 
-//Flow represents a single IPFIX flow
+//Flow represents a single IPFIX/Netflow flow
 type Flow interface {
 	//SourceIPAddress returns the source IPv4 or IPv6 address
 	SourceIPAddress() string
@@ -54,6 +54,6 @@ const (
 	//LackOfResources shows the Flow was terminated because of lack of resources
 	//available to the Metering Process and/or the Exporting Process.
 	LackOfResources
-	//Nil is used to represent the absence of a FlowEndReason
-	Nil FlowEndReason = 255
+	//NilEndReason is used to represent the absence of a FlowEndReason.
+	NilEndReason FlowEndReason = 255
 )

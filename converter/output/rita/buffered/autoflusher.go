@@ -7,30 +7,40 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+//AutoFlushCollection wraps a Collection and ensures
+//the data in the Collection's buffer is flushed to MongoDB
+//within a deadline.
 type AutoFlushCollection struct {
-	bufferedColl    Collection
-	wg              *sync.WaitGroup
-	errs            chan<- error
-	stopChan        chan struct{}
-	resetTimer      chan bool
-	autoFlushTime   time.Duration
-	autoFlushActive bool
+	bufferedColl     Collection
+	wg               *sync.WaitGroup
+	errs             chan<- error
+	stopChan         chan struct{}
+	resetTimer       chan bool
+	deadlineInterval time.Duration
+	autoFlushActive  bool
 }
 
+//NewAutoFlushCollection creates a AutoFlushCollection which
+//wraps a *mgo.Collection with with a buffer for insertions and
+//ensures the buffer is written to MongoDB within a deadline.
+//The deadline is pushed back to time.Now() + deadlineInterval
+//everytime Insert or Flush is called.
 func NewAutoFlushCollection(mgoCollection *mgo.Collection, bufferSize int,
-	autoFlushTime time.Duration, errs chan<- error) *AutoFlushCollection {
+	deadlineInterval time.Duration, errs chan<- error) *AutoFlushCollection {
 	coll := &AutoFlushCollection{
-		wg:              new(sync.WaitGroup),
-		errs:            errs,
-		stopChan:        make(chan struct{}),
-		resetTimer:      make(chan bool, 1),
-		autoFlushTime:   autoFlushTime,
-		autoFlushActive: false,
+		wg:               new(sync.WaitGroup),
+		errs:             errs,
+		stopChan:         make(chan struct{}),
+		resetTimer:       make(chan bool, 1),
+		deadlineInterval: deadlineInterval,
+		autoFlushActive:  false,
 	}
 	InitializeCollection(&coll.bufferedColl, mgoCollection, bufferSize)
 	return coll
 }
 
+//StartAutoFlush starts the go routine which ensures the
+//AutoFlushCollection's buffer is flushed out within a deadline
 func (b *AutoFlushCollection) StartAutoFlush() bool {
 	if b.autoFlushActive {
 		return false
@@ -42,7 +52,7 @@ func (b *AutoFlushCollection) StartAutoFlush() bool {
 }
 
 func (b *AutoFlushCollection) autoFlush() {
-	timer := time.NewTimer(b.autoFlushTime)
+	timer := time.NewTimer(b.deadlineInterval)
 Loop:
 	for {
 		select {
@@ -67,12 +77,14 @@ Loop:
 
 			//we need to reset the timer whether or not we performed a flush
 			//so we don't repeatedly flush
-			timer.Reset(b.autoFlushTime)
+			timer.Reset(b.deadlineInterval)
 		}
 	}
 	b.wg.Done()
 }
 
+//Insert writes a record into the Collection's buffer.
+//If the buffer is full after the insertion, Flush is called.
 func (b *AutoFlushCollection) Insert(data interface{}) {
 	err := b.bufferedColl.Insert(data)
 	if err != nil {
@@ -87,6 +99,7 @@ func (b *AutoFlushCollection) Insert(data interface{}) {
 	}
 }
 
+//Flush sends the data inside the Collection's buffer to MongoDB
 func (b *AutoFlushCollection) Flush() {
 	err := b.bufferedColl.Flush()
 	if err != nil {
@@ -101,6 +114,7 @@ func (b *AutoFlushCollection) Flush() {
 	}
 }
 
+//Close closes the socket wrapped by the Collection
 func (b *AutoFlushCollection) Close() {
 	//tell the autoflusher to stop
 	close(b.stopChan)

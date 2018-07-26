@@ -6,11 +6,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
-	mgo "gopkg.in/mgo.v2"
 )
 
 //v4MulticastNet represents all IPv4 multicast addresses
@@ -30,7 +29,7 @@ type stitcher struct {
 	matcher              matching.Matcher
 	sessionsOut          chan<- *session.Aggregate
 	errs                 chan<- error
-	input                chan ipfix.Flow
+	input                chan input.Flow
 	//inputDrained is used to keep track of this stitcher's progress
 	//through its input buffer
 	inputDrained *sync.WaitGroup
@@ -47,7 +46,7 @@ func newStitcher(id, bufferSize int, sameSessionThreshold int64,
 		matcher:              matcher,
 		sessionsOut:          sessionsOut,
 		errs:                 errs,
-		input:                make(chan ipfix.Flow, bufferSize),
+		input:                make(chan input.Flow, bufferSize),
 		inputDrained:         new(sync.WaitGroup),
 	}
 }
@@ -69,7 +68,7 @@ func (s *stitcher) run(stitcherDone *sync.WaitGroup) {
 
 //enqueue inserts a flow into the input collection to be processed
 //by the loop in start
-func (s *stitcher) enqueue(flow ipfix.Flow) {
+func (s *stitcher) enqueue(flow input.Flow) {
 	s.inputDrained.Add(1)
 	s.input <- flow
 }
@@ -92,7 +91,7 @@ func (s *stitcher) waitForFlush() {
 //against each other. Once a flow has been matched in both
 //directions, the resulting session aggregate is sent to
 //the sessionsOut channel.
-func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
+func (s *stitcher) stitchFlow(flow input.Flow) error {
 	//Create a session aggregate from the flow
 	var newSessAgg session.Aggregate
 	err := session.FromFlow(flow, &newSessAgg)
@@ -149,7 +148,7 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 	}
 
 	//if there's an error other than not found, return it up
-	if oldSessAggIter.Err() != nil && oldSessAggIter.Err() != mgo.ErrNotFound {
+	if oldSessAggIter.Err() != nil /*&& oldSessAggIter.Err() != mgo.ErrNotFound*/ {
 		return errors.Wrap(oldSessAggIter.Err(), "could not find all matching session aggregates")
 	}
 
@@ -169,8 +168,8 @@ func (s *stitcher) stitchFlow(flow ipfix.Flow) error {
 //on timestamps and flow end reasons
 func (s *stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *session.Aggregate) bool {
 
-	if oldSessAgg.ProtocolIdentifier == protocols.TCP && (newSessAgg.FilledFromSourceA && oldSessAgg.FlowEndReasonAB == ipfix.EndOfFlow ||
-		newSessAgg.FilledFromSourceB && oldSessAgg.FlowEndReasonBA == ipfix.EndOfFlow) {
+	if oldSessAgg.ProtocolIdentifier == protocols.TCP && (newSessAgg.FilledFromSourceA && oldSessAgg.FlowEndReasonAB == input.EndOfFlow ||
+		newSessAgg.FilledFromSourceB && oldSessAgg.FlowEndReasonBA == input.EndOfFlow) {
 		return false
 	}
 
@@ -210,7 +209,7 @@ func (s *stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *sessio
 //shouldSkipStitching determines whether or not we know
 //how to stitch a given flow. Protocols and special addresses
 //determine whether or not stitching is possible.
-func (s *stitcher) shouldSkipStitching(flow ipfix.Flow) bool {
+func (s *stitcher) shouldSkipStitching(flow input.Flow) bool {
 	//If the destination is multicast or broadcast,
 	//write the flow out without stitching
 	if s.destIsMulticastOrBroadcast(flow) {
@@ -228,7 +227,7 @@ func (s *stitcher) shouldSkipStitching(flow ipfix.Flow) bool {
 
 //destIsMulticastOrBroadcast determines whether the destination
 //of a flow is a multicast or broadcast IPv4/ IPv6 address
-func (s *stitcher) destIsMulticastOrBroadcast(flow ipfix.Flow) bool {
+func (s *stitcher) destIsMulticastOrBroadcast(flow input.Flow) bool {
 	destIP := net.ParseIP(flow.DestinationIPAddress())
 	if destIP.To4() != nil {
 		//unfortunately we can't check for network specific broadcast addresses

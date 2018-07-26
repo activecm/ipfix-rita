@@ -64,7 +64,7 @@ func NewMongoMatcher(db database.DB, log logging.Logger,
 	for i := 0; i < int(numStitchers); i++ {
 		sessionsCollConnections = append(
 			sessionsCollConnections,
-			db.NewCollection(SessionsCollName),
+			db.NewHelperCollection(SessionsCollName),
 		)
 	}
 

@@ -3,8 +3,8 @@ package session_test
 import (
 	"testing"
 
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
@@ -16,7 +16,7 @@ import (
 
 func TestFromFlowASource(t *testing.T) {
 	var sess session.Aggregate
-	testFlow := ipfix.NewFlowMock()
+	testFlow := input.NewFlowMock()
 	testFlow.MockSourceIPAddress = "1.1.1.1"
 	testFlow.MockDestinationIPAddress = "2.2.2.2"
 	err := session.FromFlow(testFlow, &sess)
@@ -37,7 +37,7 @@ func TestFromFlowASource(t *testing.T) {
 
 func TestFromFlowBSource(t *testing.T) {
 	var sess session.Aggregate
-	testFlow := ipfix.NewFlowMock()
+	testFlow := input.NewFlowMock()
 	testFlow.MockSourceIPAddress = "2.2.2.2"
 	testFlow.MockDestinationIPAddress = "1.1.1.1"
 	err := session.FromFlow(testFlow, &sess)
@@ -58,7 +58,7 @@ func TestFromFlowBSource(t *testing.T) {
 
 func TestClear(t *testing.T) {
 	var sess session.Aggregate
-	testFlow := ipfix.NewFlowMock()
+	testFlow := input.NewFlowMock()
 	session.FromFlow(testFlow, &sess)
 
 	//ensure there is data
@@ -82,13 +82,13 @@ func TestClear(t *testing.T) {
 	require.Equal(t, int64(0), sess.OctetTotalCountBA)
 	require.Equal(t, int64(0), sess.PacketTotalCountAB)
 	require.Equal(t, int64(0), sess.PacketTotalCountBA)
-	require.Equal(t, ipfix.Nil, sess.FlowEndReasonAB)
-	require.Equal(t, ipfix.Nil, sess.FlowEndReasonBA)
+	require.Equal(t, input.NilEndReason, sess.FlowEndReasonAB)
+	require.Equal(t, input.NilEndReason, sess.FlowEndReasonBA)
 }
 
 func TestMergeWrongFlowKeys(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "2.1.1.1"
 	testFlowB.MockSourceIPAddress = "1.1.1.1"
@@ -102,8 +102,8 @@ func TestMergeWrongFlowKeys(t *testing.T) {
 }
 
 func TestMergeSameDirectionSequential(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "1.1.1.1"
@@ -161,8 +161,8 @@ func TestMergeSameDirectionSequential(t *testing.T) {
 }
 
 func TestMergeSameDirectionAntiSequential(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "1.1.1.1"
@@ -216,8 +216,8 @@ func TestMergeSameDirectionAntiSequential(t *testing.T) {
 }
 
 func TestMergeOppositeDirectionSequential(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "2.2.2.2"
@@ -283,8 +283,8 @@ func TestMergeOppositeDirectionSequential(t *testing.T) {
 //TODO: TestToRITASingleFlow
 
 func TestToRitaConnABSrcDest(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "2.2.2.2"
@@ -356,8 +356,8 @@ func TestToRitaConnABSrcDest(t *testing.T) {
 }
 
 func TestToRitaConnBASrcDest(t *testing.T) {
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "2.2.2.2"
@@ -461,7 +461,7 @@ func TestMongoDBStorage(t *testing.T) {
 	//clear out the Sessions collection used by the MongoMatcher
 	integrationtest.RegisterDependenciesResetFunc(
 		func(t *testing.T, deps *integrationtest.Dependencies) {
-			sessionsColl := deps.Env.DB.NewCollection(mongomatch.SessionsCollName)
+			sessionsColl := deps.Env.DB.NewHelperCollection(mongomatch.SessionsCollName)
 			_, err := sessionsColl.RemoveAll(nil)
 			if err != nil {
 				deps.Env.Error(err, nil)
@@ -473,8 +473,8 @@ func TestMongoDBStorage(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 	defer integrationtest.CloseDependencies()
 
-	testFlowA := ipfix.NewFlowMock()
-	testFlowB := ipfix.NewFlowMock()
+	testFlowA := input.NewFlowMock()
+	testFlowB := input.NewFlowMock()
 
 	testFlowA.MockSourceIPAddress = "1.1.1.1"
 	testFlowB.MockSourceIPAddress = "2.2.2.2"
@@ -505,7 +505,7 @@ func TestMongoDBStorage(t *testing.T) {
 	session.FromFlow(testFlowB, &sessB)
 
 	//store sessA as it stands
-	sessionsColl := env.DB.NewCollection(mongomatch.SessionsCollName)
+	sessionsColl := env.DB.NewHelperCollection(mongomatch.SessionsCollName)
 	err := sessionsColl.Insert(&sessA)
 	require.Nil(t, err)
 

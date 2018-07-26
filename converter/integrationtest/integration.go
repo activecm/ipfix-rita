@@ -23,6 +23,8 @@ type Dependencies struct {
 //of GetDependencies
 var dependencies *Dependencies
 
+//dependenciesResetFuncs is a slice of functions to be
+//ran when a fresh instance of dependencies is requested
 var dependenciesResetFuncs []func(*testing.T, *Dependencies)
 
 //GetDependencies returns a singleton instance of Dependencies.
@@ -46,6 +48,7 @@ func GetDependencies(t *testing.T) *Dependencies {
 			Env:     newEnvironment(t, mongoDB.GetMongoDBURI()),
 		}
 
+		//debatable whether this should be done here or by calling code
 		RegisterDependenciesResetFunc(resetInputColl)
 		RegisterDependenciesResetFunc(resetOutputColl)
 		RegisterDependenciesResetFunc(resetMetaDBDatabasesColl)
@@ -89,7 +92,7 @@ func resetInputColl(t *testing.T, deps *Dependencies) {
 }
 
 func resetOutputColl(t *testing.T, deps *Dependencies) {
-	outputColl, err := deps.Env.DB.NewOutputConnection("")
+	outputColl, err := deps.Env.DB.NewRITAOutputConnection("")
 	if err != nil {
 		deps.Env.Error(err, nil)
 		t.FailNow()

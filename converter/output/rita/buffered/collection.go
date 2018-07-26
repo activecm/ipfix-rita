@@ -7,18 +7,24 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+//Collection wraps an *mgo.Collection in order
+//to provide buffered insertion.
 type Collection struct {
 	mgoCollection *mgo.Collection
 	buffer        []interface{}
 	mutex         *sync.Mutex
 }
 
+//InitializeCollection wraps a *mgo.Collection with a buffer of a given size
+//for performing buffered insertions.
 func InitializeCollection(coll *Collection, mgoCollection *mgo.Collection, bufferSize int) {
 	coll.mgoCollection = mgoCollection
 	coll.buffer = make([]interface{}, 0, bufferSize)
 	coll.mutex = new(sync.Mutex)
 }
 
+//Insert writes a record into the Collection's buffer.
+//If the buffer is full after the insertion, Flush is called.
 func (b *Collection) Insert(data interface{}) error {
 	b.mutex.Lock()
 	b.buffer = append(b.buffer, data)
@@ -30,6 +36,7 @@ func (b *Collection) Insert(data interface{}) error {
 	return nil
 }
 
+//Flush sends the data inside the Collection's buffer to MongoDB
 func (b *Collection) Flush() error {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
@@ -46,6 +53,7 @@ func (b *Collection) Flush() error {
 	return nil
 }
 
+//Close closes the socket wrapped by the Collection
 func (b *Collection) Close() error {
 	err := b.Flush()
 	b.mgoCollection.Database.Session.Close()

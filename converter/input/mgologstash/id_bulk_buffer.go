@@ -9,6 +9,9 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//idBulkBuffer is the main input buffer used by ipfix-rita to
+//access MongoDB
+
 //idBulkBuffer works by selecting and removing the least recently inserted
 //record in an input collection
 type idBulkBuffer struct {

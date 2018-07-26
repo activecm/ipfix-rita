@@ -12,7 +12,7 @@ import (
 func TestCollection(t *testing.T) {
 	testCollName := "TEST_BUFFERED_COLLECTION"
 	integrationtest.RegisterDependenciesResetFunc(func(t *testing.T, deps *integrationtest.Dependencies) {
-		coll := deps.Env.DB.NewCollection(testCollName)
+		coll := deps.Env.DB.NewHelperCollection(testCollName)
 		coll.DropCollection()
 		coll.Database.Session.Close()
 	})
@@ -20,7 +20,7 @@ func TestCollection(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 	defer integrationtest.CloseDependencies()
 
-	coll := env.DB.NewCollection(testCollName)
+	coll := env.DB.NewHelperCollection(testCollName)
 
 	var bufferedColl buffered.Collection
 	buffered.InitializeCollection(&bufferedColl, coll, 5)

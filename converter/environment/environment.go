@@ -10,7 +10,7 @@ import (
 
 //Environment is used to embed the methods provided by
 //the logger, config manager, etc. into a given struct
-//This alleviates passing around a method context/ resource bundle.
+//The Environment is used like a resource bundle.
 type Environment struct {
 	config.Config
 	logging.Logger

@@ -12,42 +12,48 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+//metaDBDatabasesCollection is the name of the RITA collection
+//in the RITA MetaDB that keeps track of RITA managed databases
 const metaDBDatabasesCollection = "databases"
+
+//ritaConnInputCollection is the name of the RITA collection
+//which houses input connection data
 const ritaConnInputCollection = "conn"
 
 //DB extends mgo.Session with application specific functionality
 type DB struct {
 	ssn             *mgo.Session
-	selectedDB      string
-	input           *mgo.Collection
+	inputDB         string
+	inputColl       *mgo.Collection
 	sessions        *mgo.Collection
 	metaDBDatabases *mgo.Collection
-	ritaConf        config.RITA
+	outputDBRoot    string
 }
 
 //NewDB creates a mongodb session based on the mongo config
-func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
+func NewDB(mongoConfiguration config.MongoDB, ritaConfiguration config.RITA) (DB, error) {
 	db := DB{}
 	var err error
-	if conf.GetTLS().IsEnabled() {
-		db.ssn, err = dialTLS(conf)
+	if mongoConfiguration.GetTLS().IsEnabled() {
+		db.ssn, err = dialTLS(mongoConfiguration)
 		err = errors.Wrap(err, "could not connect to MongoDB over TLS")
 	} else {
-		db.ssn, err = dialInsecure(conf)
+		db.ssn, err = dialInsecure(mongoConfiguration)
 		err = errors.Wrap(err, "could not connect to MongoDB (no TLS)")
 	}
 	if err != nil {
 		return db, err
 	}
-	db.ssn.SetSocketTimeout(conf.GetSocketTimeout())
-	db.ssn.SetSyncTimeout(conf.GetSocketTimeout())
+	db.ssn.SetSocketTimeout(mongoConfiguration.GetSocketTimeout())
+	db.ssn.SetSyncTimeout(mongoConfiguration.GetSocketTimeout())
 	db.ssn.SetCursorTimeout(0)
 
-	db.selectedDB = conf.GetDatabase()
-	db.input = db.ssn.DB(db.selectedDB).C(conf.GetCollection())
-	db.metaDBDatabases = db.ssn.DB(ritaConf.GetMetaDB()).C(metaDBDatabasesCollection)
-	db.ritaConf = ritaConf
+	db.inputDB = mongoConfiguration.GetDatabase()
+	db.inputColl = db.ssn.DB(db.inputDB).C(mongoConfiguration.GetCollection())
+	db.outputDBRoot = ritaConfiguration.GetDBRoot()
 
+	//ensure the meta database is set up
+	db.metaDBDatabases = db.ssn.DB(ritaConfiguration.GetMetaDB()).C(metaDBDatabasesCollection)
 	err = db.metaDBDatabases.EnsureIndex(mgo.Index{
 		Key: []string{
 			"name",
@@ -64,18 +70,18 @@ func NewDB(conf config.MongoDB, ritaConf config.RITA) (DB, error) {
 	return db, nil
 }
 
-//NewCollection returns a new *mgo.Collection which refers
-//to a MongoDB collection in the selected database (conf.GetDatabase())
+//NewHelperCollection returns a new socket connected
+//to a MongoDB collection in the input database (mongoConfiguration.GetDatabase())
 //with the given name collName.
-func (db *DB) NewCollection(collName string) *mgo.Collection {
-	return db.ssn.Copy().DB(db.selectedDB).C(collName)
+func (db *DB) NewHelperCollection(collName string) *mgo.Collection {
+	return db.ssn.Copy().DB(db.inputDB).C(collName)
 }
 
 //NewInputConnection returns a new socket connected to the input
 //collection
 func (db *DB) NewInputConnection() *mgo.Collection {
 	ssn := db.ssn.Copy()
-	return db.input.With(ssn)
+	return db.inputColl.With(ssn)
 }
 
 //NewMetaDBDatabasesConnection returns a new socket connected to the
@@ -85,15 +91,19 @@ func (db *DB) NewMetaDBDatabasesConnection() *mgo.Collection {
 	return db.metaDBDatabases.With(ssn)
 }
 
-//NewOutputConnection returns a new socket connected to the
+//NewRITAOutputConnection returns a new socket connected to the
 //RITA output collection with a given DB suffix
-func (db *DB) NewOutputConnection(suffix string) (*mgo.Collection, error) {
+func (db *DB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
 	ssn := db.ssn.Copy()
-	dbName := db.ritaConf.GetDBRoot()
-	if suffix != "" {
-		dbName = db.ritaConf.GetDBRoot() + "-" + suffix
+	dbName := db.outputDBRoot
+	if dbNameSuffix != "" {
+		dbName = db.outputDBRoot + "-" + dbNameSuffix
 	}
+
+	//create the conn collection handle
 	connColl := ssn.DB(dbName).C(ritaConnInputCollection)
+
+	//ensure RITA's needed indexes exist
 	tmpConn := parsetypes.Conn{}
 	for _, index := range tmpConn.Indices() {
 		err := connColl.EnsureIndex(mgo.Index{
@@ -127,11 +137,11 @@ func (db *DB) Close() {
 	db.ssn.Close()
 }
 
-func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
+func dialTLS(mongoConfiguration config.MongoDB) (*mgo.Session, error) {
 	tlsConf := tls.Config{
-		InsecureSkipVerify: !conf.GetTLS().ShouldVerifyCertificate(),
+		InsecureSkipVerify: !mongoConfiguration.GetTLS().ShouldVerifyCertificate(),
 	}
-	caFilePath := conf.GetTLS().GetCAFile()
+	caFilePath := mongoConfiguration.GetTLS().GetCAFile()
 	if len(caFilePath) > 0 {
 		pem, err := ioutil.ReadFile(caFilePath)
 		err = errors.WithStack(err)
@@ -142,11 +152,11 @@ func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
 		tlsConf.RootCAs = x509.NewCertPool()
 		tlsConf.RootCAs.AppendCertsFromPEM(pem)
 	}
-	authMechanism, err := conf.GetAuthMechanism()
+	authMechanism, err := mongoConfiguration.GetAuthMechanism()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not parse auth mechanism for MongoDB")
 	}
-	ssn, err := mgosec.Dial(conf.GetConnectionString(), authMechanism, &tlsConf)
+	ssn, err := mgosec.Dial(mongoConfiguration.GetConnectionString(), authMechanism, &tlsConf)
 	errors.WithStack(err)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to MongoDB")
@@ -154,12 +164,12 @@ func dialTLS(conf config.MongoDB) (*mgo.Session, error) {
 	return ssn, err
 }
 
-func dialInsecure(conf config.MongoDB) (*mgo.Session, error) {
-	authMechanism, err := conf.GetAuthMechanism()
+func dialInsecure(mongoConfiguration config.MongoDB) (*mgo.Session, error) {
+	authMechanism, err := mongoConfiguration.GetAuthMechanism()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not parse auth mechanism for MongoDB")
 	}
-	ssn, err := mgosec.DialInsecure(conf.GetConnectionString(), authMechanism)
+	ssn, err := mgosec.DialInsecure(mongoConfiguration.GetConnectionString(), authMechanism)
 	err = errors.WithStack(err)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to MongoDB")

@@ -16,6 +16,13 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//bufferedRITAConnDateWriter writes session aggregates to MongoDB
+//as RITA Conn records. Each record is routed
+//to a database depending on the FlowEnd time. Additionally, it creates
+//a RITA MetaDB record for each database before inserting data
+//into the respective database. The data is batched up in buffers
+//before being sent to MongoDB. The buffers are flushed when
+//they are full or after a deadline passes for the individual buffer.
 type bufferedRITAConnDateWriter struct {
 	environment.Environment
 	localNets           []net.IPNet
@@ -25,6 +32,11 @@ type bufferedRITAConnDateWriter struct {
 	autoFlushTime       time.Duration
 }
 
+//NewBufferedRITAConnDateWriter creates an buffered RITA compatible writer
+//which splits records into different databases depending on the
+//each record's flow end date. Metadatabase records are created
+//as the output databases are created. Each buffer is flushed
+//when the buffer is full or after a deadline passes.
 func NewBufferedRITAConnDateWriter(env environment.Environment, bufferSize int, autoFlushTime time.Duration) output.SessionWriter {
 	//parse local networks
 	localNets, localNetsErrs := env.GetIPFIXConfig().GetLocalNetworks()
@@ -88,6 +100,7 @@ func (r *bufferedRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
 }
 
 func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate, errs chan<- error) (*buffered.AutoFlushCollection, bool) {
+	//get the latest flowEnd time
 	endTimeMilliseconds := sess.FlowEndMillisecondsAB
 	if sess.FlowEndMillisecondsBA > endTimeMilliseconds {
 		endTimeMilliseconds = sess.FlowEndMillisecondsBA
@@ -102,7 +115,7 @@ func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.A
 	if !ok {
 		//connect to the db
 		var err error
-		outColl, err := r.DB.NewOutputConnection(endTimeStr)
+		outColl, err := r.DB.NewRITAOutputConnection(endTimeStr)
 		if err != nil {
 			errs <- errors.Wrapf(err, "could not connect to output database for suffix: %s", endTimeStr)
 			return nil, false

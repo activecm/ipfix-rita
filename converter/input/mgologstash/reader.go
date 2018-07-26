@@ -4,20 +4,22 @@ import (
 	"context"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/pkg/errors"
 )
 
-//Reader implements ipfix.Reader
+//Reader implements input.Reader
 type Reader struct {
 	buffer   Buffer
 	pollWait time.Duration
 	log      logging.Logger
 }
 
-//NewReader returns a new ipfix.Reader backed by a mgologstash.Buffer
-func NewReader(buffer Buffer, pollWait time.Duration, log logging.Logger) ipfix.Reader {
+//NewReader returns a new input.Reader backed by a mgologstash.Buffer.
+//If there is no data in the buffer, the reader will wait for `pollWait`,
+//then try reading the buffer again.
+func NewReader(buffer Buffer, pollWait time.Duration, log logging.Logger) input.Reader {
 	return Reader{
 		buffer:   buffer,
 		pollWait: pollWait,
@@ -26,11 +28,11 @@ func NewReader(buffer Buffer, pollWait time.Duration, log logging.Logger) ipfix.
 }
 
 //Drain asynchronously drains a mgologstash.Buffer
-func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
-	out := make(chan ipfix.Flow)
+func (r Reader) Drain(ctx context.Context) (<-chan input.Flow, <-chan error) {
+	out := make(chan input.Flow)
 	errs := make(chan error)
 
-	go func(buffer Buffer, pollWait time.Duration, out chan<- ipfix.Flow, errs chan<- error) {
+	go func(buffer Buffer, pollWait time.Duration, out chan<- input.Flow, errs chan<- error) {
 		pollTicker := time.NewTicker(pollWait)
 
 		r.drainInner(ctx, buffer, out, errs)
@@ -52,7 +54,7 @@ func (r Reader) Drain(ctx context.Context) (<-chan ipfix.Flow, <-chan error) {
 	return out, errs
 }
 
-func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- ipfix.Flow, errs chan<- error) {
+func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- input.Flow, errs chan<- error) {
 	r.log.Info("checking input buffer for more data", nil)
 	dataFound := false
 	flow := &Flow{}

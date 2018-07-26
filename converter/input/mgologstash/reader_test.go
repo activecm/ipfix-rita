@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/activecm/ipfix-rita/converter/input"
+	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
-	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +39,7 @@ func TestReader(t *testing.T) {
 	flowTestResults := make(chan testResult, 50)
 	errorTestResults := make(chan testResult, 50)
 	wg := sync.WaitGroup{}
-	go func(flowTestResults chan<- testResult, flows <-chan ipfix.Flow, wg *sync.WaitGroup) {
+	go func(flowTestResults chan<- testResult, flows <-chan input.Flow, wg *sync.WaitGroup) {
 		f, ok := <-flows
 		flowTestResults <- testResult{ok, "flows available for reading", nil}
 		outFlow, ok := f.(*mgologstash.Flow)

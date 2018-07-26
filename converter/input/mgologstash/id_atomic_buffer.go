@@ -7,18 +7,22 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//idIterBuffer works by selecting and removing the least recently inserted
+//idAtomicBuffer is not used within ipfix-rita. However, it does
+//show how to implement a mgologstash.Buffer. It is used in
+//reader_test as it is the simplest buffer implementation.
+
+//idAtomicBuffer works by selecting and removing the least recently inserted
 //record in an input collection
-type idIterBuffer struct {
+type idAtomicBuffer struct {
 	input *mgo.Collection
-	iter  *mgo.Iter
 	err   error
 	log   logging.Logger
 }
 
-//NewIDIterBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
-func NewIDIterBuffer(input *mgo.Collection, log logging.Logger) Buffer {
-	return &idIterBuffer{
+//NewIDAtomicBuffer returns an mgologstash.Buffer which pulls
+//input records atomically from MongoDB in (roughly) insertion order
+func NewIDAtomicBuffer(input *mgo.Collection, log logging.Logger) Buffer {
+	return &idAtomicBuffer{
 		input: input,
 		log:   log,
 	}
@@ -27,29 +31,22 @@ func NewIDIterBuffer(input *mgo.Collection, log logging.Logger) Buffer {
 //Next returns the next record that was inserted into the input collection.
 //Next returns false if there is no more data. Next may set an error when
 //it returns false. This error can be read with Err()
-func (b *idIterBuffer) Next(out *Flow) bool {
-	if b.iter == nil || b.iter.Done() {
-		b.iter = b.input.Find(nil).Sort("_id").Iter()
-	}
+func (b *idAtomicBuffer) Next(out *Flow) bool {
 
 	getNextRecord := true
 	for getNextRecord {
-
 		var input bson.M
-		ok := b.iter.Next(&input)
-		if b.iter.Err() != nil {
-			if b.iter.Err() != mgo.ErrNotFound {
-				b.err = errors.Wrap(b.iter.Err(), "could not fetch next record from input collection")
-			}
-			return false
-		}
-		if !ok {
-			return false
-		}
+		_, err := b.input.Find(nil).Sort("_id").Apply(
+			mgo.Change{
+				Remove: true,
+			},
+			&input,
+		)
 
-		err := b.input.RemoveId(input["_id"].(bson.ObjectId))
 		if err != nil {
-			b.err = errors.Wrap(err, "could not remove record from input collection")
+			if err != mgo.ErrNotFound {
+				b.err = errors.Wrap(err, "could not fetch next record from input collection")
+			}
 			return false
 		}
 
@@ -65,11 +62,11 @@ func (b *idIterBuffer) Next(out *Flow) bool {
 }
 
 //Err returns any errors set by Read()
-func (b *idIterBuffer) Err() error {
+func (b *idAtomicBuffer) Err() error {
 	return b.err
 }
 
 //Close closes the socket to the MongoDB server
-func (b *idIterBuffer) Close() {
+func (b *idAtomicBuffer) Close() {
 	b.input.Database.Session.Close()
 }

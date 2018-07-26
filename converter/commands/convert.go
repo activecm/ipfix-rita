@@ -3,16 +3,13 @@ package commands
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	_ "net/http/pprof" //Profiling
-
 	"github.com/activecm/ipfix-rita/converter/environment"
-	input "github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	input "github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	buffered "github.com/activecm/ipfix-rita/converter/output/rita/buffered/dates"
 	"github.com/activecm/ipfix-rita/converter/stitching"
@@ -34,22 +31,27 @@ func init() {
 }
 
 func convert() error {
-
-	//Profiling:
-	go func() {
-		fmt.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	env, err := environment.NewDefaultEnvironment()
 	if err != nil {
 		return err
 	}
 
-	ctx, cancel := interruptContext(env.Logger)
-	defer cancel()
+	//use CTRL-C as our signal to wrap up and exit
+	ctx, _ := interruptContext(env.Logger)
 
+	//TODO: Decide whether or not to expose these options
+
+	//pollWait is how long to wait before checking if the input buffer has
+	//more data
 	pollWait := 30 * time.Second
+
+	//inputBufferSize is how much data is stored in RAM at a time
+	//for IDBulkBuffer this is also how much data is transferred in a single request
 	inputBufferSize := 10000
+
+	//Readers read from Buffers
+	//reader will poll the MongoDB IDBulkBuffer which fetches records
+	//in order of the ID field (usually insertion order)
 	reader := input.NewReader(
 		input.NewIDBulkBuffer(
 			env.DB.NewInputConnection(),
@@ -59,23 +61,51 @@ func convert() error {
 		pollWait,
 		env.Logger,
 	)
+	//input channels
 	inputData, inputErrors := reader.Drain(ctx)
 
+	//sameSessionThreshold determines is used in the process of determining
+	//whether two flows should be stitched together or not.
+	//If the time between one flow ending and the other flow starting
+	//exceeds sameSessionThreshold, they will not be stitched together.
 	sameSessionThreshold := int64(1000 * 60) //milliseconds
+
+	//how many stitching workers to use. The stitching workers
+	//are assigned work by hash partitioning. Flows which may be stitched
+	//together are guaranteed to handled by the same worker.
 	numStitchers := 20
+
+	//each woker has an input buffer.
+	//if the inputBufferSize is evenly split among the stitching workers
+	//then each stitcher needs a buffer at least as big as
+	//inputBufferSize / numStitchers.
 	stitcherBufferSize := inputBufferSize / numStitchers
 
+	//matcherSize determines how many session.AggregateQuery
+	//objects can be considered a candidate for matching (stitching)
+	//at any given time
+	//Increasing this value will likely increase the accuracy
+	//of the results. However, a larger matcher likely takes
+	//more resources (RAM/ CPU) to run at the same level of performance.
 	matcherSize := 5000
+	//TODO matcher flush percentage
 
-	//the output buffer should be able to handle the same amount
-	//as the total input buffer
+	//outputBufferSize is used to set the size of the buffered channel
+	//leading to the output.SessionWriter. It should be able to handle
+	//at least as many records as in the input buffer.
 	outputBufferSize := inputBufferSize
 	//if more data could come out of the matcher via flushing
 	//than the input buffer, use that to guide the output buffer size
+	//Divide by 2 is a rough estimate of how many flows may be flushed at once
 	if outputBufferSize < matcherSize/2 {
 		outputBufferSize = matcherSize / 2
 	}
 
+	//the stitchingManager reads input from the input channel
+	//and assigns the input flows to a pool stitcher workers.
+	//Additionally, it manages the Matcher which is responsible
+	//for providing the (CRUD+Flush) data structure needed for
+	//stitching.
 	stitchingManager := stitching.NewManager(
 		sameSessionThreshold,
 		int32(numStitchers),
@@ -85,26 +115,29 @@ func convert() error {
 		env.Logger,
 	)
 
+	//run the stitching manager and get the output channels
 	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(inputData, env.DB)
 
-	//var writer output.SpewRITAConnWriter
-	/*writer := output.RITAConnWriter{
-		Environment: env,
-	}*/
-	//writer := output.NullSessionWriter{}
-	//writer := dates.NewRITAConnDateWriter(env)
-
-	autoFlushTime := 1 * time.Minute
-	writer := buffered.NewBufferedRITAConnDateWriter(env, outputBufferSize, autoFlushTime)
-
+	//flushDeadline determines how long data may sit in a buffer
+	//before it is exported to MongoDB
+	flushDeadline := 1 * time.Minute
+	//bulkBatchSize is how much data is shipped to MongoDB at a time
+	bulkBatchSize := outputBufferSize
+	//NewBufferedRITAConnDateWriter creates a MongoDB/RITA conn-record writer
+	//which splits output records up by the time the connection finished
+	writer := buffered.NewBufferedRITAConnDateWriter(env, bulkBatchSize, flushDeadline)
+	//start the writer
 	writingErrors := writer.Write(stitchingOutput)
 
+	//Go-ism for waiting for several channels to close
+	//process the errors on the main thread
+	//the error channels will close when the component has exited
 	for {
 		select {
 		case err, ok := <-inputErrors:
 			if !ok {
 				env.Info("input errors closed", nil)
-				inputErrors = nil
+				inputErrors = nil //nil channels cna't be selected
 				break
 			}
 			env.Error(err, logging.Fields{"component": "input"})

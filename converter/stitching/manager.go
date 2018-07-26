@@ -6,14 +6,14 @@ import (
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/database"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching/rammatch"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/pkg/errors"
 )
 
-//Manager stitches together a series of ipfix.Flow objects into
+//Manager stitches together a series of input.Flow objects into
 //*session.Aggregate objects.
 type Manager struct {
 	//sameSessionThreshold determines whether two flows are part of the same session
@@ -50,16 +50,16 @@ func NewManager(sameSessionThreshold int64, numStitchers int32,
 	}
 }
 
-//RunSync converts an ordered array of ipfix.Flow objects
+//RunSync converts an ordered array of input.Flow objects
 //into an unordered array of *session.Aggregates.
 //An active connection to MongoDB is needed for this process.
 //This function is a synchronous wrapper around RunAsync.
-func (m Manager) RunSync(input []ipfix.Flow, db database.DB) ([]*session.Aggregate, []error) {
+func (m Manager) RunSync(inputFlows []input.Flow, db database.DB) ([]*session.Aggregate, []error) {
 	//run the input array through a channel for the runAsync method
-	inputChan := make(chan ipfix.Flow)
+	inputChan := make(chan input.Flow)
 	go func() {
-		for i := range input {
-			inputChan <- input[i]
+		for i := range inputFlows {
+			inputChan <- inputFlows[i]
 		}
 		close(inputChan)
 	}()
@@ -91,10 +91,10 @@ func (m Manager) RunSync(input []ipfix.Flow, db database.DB) ([]*session.Aggrega
 	return sessions, errs
 }
 
-//RunAsync converts an ordered stream of ipfix.Flow objects
+//RunAsync converts an ordered stream of input.Flow objects
 //into an unordered stream of *session.Aggregates.
 //An active connection to MongoDB is needed for this process.
-func (m Manager) RunAsync(input <-chan ipfix.Flow,
+func (m Manager) RunAsync(input <-chan input.Flow,
 	db database.DB) (<-chan *session.Aggregate, <-chan error) {
 	errs := make(chan error)
 	sessions := make(chan *session.Aggregate, m.outputBufferSize)
@@ -103,7 +103,7 @@ func (m Manager) RunAsync(input <-chan ipfix.Flow,
 }
 
 //runInner implements the bulk of RunAsync
-func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
+func (m Manager) runInner(input <-chan input.Flow, db database.DB,
 	sessions chan<- *session.Aggregate, errs chan<- error) {
 
 	//the matcher allows the stitchers to find session.Aggregates
@@ -142,7 +142,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 	var flowCount int
 
 	//loop over the input until its closed
-	//If the input is coming from ipfix.mgologstash and managed by
+	//If the input is coming from input.mgologstash and managed by
 	//convert.go, the input channel will
 	//be closed when the program recieves CTRL-C
 	for inFlow := range input {
@@ -210,7 +210,7 @@ func (m Manager) runInner(input <-chan ipfix.Flow, db database.DB,
 
 //selectStitcher hashes a flow's flow key and mods the result over the
 //number of stitchers
-func (m Manager) selectStitcher(f ipfix.Flow) int {
+func (m Manager) selectStitcher(f input.Flow) int {
 	hasher := fnv.New32()
 	var buffer [2]byte
 

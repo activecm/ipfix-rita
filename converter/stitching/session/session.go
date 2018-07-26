@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
@@ -30,8 +30,8 @@ type Aggregate struct {
 	PacketTotalCountAB int64 `bson:"packetTotalCountAB"`
 	PacketTotalCountBA int64 `bson:"packetTotalCountBA"`
 
-	FlowEndReasonAB ipfix.FlowEndReason `bson:"flowEndReasonAB"`
-	FlowEndReasonBA ipfix.FlowEndReason `bson:"flowEndReasonBA"`
+	FlowEndReasonAB input.FlowEndReason `bson:"flowEndReasonAB"`
+	FlowEndReasonBA input.FlowEndReason `bson:"flowEndReasonBA"`
 
 	FilledFromSourceA bool `bson:"filledFromSourceA"`
 	FilledFromSourceB bool `bson:"filledFromSourceB"`
@@ -58,7 +58,7 @@ type AggregateQuery struct {
 
 //FromFlow fills a SessionAggregate from a Flow.
 //Note: MatcherID is unaffected by this function.
-func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
+func FromFlow(flow input.Flow, sess *Aggregate) error {
 	flowSource := flow.SourceIPAddress()
 	flowDest := flow.DestinationIPAddress()
 
@@ -86,7 +86,7 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 		sess.OctetTotalCountAB = flow.OctetTotalCount()
 		sess.PacketTotalCountAB = flow.PacketTotalCount()
 		sess.FlowEndReasonAB = flow.FlowEndReason()
-		sess.FlowEndReasonBA = ipfix.Nil
+		sess.FlowEndReasonBA = input.NilEndReason
 		sess.FilledFromSourceA = true
 		return nil
 	}
@@ -100,7 +100,7 @@ func FromFlow(flow ipfix.Flow, sess *Aggregate) error {
 	sess.OctetTotalCountBA = flow.OctetTotalCount()
 	sess.PacketTotalCountBA = flow.PacketTotalCount()
 	sess.FlowEndReasonBA = flow.FlowEndReason()
-	sess.FlowEndReasonAB = ipfix.Nil
+	sess.FlowEndReasonAB = input.NilEndReason
 	sess.FilledFromSourceB = true
 	return nil
 }
@@ -177,8 +177,8 @@ func (s *Aggregate) Clear() {
 	s.PacketTotalCountAB = 0
 	s.PacketTotalCountBA = 0
 
-	s.FlowEndReasonAB = ipfix.Nil
-	s.FlowEndReasonBA = ipfix.Nil
+	s.FlowEndReasonAB = input.NilEndReason
+	s.FlowEndReasonBA = input.NilEndReason
 
 	s.FilledFromSourceA = false
 	s.FilledFromSourceB = false

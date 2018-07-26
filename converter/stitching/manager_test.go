@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
-	"github.com/activecm/ipfix-rita/converter/ipfix"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching/mongomatch"
@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 	//clear out the Sessions collection used by the MongoMatcher
 	integrationtest.RegisterDependenciesResetFunc(
 		func(t *testing.T, deps *integrationtest.Dependencies) {
-			sessionsColl := deps.Env.DB.NewCollection(mongomatch.SessionsCollName)
+			sessionsColl := deps.Env.DB.NewHelperCollection(mongomatch.SessionsCollName)
 			_, err := sessionsColl.RemoveAll(nil)
 			if err != nil {
 				deps.Env.Error(err, nil)
@@ -66,7 +66,7 @@ func newTestingStitchingManager(logger logging.Logger) Manager {
 //requireFlowStitchedWithZeroes ensures a flow was assigned to only
 //one side of a session aggregate. Additionally, this ensures
 //no other flows were aggregated into the aggregate.
-func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.Aggregate) {
+func requireFlowStitchedWithZeroes(t *testing.T, flow input.Flow, sess *session.Aggregate) {
 	sourceIsA := flow.SourceIPAddress() < flow.DestinationIPAddress()
 	if sourceIsA {
 		require.True(t, sess.FilledFromSourceA)
@@ -95,7 +95,7 @@ func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.
 		require.Zero(t, sess.PacketTotalCountBA)
 		require.Zero(t, sess.FlowStartMillisecondsBA)
 		require.Zero(t, sess.FlowEndMillisecondsBA)
-		require.Equal(t, ipfix.Nil, sess.FlowEndReasonBA)
+		require.Equal(t, input.NilEndReason, sess.FlowEndReasonBA)
 	} else {
 		require.False(t, sess.FilledFromSourceA)
 		require.True(t, sess.FilledFromSourceB)
@@ -123,14 +123,14 @@ func requireFlowStitchedWithZeroes(t *testing.T, flow ipfix.Flow, sess *session.
 		require.Zero(t, sess.PacketTotalCountAB)
 		require.Zero(t, sess.FlowStartMillisecondsAB)
 		require.Zero(t, sess.FlowEndMillisecondsAB)
-		require.Equal(t, ipfix.Nil, sess.FlowEndReasonAB)
+		require.Equal(t, input.NilEndReason, sess.FlowEndReasonAB)
 	}
 }
 
 //requireFlowsStitchedSameSide ensures two flows were stitched into
 //the same side of a session aggregate and that the other side is
 //filled with zeroes
-func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg *session.Aggregate) {
+func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 input.Flow, sessAgg *session.Aggregate) {
 	if flow1.SourceIPAddress() < flow1.DestinationIPAddress() {
 		//assigned to AB side of the session aggregate
 		//require the other flow to have the same assignment
@@ -180,7 +180,7 @@ func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg
 		require.Zero(t, sessAgg.PacketTotalCountBA)
 		require.Zero(t, sessAgg.FlowStartMillisecondsBA)
 		require.Zero(t, sessAgg.FlowEndMillisecondsBA)
-		require.Equal(t, ipfix.Nil, sessAgg.FlowEndReasonBA)
+		require.Equal(t, input.NilEndReason, sessAgg.FlowEndReasonBA)
 
 	} else {
 		//assigned to BA side of the session aggregate
@@ -231,13 +231,13 @@ func requireFlowsStitchedSameSide(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg
 		require.Zero(t, sessAgg.PacketTotalCountAB)
 		require.Zero(t, sessAgg.FlowStartMillisecondsAB)
 		require.Zero(t, sessAgg.FlowEndMillisecondsAB)
-		require.Equal(t, ipfix.Nil, sessAgg.FlowEndReasonAB)
+		require.Equal(t, input.NilEndReason, sessAgg.FlowEndReasonAB)
 	}
 }
 
 //requireFlowsStitchedFlippedSides ensures two flows were stitched into
 //opposite sides of a session aggregate
-func requireFlowsStitchedFlippedSides(t *testing.T, flow1, flow2 ipfix.Flow, sessAgg *session.Aggregate) {
+func requireFlowsStitchedFlippedSides(t *testing.T, flow1, flow2 input.Flow, sessAgg *session.Aggregate) {
 	require.True(t, sessAgg.FilledFromSourceA)
 	require.True(t, sessAgg.FilledFromSourceB)
 	flow1SourceIsA := flow1.SourceIPAddress() < flow1.DestinationIPAddress()
@@ -335,7 +335,7 @@ func TestSelectStitcherFairness(t *testing.T) {
 	//ensure the data is split roughly evenly
 	binCount := make(map[int]int)
 	for i := 0; i < 1000; i++ {
-		binCount[manager.selectStitcher(ipfix.NewFlowMock())]++
+		binCount[manager.selectStitcher(input.NewFlowMock())]++
 	}
 	expected := 1000 / 5
 	delta := 25
@@ -351,15 +351,15 @@ func TestSelectStitcherFairness(t *testing.T) {
 func TestSelectStitcherReproducible(t *testing.T) {
 	manager := newTestingStitchingManager(logging.NewTestLogger(t))
 
-	flow1 := ipfix.NewFlowMock()
-	flow2 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
+	flow2 := input.NewFlowMock()
 
 	//ensure the selectStitcher gives the same results
 	//if the flow key is the same
 	assignment1 := manager.selectStitcher(flow1)
 	assignment2 := manager.selectStitcher(flow2)
 	for i := 0; i < 100; i++ {
-		newFlow := ipfix.NewFlowMock()
+		newFlow := input.NewFlowMock()
 
 		newFlow.MockSourceIPAddress = flow1.SourceIPAddress()
 		newFlow.MockDestinationIPAddress = flow1.DestinationIPAddress()
@@ -384,11 +384,11 @@ func TestSelectStitcherFlippedFlowKeys(t *testing.T) {
 
 	//repeat the test a few times since the data is random
 	for i := 0; i < 100; i++ {
-		flow1 := ipfix.NewFlowMock()
+		flow1 := input.NewFlowMock()
 		assignment1 := manager.selectStitcher(flow1)
 
 		//create a flow with a matching, flipped flow key
-		flow2 := ipfix.NewFlowMock()
+		flow2 := input.NewFlowMock()
 		flow2.MockSourceIPAddress = flow1.DestinationIPAddress()
 		flow2.MockDestinationIPAddress = flow1.SourceIPAddress()
 		flow2.MockSourcePort = flow1.DestinationPort()
@@ -408,9 +408,9 @@ func TestGoRoutineLeaks(t *testing.T) {
 	numGoRoutines := runtime.NumGoroutine()
 	stitchingManager := newTestingStitchingManager(env.Logger)
 	_, errs := stitchingManager.RunSync(
-		[]ipfix.Flow{
-			ipfix.NewFlowMock(),
-			ipfix.NewFlowMock(),
+		[]input.Flow{
+			input.NewFlowMock(),
+			input.NewFlowMock(),
 		},
 		env.DB,
 	)
@@ -434,7 +434,7 @@ func TestSingleIcmpFlow(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 
 	//Create the input flow from random data
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	//Ensure the source comes before the destination alphabetically
 	//to ensure the source is mapped to host "A", and the destination is
 	//mapped to host "B"
@@ -442,11 +442,11 @@ func TestSingleIcmpFlow(t *testing.T) {
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	//Set the protocol to ICMP
 	flow1.MockProtocolIdentifier = protocols.ICMP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
 	//run the stitching manager
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -466,15 +466,15 @@ func TestTwoICMPFlowsSameSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.ICMP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -490,7 +490,7 @@ func TestTwoICMPFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -511,15 +511,15 @@ func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.ICMP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -535,7 +535,7 @@ func TestTwoICMPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -556,15 +556,15 @@ func TestTwoICMPFlowsFlippedSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.ICMP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -580,7 +580,7 @@ func TestTwoICMPFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -601,15 +601,15 @@ func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.ICMP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -625,7 +625,7 @@ func TestTwoICMPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -648,7 +648,7 @@ func TestSingleUDPFlow(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 
 	//Create the input flow from random data
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	//Ensure the source comes before the destination alphabetically
 	//to ensure the source is mapped to host "A", and the destination is
 	//mapped to host "B"
@@ -656,11 +656,11 @@ func TestSingleUDPFlow(t *testing.T) {
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	//Set the protocol to UDP
 	flow1.MockProtocolIdentifier = protocols.UDP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
 	//run the stitching manager
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -680,15 +680,15 @@ func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.UDP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -700,7 +700,7 @@ func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -718,15 +718,15 @@ func TestTwoUDPFlowSameSourceInTimeout(t *testing.T) {
 func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.UDP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -739,7 +739,7 @@ func TestTwoUDPFlowsSameSourceOutOfTimeout(t *testing.T) {
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
 
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -753,15 +753,15 @@ func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.UDP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -777,7 +777,7 @@ func TestTwoUDPFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -796,15 +796,15 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.UDP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -820,7 +820,7 @@ func TestTwoUDPFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -835,7 +835,7 @@ func TestSingleTCPIdleOutFlow(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 
 	//Create the input flow from random data
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	//Ensure the source comes before the destination alphabetically
 	//to ensure the source is mapped to host "A", and the destination is
 	//mapped to host "B"
@@ -843,11 +843,11 @@ func TestSingleTCPIdleOutFlow(t *testing.T) {
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	//Set the protocol to TCP
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
 	//run the stitching manager
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -867,15 +867,15 @@ func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -887,7 +887,7 @@ func TestTwoTCPIdleOutFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -906,15 +906,15 @@ func TwoTCPIdleOutFlowsSameSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -926,7 +926,7 @@ func TwoTCPIdleOutFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 1)
 
@@ -940,15 +940,15 @@ func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -964,7 +964,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -983,15 +983,15 @@ func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.IdleTimeout
+	flow1.MockFlowEndReason = input.IdleTimeout
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1007,7 +1007,7 @@ func TestTwoTCPIdleOutFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1022,7 +1022,7 @@ func TestSingleTCPEOFFlow(t *testing.T) {
 	env := integrationtest.GetDependencies(t).Env
 
 	//Create the input flow from random data
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	//Ensure the source comes before the destination alphabetically
 	//to ensure the source is mapped to host "A", and the destination is
 	//mapped to host "B"
@@ -1030,11 +1030,11 @@ func TestSingleTCPEOFFlow(t *testing.T) {
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	//Set the protocol to TCP
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
 	//run the stitching manager
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -1054,15 +1054,15 @@ func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -1074,7 +1074,7 @@ func TestTwoTCPEOFFlowsSameSourceInTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1088,15 +1088,15 @@ func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 29445
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 53
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockSourceIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockSourcePort = flow1.MockSourcePort
@@ -1108,7 +1108,7 @@ func TestTwoTCPEOFFlowsSameSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1122,15 +1122,15 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv4(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1146,7 +1146,7 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv4(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -1165,15 +1165,15 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv6(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "2001:db8:85a3:8d3:1319:8a2e:370:7348"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2001:db8:85a3:8d3:1319:8a2e:370:7347"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1189,7 +1189,7 @@ func TestTwoTCPEOFFlowsFlippedSourceInTimeoutIPv6(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	//ensure there were no errors
 	if len(errs) != 0 {
@@ -1208,15 +1208,15 @@ func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "2.2.2.2"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1232,7 +1232,7 @@ func TestTwoTCPEOFFlowsFlippedSourceOutOfTimeout(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1246,15 +1246,15 @@ func TestIPv4Multicast(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "224.0.0.5"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1270,7 +1270,7 @@ func TestIPv4Multicast(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1284,15 +1284,15 @@ func TestIPv4Broadcast(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "1.1.1.1"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "255.255.255.255"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1308,7 +1308,7 @@ func TestIPv4Broadcast(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1322,15 +1322,15 @@ func TestIPv6Multicast(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flow1 := ipfix.NewFlowMock()
+	flow1 := input.NewFlowMock()
 	flow1.MockSourceIPAddress = "2001:db8:85a3:8d3:1319:8a2e:370:7348"
 	flow1.MockSourcePort = 0
 	flow1.MockDestinationIPAddress = "FF02:0:0:0:0:0:0:F"
 	flow1.MockDestinationPort = 771
 	flow1.MockProtocolIdentifier = protocols.TCP
-	flow1.MockFlowEndReason = ipfix.EndOfFlow
+	flow1.MockFlowEndReason = input.EndOfFlow
 
-	flow2 := ipfix.NewFlowMock()
+	flow2 := input.NewFlowMock()
 	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
 	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
 	flow2.MockSourcePort = flow1.MockDestinationPort
@@ -1346,7 +1346,7 @@ func TestIPv6Multicast(t *testing.T) {
 	flow2.MockFlowEndMilliseconds = flow2.MockFlowStartMilliseconds + (flow1.MockFlowEndMilliseconds - flow1.MockFlowStartMilliseconds)
 
 	stitchingManager := newTestingStitchingManager(env.Logger)
-	sessions, errs := stitchingManager.RunSync([]ipfix.Flow{flow1, flow2}, env.DB)
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow1, flow2}, env.DB)
 
 	require.Len(t, errs, 0)
 
@@ -1360,9 +1360,9 @@ func TestFlush1PacketFlowsFirst(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flows := make([]ipfix.Flow, 0, 20)
+	flows := make([]input.Flow, 0, 20)
 	for i := 0; i < 20; i++ {
-		flow := ipfix.NewFlowMock()
+		flow := input.NewFlowMock()
 		//ensure the flow makes it into the stitching table
 		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
 		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)
@@ -1386,9 +1386,9 @@ func TestFlush2PacketFlowsSecond(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flows := make([]ipfix.Flow, 0, 20)
+	flows := make([]input.Flow, 0, 20)
 	for i := 0; i < 20; i++ {
-		flow := ipfix.NewFlowMock()
+		flow := input.NewFlowMock()
 		//ensure the flow makes it into the stitching table
 		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
 		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)
@@ -1415,9 +1415,9 @@ func TestFlushOldestFlowsLast(t *testing.T) {
 	//Set up for an integration test
 	env := integrationtest.GetDependencies(t).Env
 
-	flows := make([]ipfix.Flow, 0, 20)
+	flows := make([]input.Flow, 0, 20)
 	for i := 0; i < 20; i++ {
-		flow := ipfix.NewFlowMock()
+		flow := input.NewFlowMock()
 		//ensure the flow makes it into the stitching table
 		flow.MockSourceIPAddress = fmt.Sprintf("192.168.0.%d", i)
 		flow.MockDestinationIPAddress = fmt.Sprintf("192.168.1.%d", i)

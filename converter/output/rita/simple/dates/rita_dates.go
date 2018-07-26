@@ -15,13 +15,25 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type RITAConnDateWriter struct {
+//simple.data.ritaConnDateWriter is not used in ipfix-rita but is
+//kept around for convenience
+
+//ritaConnDateWriter writes session aggregates to MongoDB
+//as RITA Conn records. Each record is routed
+//to a database depending on the FlowEnd time. Additionally, it creates
+//a RITA MetaDB record for each database before inserting data
+//into the respective database.
+type ritaConnDateWriter struct {
 	environment.Environment
 	localNets           []net.IPNet
 	outputCollections   map[string]*mgo.Collection
 	metaDBDatabasesColl *mgo.Collection
 }
 
+//NewRITAConnDateWriter creates an unbuffered RITA compatible writer
+//which splits records into different databases depending on the
+//each record's flow end date. Metadatabase records are created
+//as the output databases are created.
 func NewRITAConnDateWriter(env environment.Environment) output.SessionWriter {
 	localNets, localNetsErrs := env.GetIPFIXConfig().GetLocalNetworks()
 	if len(localNetsErrs) != 0 {
@@ -29,7 +41,7 @@ func NewRITAConnDateWriter(env environment.Environment) output.SessionWriter {
 			env.Logger.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
 		}
 	}
-	return &RITAConnDateWriter{
+	return &ritaConnDateWriter{
 		Environment:         env,
 		localNets:           localNets,
 		outputCollections:   make(map[string]*mgo.Collection),
@@ -37,7 +49,7 @@ func NewRITAConnDateWriter(env environment.Environment) output.SessionWriter {
 	}
 }
 
-func (r *RITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
+func (r *ritaConnDateWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
@@ -61,14 +73,14 @@ func (r *RITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-chan er
 	return errs
 }
 
-func (r *RITAConnDateWriter) closeDBSessions() {
+func (r *ritaConnDateWriter) closeDBSessions() {
 	for _, coll := range r.outputCollections {
 		coll.Database.Session.Close()
 	}
 	r.metaDBDatabasesColl.Database.Session.Close()
 }
 
-func (r *RITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
+func (r *ritaConnDateWriter) isIPLocal(ipAddrStr string) bool {
 	ipAddr := net.ParseIP(ipAddrStr)
 	for i := range r.localNets {
 		if r.localNets[i].Contains(ipAddr) {
@@ -78,7 +90,7 @@ func (r *RITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
 	return false
 }
 
-func (r *RITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate) (*mgo.Collection, error) {
+func (r *ritaConnDateWriter) getConnCollectionForSession(sess *session.Aggregate) (*mgo.Collection, error) {
 	endTimeMilliseconds := sess.FlowEndMillisecondsAB
 	if sess.FlowEndMillisecondsBA > endTimeMilliseconds {
 		endTimeMilliseconds = sess.FlowEndMillisecondsBA
@@ -92,7 +104,7 @@ func (r *RITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate
 	outColl, ok := r.outputCollections[endTimeStr]
 	if !ok {
 		var err error
-		outColl, err = r.DB.NewOutputConnection(endTimeStr)
+		outColl, err = r.DB.NewRITAOutputConnection(endTimeStr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not connect to output database for suffix: %s", endTimeStr)
 		}
@@ -102,7 +114,7 @@ func (r *RITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate
 	return outColl, nil
 }
 
-func (r *RITAConnDateWriter) ensureMetaDBRecordExists(dbName string) error {
+func (r *ritaConnDateWriter) ensureMetaDBRecordExists(dbName string) error {
 	numRecords, err := r.metaDBDatabasesColl.Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)

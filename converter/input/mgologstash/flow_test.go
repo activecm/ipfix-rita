@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/ipfix"
-	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/input"
+	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func getTestFlow1() *mgologstash.Flow {
 	flow.Netflow.ProtocolIdentifier = protocols.UDP
 	flow.Netflow.IPClassOfService = 3
 	flow.Netflow.VlanID = 4
-	flow.Netflow.FlowEndReason = ipfix.ActiveTimeout
+	flow.Netflow.FlowEndReason = input.ActiveTimeout
 	flow.Netflow.Version = 5
 	return flow
 }
@@ -45,7 +45,7 @@ func getTestFlow2() *mgologstash.Flow {
 	flow.Netflow.ProtocolIdentifier = protocols.TCP
 	flow.Netflow.IPClassOfService = 30
 	flow.Netflow.VlanID = 44
-	flow.Netflow.FlowEndReason = ipfix.IdleTimeout
+	flow.Netflow.FlowEndReason = input.IdleTimeout
 	flow.Netflow.Version = 54
 	return flow
 }
@@ -65,7 +65,7 @@ func getTestFlow3() *mgologstash.Flow {
 	flow.Netflow.ProtocolIdentifier = protocols.TCP
 	flow.Netflow.IPClassOfService = 50
 	flow.Netflow.VlanID = 12
-	flow.Netflow.FlowEndReason = ipfix.ActiveTimeout
+	flow.Netflow.FlowEndReason = input.ActiveTimeout
 	flow.Netflow.Version = 1
 	return flow
 }
@@ -97,7 +97,7 @@ func TestV4V6Address(t *testing.T) {
 
 func TestInheritance(t *testing.T) {
 	var flow interface{} = &mgologstash.Flow{}
-	_, ok := flow.(ipfix.Flow)
+	_, ok := flow.(input.Flow)
 	require.True(t, ok)
 }
 

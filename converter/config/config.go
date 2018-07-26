@@ -12,8 +12,8 @@ import (
 //If the scope does not exist, create an interface here
 //exposing each of the configuration options for that scope
 //as method calls. Then, expose that interface via
-//the Config interface. You may also need to edit the struct
-//implementing Config if you created a new scope.
+//the Config interface. You will also need to edit the struct(s)
+//implementing Config if you created a new scope. (explained below)
 //
 //If the scope already exists, simply add a method exposing
 //the option to that scope's interface.

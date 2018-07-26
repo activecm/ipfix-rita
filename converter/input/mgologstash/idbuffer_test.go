@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
-	"github.com/activecm/ipfix-rita/converter/ipfix/mgologstash"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,7 +64,6 @@ func testBufferOrder(buffer mgologstash.Buffer, env environment.Environment, t *
 
 	require.Equal(t, testFlow2, &flow)
 	buffer.Close()
-
 }
 
-//TODO: TestSkipInvalidFlows
+//TODO: TestSkipInvalidFlows with various input objects (ie valid IPFIX records with different fields)

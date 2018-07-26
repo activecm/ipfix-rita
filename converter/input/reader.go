@@ -1,11 +1,23 @@
-package ipfix
+package input
 
 import (
 	"context"
 	"reflect"
 )
 
-func DrainNReaders(readers []Reader, ctx context.Context) (<-chan Flow, <-chan error) {
+//Reader represents a source of IPFIX flows which can be read from
+//asynchronously
+type Reader interface {
+	//Drain asynchronously drains a source of IPFIX flows
+	Drain(context.Context) (<-chan Flow, <-chan error)
+}
+
+//DrainNReaders is not used in ipfix-rita. However it is kept
+//here for convenience.
+
+//DrainNReaders allows a piece of code to read several
+//readers at once
+func DrainNReaders(ctx context.Context, readers []Reader) (<-chan Flow, <-chan error) {
 
 	readerData := make([]<-chan Flow, 0, len(readers))
 	readerDataCases := make([]reflect.SelectCase, 0, len(readers))

@@ -157,6 +157,8 @@ func (r *ramMatcher) Flush() error {
 }
 
 func (r *ramMatcher) flushTo(targetCount uint64) error {
+	//TODO: subtract off the smallest MatcherID from every record
+	//and the insertTracker to prevent overflow of insertTracker
 	startCount := atomic.LoadUint64(&r.count)
 	if startCount <= targetCount {
 		return nil

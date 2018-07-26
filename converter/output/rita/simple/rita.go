@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
@@ -11,23 +12,34 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//RITAConnWriter writes session aggregates to MongoDB
+//ritaConnWriter is not used in ipfix-rita as it is too slow
+
+//ritaConnWriter writes session aggregates to MongoDB
 //as RITA Conn records. Additionally, it creates
 //a RITA MetaDB record for the data once the program
-//finishes executing.
-type RITAConnWriter struct {
+//finishes executing. Only a single output database is used.
+type ritaConnWriter struct {
 	environment.Environment
+}
+
+//NewRITAConnWriter creates a new ritaConnWriter which
+//writes session aggregate records to MongoDB in a RITA compatible format
+//to a single database. The MetaDB entry is created as the writer exits.
+func NewRITAConnWriter(env environment.Environment) output.SessionWriter {
+	return ritaConnWriter{
+		Environment: env,
+	}
 }
 
 //Write converts session aggregates into RITA conn
 //records and writes them out to MongoDB
 //such that RITA can import the data
-func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
+func (r ritaConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
 
-		outColl, err := r.DB.NewOutputConnection("")
+		outColl, err := r.DB.NewRITAOutputConnection("")
 		if err != nil {
 			errs <- errors.Wrap(err, "could not connect to output collection")
 			return
@@ -42,6 +54,7 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 
 		for sess := range sessions {
 			var connRecord parsetypes.Conn
+
 			sess.ToRITAConn(&connRecord, func(ipAddrStr string) bool {
 				ipAddr := net.ParseIP(ipAddrStr)
 				for i := range localNets {
@@ -51,6 +64,7 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 				}
 				return false
 			})
+
 			err := outColl.Insert(connRecord)
 			if err != nil {
 				errs <- errors.Wrapf(err, "could not insert record into RITA conn collection\n%+v", connRecord)
@@ -62,7 +76,7 @@ func (r RITAConnWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 	return errs
 }
 
-func (r *RITAConnWriter) ensureMetaDBRecordExists(dbName string) error {
+func (r *ritaConnWriter) ensureMetaDBRecordExists(dbName string) error {
 	dbs := r.DB.NewMetaDBDatabasesConnection()
 	defer dbs.Database.Session.Close()
 

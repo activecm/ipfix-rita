@@ -3,7 +3,7 @@ package mgologstash
 import (
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/ipfix"
+	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2/bson"
@@ -32,7 +32,7 @@ type Flow struct {
 		ProtocolIdentifier protocols.Identifier `bson:"protocolIdentifier"`
 		IPClassOfService   uint8                `bson:"ipClassOfService"`
 		VlanID             uint16               `bson:"vlanId"`
-		FlowEndReason      ipfix.FlowEndReason  `bson:"flowEndReason"`
+		FlowEndReason      input.FlowEndReason  `bson:"flowEndReason"`
 		Version            uint8                `bson:"version"`
 	} `bson:"netflow"`
 }
@@ -286,7 +286,7 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	i.Netflow.ProtocolIdentifier = protocols.Identifier(protocolID)
 	i.Netflow.IPClassOfService = uint8(ipClassOfService)
 	i.Netflow.VlanID = uint16(vlanID)
-	i.Netflow.FlowEndReason = ipfix.FlowEndReason(flowEndReason)
+	i.Netflow.FlowEndReason = input.FlowEndReason(flowEndReason)
 	i.Netflow.Version = uint8(version)
 	return nil
 }
@@ -364,7 +364,7 @@ func (i *Flow) VlanID() uint16 {
 }
 
 //FlowEndReason returns why the metering process stopped recording the flow
-func (i *Flow) FlowEndReason() ipfix.FlowEndReason {
+func (i *Flow) FlowEndReason() input.FlowEndReason {
 	return i.Netflow.FlowEndReason
 }
 
