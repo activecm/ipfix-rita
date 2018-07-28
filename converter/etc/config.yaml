@@ -1,24 +1,36 @@
-MongoDB:
-  # See https://docs.mongodb.com/manual/reference/connection-string/
-  ConnectionString: mongodb://mongodb:27017
-  # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
-  AuthenticationMechanism: null
-  # The time in hours before IPFIX-RITA's connection to MongoDB times out. 0 waits indefinitely.
-  TLS:
-    Enable: false
-    VerifyCertificate: false
-    CAFile: null
+Input:
+  Logstash-MongoDB:
+    MongoDB-Connection:
+      # See https://docs.mongodb.com/manual/reference/connection-string/
+      ConnectionString: mongodb://localhost:27017
+      # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
+      AuthenticationMechanism: null
+      TLS:
+        Enable: false
+        VerifyCertificate: false
+        CAFile: null
 
-  # The datbase and collection holding records produced by the collector
-  Database: IPFIX
-  Collection: in
+    # The database and collection holding records produced by the collector
+    Database: IPFIX
+    Collection: in
 
-RITA:
-  # The resulting RITA databases will be displayed as "DBRoot-YYYY-MM-DD"
-  DBRoot: IPFIX
+Output:
+  RITA-MongoDB:
+    MongoDB-Connection:
+      # See https://docs.mongodb.com/manual/reference/connection-string/
+      ConnectionString: mongodb://localhost:27017
+      # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
+      AuthenticationMechanism: null
+      TLS:
+        Enable: false
+        VerifyCertificate: false
+        CAFile: null
 
-  # This database holds information about the procesed files and databases.
-  MetaDB: MetaDatabase
+    # The resulting RITA databases will be displayed as "DBRoot-YYYY-MM-DD"
+    DBRoot: IPFIX
+
+    # This database holds information about RITA managed databases.
+    MetaDB: MetaDatabase
 
 IPFIX:
   # CIDR ranges of networks to mark local

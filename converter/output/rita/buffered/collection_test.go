@@ -3,16 +3,23 @@ package buffered_test
 import (
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/integrationtest"
+	"github.com/activecm/dbtest"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
 func TestCollection(t *testing.T) {
-	env := integrationtest.GetDependencies(t).Env
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
 
-	coll := env.DB.NewHelperCollection(testCollectionName)
+	mongoDBContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoDBContainer.NewSession()
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	coll := ssn.DB(testDBName).C(testCollectionName)
 
 	var bufferedColl buffered.Collection
 	buffered.InitializeCollection(&bufferedColl, coll, 5)
@@ -21,10 +28,10 @@ func TestCollection(t *testing.T) {
 		inRecords = append(inRecords, bson.M{"test": i})
 	}
 	for i := range inRecords {
-		err := bufferedColl.Insert(inRecords[i])
+		err = bufferedColl.Insert(inRecords[i])
 		require.Nil(t, err)
 	}
-	err := bufferedColl.Flush()
+	err = bufferedColl.Flush()
 	require.Nil(t, err)
 
 	var outRecords []bson.M

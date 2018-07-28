@@ -23,10 +23,10 @@ import (
 //
 //Finally, make sure to edit the tests for each format.
 
-//Config holds IPFIX-RITA configuration details
+//Config holds IPFIX-RITA (converter) configuration details
 type Config interface {
-	GetMongoDBConfig() MongoDB
-	GetRITAConfig() RITA
+	GetInputConfig() Input
+	GetOutputConfig() Output
 	GetIPFIXConfig() IPFIX
 }
 
@@ -38,13 +38,11 @@ type Serializable interface {
 	SaveConfig() ([]byte, error)
 }
 
-//MongoDB provides information for contacting MongoDB
-type MongoDB interface {
+//MongoDBConnection provides information for contacting MongoDB\
+type MongoDBConnection interface {
 	GetConnectionString() string
 	GetAuthMechanism() (mgosec.AuthMechanism, error)
 	GetTLS() TLS
-	GetDatabase() string
-	GetCollection() string
 }
 
 //TLS provides information for contacting MongoDB over TLS
@@ -54,8 +52,29 @@ type TLS interface {
 	GetCAFile() string
 }
 
-//RITA provides information for coordinating with RITA
+//Input contains configuration for ingesting IPFIX/ Netflow data
+type Input interface {
+	GetLogstashMongoDBConfig() LogstashMongoDB
+}
+
+//LogstashMongoDB contains configuration for ingesting Logstash
+//decoded IPFIX/ Netflow records from MongoDB
+type LogstashMongoDB interface {
+	GetConnectionConfig() MongoDBConnection
+	GetDatabase() string
+	GetCollection() string
+}
+
+//Output contains configuration for writing out the
+//stitched IPFIX/ Netflow records
+type Output interface {
+	GetRITAConfig() RITA
+}
+
+//RITA2 contains configuration for writing out the
+//stitched IPFIX/ Netflow records RITA compatible MongoDB databases
 type RITA interface {
+	GetConnectionConfig() MongoDBConnection
 	GetDBRoot() string
 	GetMetaDB() string
 }

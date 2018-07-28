@@ -4,9 +4,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
+	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	rita_db "github.com/activecm/rita/database"
@@ -24,12 +25,13 @@ import (
 //before being sent to MongoDB. The buffers are flushed when
 //they are full or after a deadline passes for the individual buffer.
 type bufferedRITAConnDateWriter struct {
-	environment.Environment
+	db                  rita.OutputDB
 	localNets           []net.IPNet
 	outputCollections   map[string]*buffered.AutoFlushCollection
 	metaDBDatabasesColl *mgo.Collection
 	bufferSize          int
 	autoFlushTime       time.Duration
+	log                 logging.Logger
 }
 
 //NewBufferedRITAConnDateWriter creates an buffered RITA compatible writer
@@ -37,23 +39,29 @@ type bufferedRITAConnDateWriter struct {
 //each record's flow end date. Metadatabase records are created
 //as the output databases are created. Each buffer is flushed
 //when the buffer is full or after a deadline passes.
-func NewBufferedRITAConnDateWriter(env environment.Environment, bufferSize int, autoFlushTime time.Duration) output.SessionWriter {
+func NewBufferedRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX, bufferSize int, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
+	db, err := rita.NewOutputDB(ritaConf)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
+	}
+
 	//parse local networks
-	localNets, localNetsErrs := env.GetIPFIXConfig().GetLocalNetworks()
+	localNets, localNetsErrs := ipfixConf.GetLocalNetworks()
 	if len(localNetsErrs) != 0 {
 		for i := range localNetsErrs {
-			env.Logger.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
+			log.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
 		}
 	}
 	//return the new writer
 	return &bufferedRITAConnDateWriter{
-		Environment:         env,
 		localNets:           localNets,
 		outputCollections:   make(map[string]*buffered.AutoFlushCollection),
-		metaDBDatabasesColl: env.DB.NewMetaDBDatabasesConnection(),
+		metaDBDatabasesColl: db.NewMetaDBDatabasesConnection(),
 		bufferSize:          bufferSize,
 		autoFlushTime:       autoFlushTime,
-	}
+		db:                  db,
+		log:                 log,
+	}, nil
 }
 
 func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
@@ -115,7 +123,7 @@ func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.A
 	if !ok {
 		//connect to the db
 		var err error
-		outColl, err := r.DB.NewRITAOutputConnection(endTimeStr)
+		outColl, err := r.db.NewRITAOutputConnection(endTimeStr)
 		if err != nil {
 			errs <- errors.Wrapf(err, "could not connect to output database for suffix: %s", endTimeStr)
 			return nil, false

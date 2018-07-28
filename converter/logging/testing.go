@@ -4,16 +4,20 @@ import (
 	"testing"
 )
 
-type testLogger struct {
+//TestLogger implements logging.Logger with
+//the methods provided by go test's testing.T
+type TestLogger struct {
 	t *testing.T
 }
 
 //NewTestLogger routes log calls to go test
 func NewTestLogger(t *testing.T) Logger {
-	return testLogger{t: t}
+	return TestLogger{t: t}
 }
 
-func (l testLogger) Error(err error, fields Fields) {
+//Error displays an error and all of its inner fields along
+//with arbitrary data as specified in Fields
+func (l TestLogger) Error(err error, fields Fields) {
 	if fields != nil {
 		l.t.Errorf("%+v\n%+v\n", err, fields)
 	} else {
@@ -21,7 +25,9 @@ func (l testLogger) Error(err error, fields Fields) {
 	}
 }
 
-func (l testLogger) Info(msg string, fields Fields) {
+//Info displays a message and all of its inner fields along
+//with arbitrary data as specified in Fields
+func (l TestLogger) Info(msg string, fields Fields) {
 	if fields != nil {
 		l.t.Logf("%s\n%+v\n", msg, fields)
 	} else {
@@ -29,7 +35,9 @@ func (l testLogger) Info(msg string, fields Fields) {
 	}
 }
 
-func (l testLogger) Warn(msg string, fields Fields) {
+//Warn displays a message and all of its inner fields along
+//with arbitrary data as specified in Fields
+func (l TestLogger) Warn(msg string, fields Fields) {
 	if fields != nil {
 		l.t.Logf("%s\n%+v\n", msg, fields)
 	} else {

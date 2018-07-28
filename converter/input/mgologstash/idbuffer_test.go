@@ -10,16 +10,19 @@ import (
 )
 
 func TestIDBulkBuffer(t *testing.T) {
-	env := integrationtest.GetDependencies(t).Env
-	buffer := mgologstash.NewIDBulkBuffer(env.DB.NewInputConnection(), 1000, env.Logger)
-	testBufferOrder(buffer, env, t)
+	fixtures := fixturesManager.BeginTest(t)
+	defer fixturesManager.EndTest(t)
+	env := fixtures.GetWithSkip(t, integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	inputDB := fixtures.GetWithSkip(t, inputDBTestFixture.Key).(mgologstash.LogstashMongoInputDB)
+	buffer := mgologstash.NewIDBulkBuffer(inputDB.NewInputConnection(), 1000, env.Logger)
+	testBufferOrder(buffer, inputDB, t)
 }
 
-func testBufferOrder(buffer mgologstash.Buffer, env environment.Environment, t *testing.T) {
+func testBufferOrder(buffer mgologstash.Buffer, inputDB mgologstash.LogstashMongoInputDB, t *testing.T) {
 	testFlow1 := getTestFlow1()
 	testFlow2 := getTestFlow2()
 
-	c := env.DB.NewInputConnection()
+	c := inputDB.NewInputConnection()
 	err := c.Insert(testFlow1)
 	require.Nil(t, err)
 	err = c.Insert(testFlow2)

@@ -3,7 +3,6 @@ package integrationtest
 import (
 	"testing"
 
-	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/logging"
 )
@@ -11,16 +10,19 @@ import (
 //newEnvironment creates a new environment.Environment
 //suitable for testing. Initializes Environment.DB with the given MongoDB URI.
 //MongoDB must be run without encryption/ authentication.
-func newEnvironment(t *testing.T, mongoDBURI string) environment.Environment {
+func newEnvironment(t *testing.T) environment.Environment {
 	envOut := environment.Environment{
-		Config: newConfig(mongoDBURI),
+		Config: &TestConfig{},
 		Logger: logging.NewTestLogger(t),
 	}
-	var err error
-	envOut.DB, err = database.NewDB(envOut.GetMongoDBConfig(), envOut.GetRITAConfig())
-	if err != nil {
-		envOut.Error(err, nil)
-		t.FailNow()
-	}
 	return envOut
+}
+
+//EnvironmentFixture ensures a proper testing environment
+//is loaded into a FixtureManager.
+var EnvironmentFixture = TestFixture{
+	Key: "environment",
+	Before: func(t *testing.T, data FixtureData) (interface{}, bool) {
+		return newEnvironment(t), true
+	},
 }

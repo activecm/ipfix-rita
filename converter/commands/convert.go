@@ -54,17 +54,21 @@ func convert() error {
 	//Readers read from Buffers
 	//reader will poll the MongoDB IDBulkBuffer which fetches records
 	//in order of the ID field (usually insertion order)
+	inputDB, err := input.NewLogstashMongoInputDB(
+		env.GetInputConfig().GetLogstashMongoDBConfig(),
+	)
+	if err != nil {
+		return err
+	}
 	reader := input.NewReader(
 		input.NewIDBulkBuffer(
-			env.DB.NewInputConnection(),
+			inputDB.NewInputConnection(),
 			inputBufferSize,
 			env.Logger,
 		),
 		pollWait,
 		env.Logger,
 	)
-	//input channels
-	inputData, inputErrors := reader.Drain(ctx)
 
 	//sameSessionThreshold determines is used in the process of determining
 	//whether two flows should be stitched together or not.
@@ -120,9 +124,6 @@ func convert() error {
 		env.Logger,
 	)
 
-	//run the stitching manager and get the output channels
-	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(inputData, env.DB)
-
 	//flushDeadline determines how long data may sit in a buffer
 	//before it is exported to MongoDB
 	flushDeadline := 1 * time.Minute
@@ -130,7 +131,20 @@ func convert() error {
 	bulkBatchSize := outputBufferSize
 	//NewBufferedRITAConnDateWriter creates a MongoDB/RITA conn-record writer
 	//which splits output records up by the time the connection finished
-	writer := buffered.NewBufferedRITAConnDateWriter(env, bulkBatchSize, flushDeadline)
+	writer, err := buffered.NewBufferedRITAConnDateWriter(
+		env.GetOutputConfig().GetRITAConfig(),
+		env.GetIPFIXConfig(),
+		bulkBatchSize, flushDeadline,
+		env.Logger,
+	)
+	if err != nil {
+		return err
+	}
+
+	//input channels
+	inputData, inputErrors := reader.Drain(ctx)
+	//run the stitching manager and get the output channels
+	stitchingOutput, stitchingErrors := stitchingManager.RunAsync(inputData)
 	//start the writer
 	writingErrors := writer.Write(stitchingOutput)
 

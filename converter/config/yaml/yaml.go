@@ -30,19 +30,19 @@ func ReadConfigFile() ([]byte, error) {
 }
 
 //yamlConfig contains the applications settings
-//as represented by a YAML string
+//as represented by a YAML string. Implements config.Config
 type yamlConfig struct {
-	MongoDB mongoDB `yaml:"MongoDB"`
-	RITA    rita    `yaml:"RITA"`
-	IPFIX   ipfix   `yaml:"IPFIX"`
+	Input  input  `yaml:"Input"`
+	Output output `yaml:"Output"`
+	IPFIX  ipfix  `yaml:"IPFIX"`
 }
 
-func (y *yamlConfig) GetMongoDBConfig() config.MongoDB {
-	return &y.MongoDB
+func (y *yamlConfig) GetInputConfig() config.Input {
+	return &y.Input
 }
 
-func (y *yamlConfig) GetRITAConfig() config.RITA {
-	return &y.RITA
+func (y *yamlConfig) GetOutputConfig() config.Output {
+	return &y.Output
 }
 
 func (y *yamlConfig) GetIPFIXConfig() config.IPFIX {

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/activecm/dbtest"
+	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/stretchr/testify/require"
@@ -11,9 +13,17 @@ import (
 )
 
 func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
-	env := integrationtest.GetDependencies(t).Env
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
 
-	coll := env.DB.NewHelperCollection(testCollectionName)
+	env := fixtures.GetWithSkip(t, integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	mongoDBContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoDBContainer.NewSession()
+	if err != nil {
+		env.Error(err, nil)
+		t.FailNow()
+	}
+	coll := ssn.DB(testDBName).C(testCollectionName)
 
 	errs := make(chan error, 100)
 	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 5*time.Second, errs)
@@ -29,7 +39,7 @@ func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
 	autoFlushColl.Flush()
 
 	var outRecords []bson.M
-	err := coll.Find(nil).All(&outRecords)
+	err = coll.Find(nil).All(&outRecords)
 	require.Nil(t, err)
 	require.Len(t, outRecords, len(inRecords))
 	for i := range inRecords {
@@ -60,9 +70,17 @@ func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
 }
 
 func TestAutoFlushCollectionAutoFlush(t *testing.T) {
-	env := integrationtest.GetDependencies(t).Env
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
 
-	coll := env.DB.NewHelperCollection(testCollectionName)
+	env := fixtures.GetWithSkip(t, integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	mongoDBContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoDBContainer.NewSession()
+	if err != nil {
+		env.Error(err, nil)
+		t.FailNow()
+	}
+	coll := ssn.DB(testDBName).C(testCollectionName)
 
 	errs := make(chan error, 100)
 	buffSize := 5
@@ -83,7 +101,7 @@ func TestAutoFlushCollectionAutoFlush(t *testing.T) {
 	//notice no flush
 
 	var outRecords []bson.M
-	err := coll.Find(nil).All(&outRecords)
+	err = coll.Find(nil).All(&outRecords)
 	require.Nil(t, err)
 	require.Len(t, outRecords, len(inRecords))
 	for i := range inRecords {

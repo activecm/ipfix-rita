@@ -5,7 +5,6 @@ import (
 	"hash/fnv"
 	"sync"
 
-	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching/rammatch"
@@ -58,9 +57,8 @@ func NewManager(sameSessionThreshold int64, numStitchers int32,
 
 //RunSync converts an ordered array of input.Flow objects
 //into an unordered array of *session.Aggregates.
-//An active connection to MongoDB is needed for this process.
 //This function is a synchronous wrapper around RunAsync.
-func (m Manager) RunSync(inputFlows []input.Flow, db database.DB) ([]*session.Aggregate, []error) {
+func (m Manager) RunSync(inputFlows []input.Flow) ([]*session.Aggregate, []error) {
 	//run the input array through a channel for the runAsync method
 	inputChan := make(chan input.Flow)
 	go func() {
@@ -71,7 +69,7 @@ func (m Manager) RunSync(inputFlows []input.Flow, db database.DB) ([]*session.Ag
 	}()
 
 	//grab the results from the async method
-	sessionsChan, errsChan := m.RunAsync(inputChan, db)
+	sessionsChan, errsChan := m.RunAsync(inputChan)
 
 	//append the results to the output buffers
 	var sessions []*session.Aggregate
@@ -100,16 +98,15 @@ func (m Manager) RunSync(inputFlows []input.Flow, db database.DB) ([]*session.Ag
 //RunAsync converts an ordered stream of input.Flow objects
 //into an unordered stream of *session.Aggregates.
 //An active connection to MongoDB is needed for this process.
-func (m Manager) RunAsync(input <-chan input.Flow,
-	db database.DB) (<-chan *session.Aggregate, <-chan error) {
+func (m Manager) RunAsync(input <-chan input.Flow) (<-chan *session.Aggregate, <-chan error) {
 	errs := make(chan error)
 	sessions := make(chan *session.Aggregate, m.outputBufferSize)
-	go m.runInner(input, db, sessions, errs)
+	go m.runInner(input, sessions, errs)
 	return sessions, errs
 }
 
 //runInner implements the bulk of RunAsync
-func (m Manager) runInner(input <-chan input.Flow, db database.DB,
+func (m Manager) runInner(input <-chan input.Flow,
 	sessions chan<- *session.Aggregate, errs chan<- error) {
 
 	//the matcher allows the stitchers to find session.Aggregates

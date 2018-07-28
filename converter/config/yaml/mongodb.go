@@ -6,25 +6,23 @@ import (
 	"github.com/pkg/errors"
 )
 
-//mongoDB implements config.MongoDB
-type mongoDB struct {
+//mongoDBConnection implements config.MongoDBConnection
+type mongoDBConnection struct {
 	ConnectionString string `yaml:"ConnectionString"`
 	AuthMechanism    string `yaml:"AuthenticationMechanism"`
 	TLS              tls    `yaml:"TLS"`
-	Database         string `yaml:"Database"`
-	Collection       string `yaml:"Collection"`
 }
 
-func (m *mongoDB) GetConnectionString() string {
+func (m *mongoDBConnection) GetConnectionString() string {
 	return m.ConnectionString
 }
 
-func (m *mongoDB) GetAuthMechanism() (mgosec.AuthMechanism, error) {
+func (m *mongoDBConnection) GetAuthMechanism() (mgosec.AuthMechanism, error) {
 	mechanism, err := mgosec.ParseAuthMechanism(m.AuthMechanism)
 	return mechanism, errors.Wrapf(err, "could not parse MongoDB AuthMechanism: %s", m.AuthMechanism)
 }
 
-func (m *mongoDB) GetTLS() config.TLS {
+func (m *mongoDBConnection) GetTLS() config.TLS {
 	return &m.TLS
 }
 
@@ -45,12 +43,4 @@ func (t *tls) ShouldVerifyCertificate() bool {
 
 func (t *tls) GetCAFile() string {
 	return t.CAFile
-}
-
-func (m *mongoDB) GetDatabase() string {
-	return m.Database
-}
-
-func (m *mongoDB) GetCollection() string {
-	return m.Collection
 }

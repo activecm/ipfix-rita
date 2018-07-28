@@ -5,7 +5,8 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/config/yaml"
-	"github.com/activecm/ipfix-rita/converter/database"
+	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/urfave/cli"
 )
 
@@ -34,7 +35,7 @@ func init() {
 			}
 			fmt.Printf("Loaded Configuration:\n%s\n", confStr)
 
-			db, err := database.NewDB(conf.GetMongoDBConfig(), conf.GetRITAConfig())
+			db, err := mgologstash.NewLogstashMongoInputDB(conf.GetInputConfig().GetLogstashMongoDBConfig())
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}
@@ -42,7 +43,7 @@ func init() {
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}
-			fmt.Printf("Database Connection Successful\n")
+			fmt.Printf("Input Database Connection Successful\n")
 
 			coll := db.NewInputConnection()
 			count, err := coll.Count()
@@ -50,7 +51,17 @@ func init() {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}
 			fmt.Printf("Found %d Flow Records Ready For Processing\n", count)
+			coll.Database.Session.Close()
 
+			outDB, err := rita.NewOutputDB(conf.GetOutputConfig().GetRITAConfig())
+			if err != nil {
+				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
+			}
+			err = outDB.Ping()
+			if err != nil {
+				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
+			}
+			fmt.Printf("Output Database Connection Successful\n")
 			return nil
 		},
 	})

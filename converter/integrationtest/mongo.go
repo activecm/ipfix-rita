@@ -7,14 +7,31 @@ import (
 	"github.com/activecm/dbtest/docker"
 )
 
-func newMongoDBContainer() (docker.Loader, dbtest.MongoDBContainer, error) {
-	loader, err := docker.NewLoader()
-	if err != nil {
-		return docker.Loader{}, dbtest.MongoDBContainer{}, err
+//NewMongoDBContainerFixture returns a TestFixture
+//which creates a dbtest.MongoDBContainer with the given key.
+func NewMongoDBContainerFixture(key string) TestFixture {
+	return TestFixture{
+		Key:         key,
+		LongRunning: true,
+		Requires: []string{
+			DockerLoaderFixture.Key,
+		},
+		BeforePackage: func(fixtures FixtureData) (interface{}, bool) {
+			loader := fixtures.Get(DockerLoaderFixture.Key).(docker.Loader)
+			mongoContainer, err := dbtest.NewMongoDBContainer(context.Background(), loader)
+			if err != nil {
+				panic(err)
+			}
+			return mongoContainer, true
+		},
+		AfterPackage: func(fixtures FixtureData) (interface{}, bool) {
+			loader := fixtures.Get(DockerLoaderFixture.Key).(docker.Loader)
+			mongoContainer := fixtures.Get(key).(dbtest.MongoDBContainer)
+			err := loader.StopService(context.Background(), mongoContainer)
+			if err != nil {
+				panic(err)
+			}
+			return nil, true
+		},
 	}
-	mongo, err := dbtest.NewMongoDBContainer(context.Background(), loader)
-	if err != nil {
-		return docker.Loader{}, dbtest.MongoDBContainer{}, err
-	}
-	return loader, mongo, nil
 }

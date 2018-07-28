@@ -7,59 +7,79 @@ import (
 	"github.com/activecm/mgosec"
 )
 
-//newConfig returns a standard testing configuration
-//linked to a given instance of MongoDB via the mongoDBURI.
-//MongoDB must be run without encryption/ authentication.
-func newConfig(mongoDBURI string) config.Config {
-	return testConfig{
-		mongoDB: mongoDBConfig{
-			connectionString: mongoDBURI,
-		},
-	}
+//TestConfig implements config.Config
+type TestConfig struct {
+	input  InputConfig
+	output OutputConfig
+	ipfix  IPFIXConfig
 }
 
-//testConfig implements Config
-type testConfig struct {
-	mongoDB mongoDBConfig
-	ipfix   ipfixConfig
-	rita    ritaConfig
+func (t *TestConfig) GetInputConfig() config.Input   { return &t.input }
+func (t *TestConfig) GetOutputConfig() config.Output { return &t.output }
+func (t *TestConfig) GetIPFIXConfig() config.IPFIX   { return &t.ipfix }
+
+//InputConfig implements config.Input
+type InputConfig struct {
+	logstashMongo LogstashMongoConfig
 }
 
-func (t testConfig) GetMongoDBConfig() config.MongoDB { return t.mongoDB }
-func (t testConfig) GetIPFIXConfig() config.IPFIX     { return t.ipfix }
-func (t testConfig) GetRITAConfig() config.RITA       { return t.rita }
+func (t *InputConfig) GetLogstashMongoDBConfig() config.LogstashMongoDB { return &t.logstashMongo }
 
-//mongoDBConfig implements config.MongoDB
-type mongoDBConfig struct {
+//LogstashMongoConfig implements config.LogstashMongoDB
+type LogstashMongoConfig struct {
+	mongoDB MongoDBConfig
+}
+
+func (t *LogstashMongoConfig) GetConnectionConfig() config.MongoDBConnection { return &t.mongoDB }
+func (t *LogstashMongoConfig) GetDatabase() string                           { return "IPFIX" }
+func (t *LogstashMongoConfig) GetCollection() string                         { return "in" }
+
+//MongoDBConfig implements config.MongoDB
+type MongoDBConfig struct {
 	connectionString string
-	tls              testingTLSConfig
+	tls              TLSConfig
 }
 
-func (m mongoDBConfig) GetConnectionString() string { return m.connectionString }
-func (m mongoDBConfig) GetAuthMechanism() (mgosec.AuthMechanism, error) {
+func (m *MongoDBConfig) GetConnectionString() string { return m.connectionString }
+
+//SetConnectionString provides a private setter
+//so the connection string can be updated dynamically
+func (m *MongoDBConfig) SetConnectionString(connectionString string) {
+	m.connectionString = connectionString
+}
+
+func (m *MongoDBConfig) GetAuthMechanism() (mgosec.AuthMechanism, error) {
 	return mgosec.None, nil
 }
-func (m mongoDBConfig) GetTLS() config.TLS { return m.tls }
+func (m *MongoDBConfig) GetTLS() config.TLS { return &m.tls }
 
-func (m mongoDBConfig) GetDatabase() string   { return "IPFIX" }
-func (m mongoDBConfig) GetCollection() string { return "in" }
+//TLSConfig implements config.TLS
+type TLSConfig struct{}
 
-//testingTLSConfig implements config.TLS
-type testingTLSConfig struct{}
+func (t *TLSConfig) IsEnabled() bool               { return false }
+func (t *TLSConfig) ShouldVerifyCertificate() bool { return false }
+func (t *TLSConfig) GetCAFile() string             { return "" }
 
-func (t testingTLSConfig) IsEnabled() bool               { return false }
-func (t testingTLSConfig) ShouldVerifyCertificate() bool { return false }
-func (t testingTLSConfig) GetCAFile() string             { return "" }
-
-//ipfixConfig implements config.IPFIX
-type ipfixConfig struct{}
-
-func (t ipfixConfig) GetLocalNetworks() ([]net.IPNet, []error) {
-	return []net.IPNet{}, []error{}
+//OutputConfig implements config.Output
+type OutputConfig struct {
+	rita RitaConfig
 }
 
-//TestingRITAConfig implements config.RITA
-type ritaConfig struct{}
+func (t *OutputConfig) GetRITAConfig() config.RITA { return &t.rita }
 
-func (r ritaConfig) GetDBRoot() string { return "RITA" }
-func (r ritaConfig) GetMetaDB() string { return "MetaDatabase" }
+//RitaConfig implements config.RITA
+type RitaConfig struct {
+	mongoDB MongoDBConfig
+}
+
+func (r *RitaConfig) GetConnectionConfig() config.MongoDBConnection { return &r.mongoDB }
+
+func (r *RitaConfig) GetDBRoot() string { return "RITA" }
+func (r *RitaConfig) GetMetaDB() string { return "MetaDatabase" }
+
+//IPFIXConfig implements config.IPFIX
+type IPFIXConfig struct{}
+
+func (t *IPFIXConfig) GetLocalNetworks() ([]net.IPNet, []error) {
+	return []net.IPNet{}, []error{}
+}

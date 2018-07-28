@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
@@ -16,12 +17,15 @@ import (
 )
 
 func TestReader(t *testing.T) {
-	env := integrationtest.GetDependencies(t).Env
+	fixtures := fixturesManager.BeginTest(t)
+	defer fixturesManager.EndTest(t)
+	env := fixtures.GetWithSkip(t, integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	inputDB := fixtures.GetWithSkip(t, inputDBTestFixture.Key).(mgologstash.LogstashMongoInputDB)
 
-	buff := mgologstash.NewIDAtomicBuffer(env.DB.NewInputConnection(), env.Logger)
+	buff := mgologstash.NewIDAtomicBuffer(inputDB.NewInputConnection(), env.Logger)
 	reader := mgologstash.NewReader(buff, 2*time.Second, env.Logger)
 
-	c := env.DB.NewInputConnection()
+	c := inputDB.NewInputConnection()
 	err := c.Insert(getTestFlow1())
 	require.Nil(t, err)
 	err = c.Insert(getTestFlow2())
