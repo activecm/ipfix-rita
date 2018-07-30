@@ -5,7 +5,7 @@ version: '3.3'
 # for docker-compose
 configs:
   converter_config:
-    file: ./etc/converter/config.yaml
+    file: ./etc/converter/converter.yaml
   logstash_mongo_config:
     file: ./etc/collector/logstash/mongo.conf
 
@@ -49,7 +49,7 @@ services:
     command: run
     restart: unless-stopped
     volumes:
-      - "./etc/converter/config.yaml:/etc/ipfix-rita/config.yaml:ro"
+      - "./etc/converter/converter.yaml:/etc/ipfix-rita/converter.yaml:ro"
     configs:
       - source: converter_config
-        target: /etc/ipfix-rita/config.yaml
+        target: /etc/ipfix-rita/converter.yaml
