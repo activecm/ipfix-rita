@@ -44,7 +44,7 @@ test: vendor docker-check
 
 # BEGIN VENDORING
 vendor: Gopkg.toml $(SRC)
-	dep ensure
+	dep ensure -v
 
 #Note: Vendor isn't split because root cannot run dep ensure --no-vendor
 #dep ensure --no-vendor may not touch Gopkg.lock if it is up to date.

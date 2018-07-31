@@ -25,6 +25,10 @@
   name = "github.com/activecm/dbtest"
 
 [[constraint]]
+  name = "github.com/activecm/rita"
+  version = "^1.0.1"
+
+[[constraint]]
   name = "github.com/activecm/mgosec"
   version = "0.1.0"
 
@@ -50,4 +54,4 @@
 
 [[constraint]]
   name = "gopkg.in/yaml.v2"
-  version = "2.2.1"
+  branch = "v2"

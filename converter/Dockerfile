@@ -1,6 +1,6 @@
 FROM golang:1.10-alpine as ipfix-rita-builder
 RUN apk add --no-cache git make ca-certificates wget build-base
-RUN wget -q -O /go/bin/dep https://github.com/golang/dep/releases/download/v0.3.2/dep-linux-amd64 && chmod +x /go/bin/dep
+RUN wget -q -O /go/bin/dep https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64 && chmod +x /go/bin/dep
 WORKDIR /go/src/github.com/activecm/ipfix-rita/converter
 COPY . .
 RUN make CGO_ENABLED=0 GOARCH=amd64 GOOS=linux
