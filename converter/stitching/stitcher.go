@@ -10,7 +10,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
-	"math"
 )
 
 //v4MulticastNet represents all IPv4 multicast addresses
