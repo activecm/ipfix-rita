@@ -10,6 +10,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
+	"math"
 )
 
 //v4MulticastNet represents all IPv4 multicast addresses
@@ -34,6 +35,8 @@ type stitcher struct {
 	//through its input buffer
 	inputDrained *sync.WaitGroup
 }
+
+var MAX_INT = int64(0)
 
 //newStitcher creates a new stitcher which uses the matcher
 //to match flows into session aggregates
@@ -110,7 +113,8 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	//AggregateQuery in the matcher, and the
 	//sessions qualify for merging/ stitching
 	matchFound := false
-
+	matchAgg := false
+	matchCost := MAX_INT
 	var oldSessAgg session.Aggregate
 	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
 
@@ -124,41 +128,30 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
 			matchFound = true
 
-			//merge the session aggregates (adding data counts etc)
-			err = newSessAgg.Merge(&oldSessAgg)
-			if err != nil {
-				return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &oldSessAgg)
-			}
-			//if both sides of the session have been filled, write it out
-			if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB {
-				err := s.matcher.Remove(&oldSessAgg)
-				if err != nil {
-					return errors.Wrap(err, "could not remove old session aggregate")
-				}
-				s.sessionsOut <- &newSessAgg
-			} else {
-				//otherwise update the database
-				newSessAgg.MatcherID = oldSessAgg.MatcherID
-				err := s.matcher.Update(&newSessAgg)
-				if err != nil {
-					return errors.Wrap(err, "could not update existing session aggregate")
-				}
+			f_FlowStartMilliseconds := s.FlowStartMilliseconds(&newSessAgg)
+			nextMatch_FlowStartMilliseconds := s.FlowStartMilliseconds(&oldSessAgg)
+			f_FlowEndMilliseconds := s.FlowEndMilliseconds(&newSessAgg)
+			nextMatch_FlowEndMilliseconds := s.FlowEndMilliseconds(&newSessAgg)
+
+			newMatchCost := (f_FlowStartMilliseconds - nextMatch_FlowStartMilliseconds) + (f_FlowEndMilliseconds - nextMatch_FlowEndMilliseconds)
+
+			if newMatchCost < matchCost {
+				matchAgg = true
 			}
 		}
 	}
 
-	//if there's an error other than not found, return it up
-	if oldSessAggIter.Err() != nil /*&& oldSessAggIter.Err() != mgo.ErrNotFound*/ {
-		return errors.Wrap(oldSessAggIter.Err(), "could not find all matching session aggregates")
+	if matchAgg {
+	    newSessAgg.Merge(&oldSessAgg) //changes f
+	    if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB { //The session has both sides of the connection detailed
+	        s.matcher.Remove(&newSessAgg)
+	    } else { //The merge happened on the same side of the connection
+	        s.matcher.Update(&oldSessAgg) //overwrite the matching aggregate in the matcher with the merged
+	    }
+	} else {
+	    s.matcher.Insert(&newSessAgg)
 	}
 
-	//no matching unstitched session found
-	if !matchFound {
-		err := s.matcher.Insert(&newSessAgg)
-		if err != nil {
-			return errors.Wrap(err, "could not insert new session aggregate")
-		}
-	}
 	return nil
 }
 
@@ -241,4 +234,38 @@ func (s *stitcher) destIsMulticastOrBroadcast(flow input.Flow) bool {
 		}
 	}
 	return false
+}
+
+func (s *stitcher) FlowStartMilliseconds(f *session.Aggregate) int64 {
+	var f_FlowStartMilliseconds int64
+	if f.FilledFromSourceA && f.FilledFromSourceB {
+	    if f.FlowEndMillisecondsAB < f.FlowEndMillisecondsBA {
+	        f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
+	    } else{
+	        f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
+	    }
+	} else if f.FilledFromSourceA {
+	    f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
+	} else if f.FilledFromSourceB {
+	    f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
+	}
+
+	return f_FlowStartMilliseconds
+}
+
+func (s *stitcher) FlowEndMilliseconds(f *session.Aggregate) int64 {
+	var f_FlowEndMilliseconds int64
+	if f.FilledFromSourceA && f.FilledFromSourceB {
+	    if f.FlowEndMillisecondsAB > f.FlowEndMillisecondsBA {
+	        f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
+	    } else{
+	        f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
+	    }
+	} else if f.FilledFromSourceA {
+	    f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
+	} else if f.FilledFromSourceB {
+	    f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
+	}
+
+	return f_FlowEndMilliseconds
 }
