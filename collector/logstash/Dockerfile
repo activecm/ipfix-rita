@@ -15,6 +15,3 @@ RUN mkdir /usr/share/logstash/template_cache
 # NOTE: The MongoDB output pipeline should be added
 # via bind mount or via docker configs
 ADD pipeline/ /usr/share/logstash/pipeline/
-
-# Disable some monitoring
-ADD config/ /usr/share/logstash/config/
