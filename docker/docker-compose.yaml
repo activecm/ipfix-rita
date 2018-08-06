@@ -37,7 +37,8 @@ services:
     ports:
       - 2055:2055/udp # IPFIX/Netflow endpoint udp
     environment:
-      -  XPACK_MONITORING_ENABLED=false # Disable xpack warning
+      - XPACK_MONITORING_ENABLED=false # Disable xpack warning
+      - INPUT_WORKERS=4
     volumes:
       - collector_template_cache:/usr/share/logstash/template_cache
       - "./etc/collector/logstash/mongo.conf:/usr/share/logstash/pipeline/mongo.conf:ro"
