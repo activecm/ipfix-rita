@@ -253,3 +253,37 @@ func (s *Aggregate) ToRITAConn(conn *parsetypes.Conn, localFunc func(string) boo
 		conn.RespIPBytes = int64(s.OctetTotalCountAB)
 	}
 }
+
+func FlowStartMilliseconds(f *Aggregate) int64 {
+	var f_FlowStartMilliseconds int64
+	if f.FilledFromSourceA && f.FilledFromSourceB {
+	    if f.FlowEndMillisecondsAB < f.FlowEndMillisecondsBA {
+	        f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
+	    } else{
+	        f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
+	    }
+	} else if f.FilledFromSourceA {
+	    f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
+	} else if f.FilledFromSourceB {
+	    f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
+	}
+
+	return f_FlowStartMilliseconds
+}
+
+func FlowEndMilliseconds(f *Aggregate) int64 {
+ 	var f_FlowEndMilliseconds int64
+ 	if f.FilledFromSourceA && f.FilledFromSourceB {
+ 	    if f.FlowEndMillisecondsAB > f.FlowEndMillisecondsBA {
+ 	        f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
+ 	    } else{
+ 	        f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
+ 	    }
+ 	} else if f.FilledFromSourceA {
+ 	    f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
+ 	} else if f.FilledFromSourceB {
+ 	    f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
+ 	}
+
+ 	return f_FlowEndMilliseconds
+ }
