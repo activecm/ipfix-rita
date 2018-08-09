@@ -7,6 +7,9 @@ RUN rm -f /usr/share/logstash/pipeline/logstash.conf
 # Install the MongoDB plugin
 RUN logstash-plugin install logstash-output-mongodb
 
+# Install the latest netflow codec
+RUN logstash-plugin update logstash-codec-netflow
+
 # Add a directory to cache ipfix/ netflow templates in
 # To maintain the cache across invocations it must be volumed
 RUN mkdir /usr/share/logstash/template_cache
