@@ -36,7 +36,6 @@ type stitcher struct {
 	inputDrained *sync.WaitGroup
 }
 
-var MAX_INT = int64(math.MaxInt64)
 //newStitcher creates a new stitcher which uses the matcher
 //to match flows into session aggregates
 func newStitcher(id, bufferSize int, sameSessionThreshold int64,
@@ -111,9 +110,9 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	//matchFound is true when another session is found with the same
 	//AggregateQuery in the matcher, and the
 	//sessions qualify for merging/ stitching
-	matchFound := false
-	matchAgg := false
-	matchCost := MAX_INT
+	var matchFound = false
+	var matchAgg session.Aggregate
+	matchCost := int64(math.MaxInt64)
 	var oldSessAgg session.Aggregate
 	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
 
@@ -127,10 +126,10 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
 			matchFound = true
 
-			f_FlowStartMilliseconds := session.FlowStartMilliseconds(&newSessAgg)
-			nextMatch_FlowStartMilliseconds := session.FlowStartMilliseconds(&oldSessAgg)
-			f_FlowEndMilliseconds := session.FlowEndMilliseconds(&newSessAgg)
-			nextMatch_FlowEndMilliseconds := session.FlowEndMilliseconds(&newSessAgg)
+			f_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
+			nextMatch_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
+			f_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
+			nextMatch_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
 
 			var diff1 = f_FlowEndMilliseconds - nextMatch_FlowEndMilliseconds
 			if diff1 < 0 {
@@ -144,12 +143,13 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 			newMatchCost := diff1 + diff2
 
 			if newMatchCost < matchCost {
-				matchAgg = true
+				matchCost = newMatchCost
+				matchAgg = oldSessAgg
 			}
 		}
 	}
 
-	if matchAgg {
+	if matchFound {
 		err = newSessAgg.Merge(&oldSessAgg)
 		if err != nil {
 			return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &oldSessAgg)
@@ -169,7 +169,10 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 			}
 		}
 	} else {
-		s.matcher.Insert(&newSessAgg)
+		err := s.matcher.Insert(&newSessAgg)
+		if err != nil {
+				return errors.Wrap(err, "could not insert session aggregate")
+		}
 	}
 
 	return nil

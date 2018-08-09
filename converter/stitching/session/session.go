@@ -254,7 +254,7 @@ func (s *Aggregate) ToRITAConn(conn *parsetypes.Conn, localFunc func(string) boo
 	}
 }
 
-func FlowStartMilliseconds(f *Aggregate) int64 {
+func (f *Aggregate) FlowStartMilliseconds() int64 {
 	var f_FlowStartMilliseconds int64
 	if f.FilledFromSourceA && f.FilledFromSourceB {
 	    if f.FlowEndMillisecondsAB < f.FlowEndMillisecondsBA {
@@ -271,7 +271,7 @@ func FlowStartMilliseconds(f *Aggregate) int64 {
 	return f_FlowStartMilliseconds
 }
 
-func FlowEndMilliseconds(f *Aggregate) int64 {
+func (f *Aggregate) FlowEndMilliseconds() int64 {
  	var f_FlowEndMilliseconds int64
  	if f.FilledFromSourceA && f.FilledFromSourceB {
  	    if f.FlowEndMillisecondsAB > f.FlowEndMillisecondsBA {
