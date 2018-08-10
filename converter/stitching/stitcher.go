@@ -126,9 +126,9 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
 			matchFound = true
 
-			f_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
-			nextMatch_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
-			f_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
+			f_FlowStartMilliseconds := newSessAgg.FlowStartMilliseconds()
+			nextMatch_FlowStartMilliseconds := newSessAgg.FlowStartMilliseconds()
+			f_FlowEndMilliseconds := newSessAgg.FlowEndMilliseconds()
 			nextMatch_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
 
 			var diff1 = f_FlowEndMilliseconds - nextMatch_FlowEndMilliseconds
