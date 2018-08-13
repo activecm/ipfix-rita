@@ -115,7 +115,6 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	matchCost := int64(math.MaxInt64)
 	var oldSessAgg session.Aggregate
 	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
-
 	//TODO: stitch with flow with closest timestamps rather than
 	//taking the first one that matches
 
@@ -127,7 +126,7 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 			matchFound = true
 
 			f_FlowStartMilliseconds := newSessAgg.FlowStartMilliseconds()
-			nextMatch_FlowStartMilliseconds := newSessAgg.FlowStartMilliseconds()
+			nextMatch_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
 			f_FlowEndMilliseconds := newSessAgg.FlowEndMilliseconds()
 			nextMatch_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
 
@@ -150,19 +149,19 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	}
 
 	if matchFound {
-		err = newSessAgg.Merge(&oldSessAgg)
+		err = newSessAgg.Merge(&matchAgg)
 		if err != nil {
-			return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &oldSessAgg)
+			return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &matchAgg)
 		}
 		if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB { //The session has both sides of the connection detailed
-			err := s.matcher.Remove(&oldSessAgg)
+			err := s.matcher.Remove(&matchAgg)
 			if err != nil {
 				return errors.Wrap(err, "could not remove old session aggregate")
 			}
 			s.sessionsOut <- &newSessAgg
 		} else { //The merge happened on the same side of the connection
 			//otherwise update the database
-			newSessAgg.MatcherID = oldSessAgg.MatcherID
+			newSessAgg.MatcherID = matchAgg.MatcherID
 			err := s.matcher.Update(&newSessAgg)
 			if err != nil {
 				return errors.Wrap(err, "could not update existing session aggregate")
