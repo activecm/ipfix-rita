@@ -181,37 +181,11 @@ func (s *stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *sessio
 		return false
 	}
 
-	//grab the latest FlowEnd from the new session aggregate
-	newSessAggFlowEnd := newSessAgg.FlowEndMillisecondsAB
-	if newSessAgg.FlowEndMillisecondsBA > newSessAggFlowEnd {
-		newSessAggFlowEnd = newSessAgg.FlowEndMillisecondsBA
-	}
+	return oldSessAgg.FlowStartMilliseconds() <=
+		(newSessAgg.FlowEndMilliseconds()+s.sameSessionThreshold) &&
+		oldSessAgg.FlowEndMilliseconds() >=
+			(newSessAgg.FlowStartMilliseconds()-s.sameSessionThreshold)
 
-	//grab the earliest FlowStart from the new session aggregate
-	newSessAggFlowStart := newSessAgg.FlowStartMillisecondsAB
-	if newSessAggFlowStart == 0 || newSessAgg.FlowStartMillisecondsBA != 0 &&
-		newSessAgg.FlowStartMillisecondsBA < newSessAggFlowStart {
-		newSessAggFlowStart = newSessAgg.FlowStartMillisecondsBA
-	}
-
-	oldSessAggMinFlowEnd := newSessAggFlowStart - s.sameSessionThreshold
-	oldSessAggMaxFlowStart := newSessAggFlowEnd + s.sameSessionThreshold
-
-	//grab the latest FlowEnd from the old session aggregate
-	oldSessAggFlowEnd := oldSessAgg.FlowEndMillisecondsAB
-	if oldSessAgg.FlowEndMillisecondsBA > oldSessAggFlowEnd {
-		oldSessAggFlowEnd = oldSessAgg.FlowEndMillisecondsBA
-	}
-
-	//grab the earliest FlowStart from the old session aggregate
-	oldSessAggFlowStart := oldSessAgg.FlowStartMillisecondsAB
-	if oldSessAggFlowStart == 0 || oldSessAgg.FlowStartMillisecondsBA != 0 &&
-		oldSessAgg.FlowStartMillisecondsBA < oldSessAggFlowStart {
-		oldSessAggFlowStart = oldSessAgg.FlowStartMillisecondsBA
-	}
-
-	return oldSessAggFlowStart <= oldSessAggMaxFlowStart &&
-		oldSessAggFlowEnd >= oldSessAggMinFlowEnd
 }
 
 //shouldSkipStitching determines whether or not we know

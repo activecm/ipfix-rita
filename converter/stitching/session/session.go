@@ -254,36 +254,40 @@ func (s *Aggregate) ToRITAConn(conn *parsetypes.Conn, localFunc func(string) boo
 	}
 }
 
-func (f *Aggregate) FlowStartMilliseconds() int64 {
-	var f_FlowStartMilliseconds int64
-	if f.FilledFromSourceA && f.FilledFromSourceB {
-	    if f.FlowEndMillisecondsAB < f.FlowEndMillisecondsBA {
-	        f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
-	    } else{
-	        f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
-	    }
-	} else if f.FilledFromSourceA {
-	    f_FlowStartMilliseconds = f.FlowEndMillisecondsAB
-	} else if f.FilledFromSourceB {
-	    f_FlowStartMilliseconds = f.FlowEndMillisecondsBA
+//FlowStartMilliseconds returns the earliest of s.FlowStartMillisecondsAB
+//and s.FlowStartMillisecondsBA. If neither field is set, returns 0
+func (s *Aggregate) FlowStartMilliseconds() int64 {
+	var flowStartMilliseconds int64
+	if s.FilledFromSourceA && s.FilledFromSourceB {
+		if s.FlowStartMillisecondsAB < s.FlowStartMillisecondsBA {
+			flowStartMilliseconds = s.FlowStartMillisecondsAB
+		} else {
+			flowStartMilliseconds = s.FlowStartMillisecondsBA
+		}
+	} else if s.FilledFromSourceA {
+		flowStartMilliseconds = s.FlowStartMillisecondsAB
+	} else if s.FilledFromSourceB {
+		flowStartMilliseconds = s.FlowStartMillisecondsBA
 	}
 
-	return f_FlowStartMilliseconds
+	return flowStartMilliseconds
 }
 
-func (f *Aggregate) FlowEndMilliseconds() int64 {
- 	var f_FlowEndMilliseconds int64
- 	if f.FilledFromSourceA && f.FilledFromSourceB {
- 	    if f.FlowEndMillisecondsAB > f.FlowEndMillisecondsBA {
- 	        f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
- 	    } else{
- 	        f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
- 	    }
- 	} else if f.FilledFromSourceA {
- 	    f_FlowEndMilliseconds = f.FlowEndMillisecondsAB
- 	} else if f.FilledFromSourceB {
- 	    f_FlowEndMilliseconds = f.FlowEndMillisecondsBA
- 	}
+//FlowEndMilliseconds returns the earliest of s.FlowEndMillisecondsAB
+//and s.FlowEndMillisecondsBA. If neither field is set, returns 0
+func (s *Aggregate) FlowEndMilliseconds() int64 {
+	var flowEndMilliseconds int64
+	if s.FilledFromSourceA && s.FilledFromSourceB {
+		if s.FlowEndMillisecondsAB > s.FlowEndMillisecondsBA {
+			flowEndMilliseconds = s.FlowEndMillisecondsAB
+		} else {
+			flowEndMilliseconds = s.FlowEndMillisecondsBA
+		}
+	} else if s.FilledFromSourceA {
+		flowEndMilliseconds = s.FlowEndMillisecondsAB
+	} else if s.FilledFromSourceB {
+		flowEndMilliseconds = s.FlowEndMillisecondsBA
+	}
 
- 	return f_FlowEndMilliseconds
- }
+	return flowEndMilliseconds
+}
