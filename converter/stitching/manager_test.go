@@ -1333,3 +1333,58 @@ func TestFlushOldestFlowsLast(t *testing.T) {
 	//have been processed before the first flow in input order
 	require.Equal(t, flows[0].DestinationIPAddress(), sessions[1].IPAddressB)
 }
+
+func TestChooseBestMatchingAggregate(t *testing.T) {
+	flow1 := input.NewFlowMock()
+	flow1.MockSourceIPAddress = "1.1.1.1"
+	flow1.MockSourcePort = 0
+	flow1.MockDestinationIPAddress = "2.2.2.2"
+	flow1.MockDestinationPort = 771
+	flow1.MockProtocolIdentifier = protocols.TCP
+	flow1.MockFlowEndReason = input.EndOfFlow
+
+	//flow2 is the flipped, matching flow for flow 1
+	flow2 := input.NewFlowMock()
+	flow2.MockSourceIPAddress = flow1.MockDestinationIPAddress
+	flow2.MockDestinationIPAddress = flow1.MockSourceIPAddress
+	flow2.MockSourcePort = flow1.MockDestinationPort
+	flow2.MockDestinationPort = flow1.MockSourcePort
+	flow2.MockExporter = flow1.MockExporter
+	flow2.MockProtocolIdentifier = flow1.MockProtocolIdentifier
+	flow2.MockFlowEndReason = flow1.MockFlowEndReason
+
+	flow2.MockFlowStartMilliseconds = flow1.MockFlowStartMilliseconds
+	flow2.MockFlowEndMilliseconds = flow1.MockFlowEndMilliseconds
+
+	//flow3 is a copy of flow1 but starts thirty seconds later
+	//thirtySecondsMillis is defined globally
+	flow3 := &(*flow1)
+	flow3.MockFlowStartMilliseconds += thirtySecondsMillis
+	flow3.MockFlowEndMilliseconds += thirtySecondsMillis
+
+	//flow4 is a copy of flow2 but starts thirty seconds later
+	flow4 := &(*flow2)
+	flow4.MockFlowStartMilliseconds += thirtySecondsMillis
+	flow4.MockFlowEndMilliseconds += thirtySecondsMillis
+
+	//run the stitching manager with {flow3, flow1, flow2, flow4}
+	//This order is {A->B@RelativeFlowStart=30, A->B@RelativeFlowStart=0, B->A@RelativeFlowStart=0, B->A@RelativeFlowStart=30}
+	//where RelativeFlowStart is that flow's MockFlowStartMilliseconds - flow1.MockFlowStartMilliseconds.
+	//The old, greedy algorithm would match flow3 with flow2 and flow1 with flow4.
+	//The new, best-match algorithm should match flow1 with flow2 and flow3 with flow4.
+	stitchingManager := newTestingStitchingManager(logging.NewTestLogger(t))
+	sessions, errs := stitchingManager.RunSync([]input.Flow{flow3, flow1, flow2, flow4})
+
+	//ensure there were no errors
+	if len(errs) != 0 {
+		for i := range errs {
+			t.Error(errs[i])
+		}
+	}
+
+	require.Len(t, errs, 0)
+	require.Len(t, sessions, 2)
+
+	requireFlowsStitchedFlippedSides(t, flow1, flow2, sessions[0])
+	requireFlowsStitchedFlippedSides(t, flow3, flow4, sessions[1])
+}
