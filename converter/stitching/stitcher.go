@@ -6,11 +6,12 @@ import (
 
 	"github.com/pkg/errors"
 
+	"math"
+
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
-	"math"
 )
 
 //v4MulticastNet represents all IPv4 multicast addresses
@@ -113,35 +114,27 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	var matchFound = false
 	var matchAgg session.Aggregate
 	matchCost := int64(math.MaxInt64)
+
 	var oldSessAgg session.Aggregate
 	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
-	//TODO: stitch with flow with closest timestamps rather than
-	//taking the first one that matches
-
 	//iterate over the possible matches
-	for oldSessAggIter.Next(&oldSessAgg) && !matchFound {
+	for oldSessAggIter.Next(&oldSessAgg) {
 		//its possible these flows shouldn't be merged based on timestamps
 		//and FlowEndReasons
 		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
-			matchFound = true
 
-			f_FlowStartMilliseconds := newSessAgg.FlowStartMilliseconds()
-			nextMatch_FlowStartMilliseconds := oldSessAgg.FlowStartMilliseconds()
-			f_FlowEndMilliseconds := newSessAgg.FlowEndMilliseconds()
-			nextMatch_FlowEndMilliseconds := oldSessAgg.FlowEndMilliseconds()
-
-			var diff1 = f_FlowEndMilliseconds - nextMatch_FlowEndMilliseconds
+			var diff1 = newSessAgg.FlowEndMilliseconds() - oldSessAgg.FlowEndMilliseconds()
 			if diff1 < 0 {
 				diff1 *= -1
 			}
-			var diff2 = f_FlowStartMilliseconds - nextMatch_FlowStartMilliseconds
+			var diff2 = newSessAgg.FlowStartMilliseconds() - oldSessAgg.FlowStartMilliseconds()
 			if diff2 < 0 {
 				diff2 *= -1
 			}
 
 			newMatchCost := diff1 + diff2
-
 			if newMatchCost < matchCost {
+				matchFound = true
 				matchCost = newMatchCost
 				matchAgg = oldSessAgg
 			}
@@ -170,7 +163,7 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	} else {
 		err := s.matcher.Insert(&newSessAgg)
 		if err != nil {
-				return errors.Wrap(err, "could not insert session aggregate")
+			return errors.Wrap(err, "could not insert session aggregate")
 		}
 	}
 

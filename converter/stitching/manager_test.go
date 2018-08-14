@@ -1358,12 +1358,14 @@ func TestChooseBestMatchingAggregate(t *testing.T) {
 
 	//flow3 is a copy of flow1 but starts thirty seconds later
 	//thirtySecondsMillis is defined globally
-	flow3 := &(*flow1)
+	flow3 := new(input.FlowMock)
+	*flow3 = *flow1
 	flow3.MockFlowStartMilliseconds += thirtySecondsMillis
 	flow3.MockFlowEndMilliseconds += thirtySecondsMillis
 
 	//flow4 is a copy of flow2 but starts thirty seconds later
-	flow4 := &(*flow2)
+	flow4 := new(input.FlowMock)
+	*flow4 = *flow2
 	flow4.MockFlowStartMilliseconds += thirtySecondsMillis
 	flow4.MockFlowEndMilliseconds += thirtySecondsMillis
 
