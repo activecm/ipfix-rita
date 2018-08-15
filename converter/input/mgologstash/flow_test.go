@@ -96,7 +96,7 @@ func TestInheritance(t *testing.T) {
 	require.True(t, ok)
 }
 
-func TestFillFromBSONMap(t *testing.T) {
+func TestFillFromIPFIXBSONMapNATTranslation(t *testing.T) {
 	var flow1 = new(mgologstash.Flow)
 	var testData1 = bson.M{
 		"_id":  bson.ObjectId("5b72d69af6a43336c6004e07"),
@@ -150,4 +150,53 @@ func TestFillFromBSONMap(t *testing.T) {
 	require.Nil(t, error2)
 	require.Equal(t, flow2.DestinationIPAddress(), "2001:db8:85a3:8d3:1319:8a2e:370:7348")
 	require.Equal(t, flow2.DestinationPort(), uint16(57))
+}
+
+func TestFillFromNetflowv9BSONMapIPv4(t *testing.T) {
+	inputMap := bson.M{
+		"_id":        bson.ObjectId("5b6b4e2e10a0cf244f0180aa"),
+		"@timestamp": "\"2018-08-08T20:10:20.000Z\"",
+		"host":       "73.149.157.171",
+		"netflow": bson.M{
+			"output_snmp":         1,
+			"ipv4_src_addr":       "192.168.168.65",
+			"xlate_dst_addr_ipv4": "192.168.168.168",
+			"input_snmp":          1,
+			"ipv4_next_hop":       "0.0.0.0",
+			"version":             9,
+			"flow_seq_num":        192,
+			"flowset_id":          256,
+			"in_pkts":             2,
+			"in_bytes":            603,
+			"ipv4_dst_addr":       "192.168.168.168",
+			"xlate_src_addr_ipv4": "192.168.168.65",
+			"l4_src_port":         47608,
+			"first_switched":      "2018-08-08T20:10:21.000Z",
+			"xlate_src_port":      47608,
+			"protocol":            6,
+			"xlate_dst_port":      443,
+			"l4_dst_port":         443,
+			"last_switched":       "2018-08-08T20:10:21.000Z",
+		},
+		"@version": "1",
+	}
+	flow := &mgologstash.Flow{}
+	err := flow.FillFromBSONMap(inputMap)
+	require.Nil(t, err)
+	require.Equal(t, inputMap["_id"], flow.ID)
+	require.Equal(t, inputMap["host"], flow.Exporter())
+
+	netflowMap := (inputMap["netflow"].(bson.M))
+	require.Equal(t, netflowMap["ipv4_src_addr"], flow.SourceIPAddress())
+	require.Equal(t, netflowMap["xlate_dst_addr_ipv4"], flow.DestinationIPAddress())
+	require.Equal(t, uint8(netflowMap["version"].(int)), flow.Version())
+	require.Equal(t, int64(netflowMap["in_pkts"].(int)), flow.PacketTotalCount())
+	require.Equal(t, int64(netflowMap["in_bytes"].(int)), flow.OctetTotalCount())
+	require.Equal(t, uint16(netflowMap["l4_src_port"].(int)), flow.SourcePort())
+	require.Equal(t, netflowMap["first_switched"], flow.Netflow.FlowStartMilliseconds)
+	require.Equal(t, protocols.Identifier(netflowMap["protocol"].(int)), flow.ProtocolIdentifier())
+	require.Equal(t, uint16(netflowMap["l4_dst_port"].(int)), flow.DestinationPort())
+	require.Equal(t, netflowMap["last_switched"], flow.Netflow.FlowEndMilliseconds)
+	//assume end of flow since we don't have the data
+	require.Equal(t, input.EndOfFlow, flow.FlowEndReason())
 }

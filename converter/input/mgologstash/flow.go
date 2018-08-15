@@ -271,22 +271,51 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPv4Iface)
 		}
+
+		postNatDestIPv4Iface, postNatDestIPv4Ok := netflowMap["xlate_dst_addr_ipv4"]
+		if postNatDestIPv4Ok {
+			destIPv4, ok = postNatDestIPv4Iface.(string)
+			if !ok {
+				return errors.Errorf("could not convert %+v to string", postNatDestIPv4Iface)
+			}
+		}
+
 	} else if destIPv6Ok {
 		destIPv6, ok = destIPv6Iface.(string)
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
 		}
+
+		postNatDestIPv6Iface, postNatDestIPv6Ok := netflowMap["xlate_dst_addr_ipv6"]
+		if postNatDestIPv6Ok {
+			destIPv6, ok = postNatDestIPv6Iface.(string)
+			if !ok {
+				return errors.Errorf("could not convert %+v to string", postNatDestIPv6Iface)
+			}
+		}
+
 	} else {
 		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
 	}
 
+	var destPort int
 	destPortIface, ok := netflowMap["l4_dst_port"]
-	if !ok {
+	if ok {
+		destPort, ok = destPortIface.(int)
+		if !ok {
+			return errors.Errorf("could not convert %+v to int", destPortIface)
+		}
+
+		postNaptDestPortIface, postNatptDestPortOk := netflowMap["xlate_dst_port"]
+		if postNatptDestPortOk {
+			destPort, ok = postNaptDestPortIface.(int)
+			if !ok {
+				return errors.Errorf("could not convert %+v to int", postNaptDestPortIface)
+			}
+		}
+
+	} else {
 		return errors.New("input map must contain key 'netflow.destinationTransportPort'")
-	}
-	destPort, ok := destPortIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", destPortIface)
 	}
 
 	flowStartIface, ok := netflowMap["first_switched"]
@@ -378,7 +407,8 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 	i.Netflow.OctetTotalCount = octetTotal
 	i.Netflow.PacketTotalCount = packetTotal
 	i.Netflow.ProtocolIdentifier = protocols.Identifier(protocolID)
-	i.Netflow.FlowEndReason = input.NilEndReason
+	//assume end of flow since we don't have the data
+	i.Netflow.FlowEndReason = input.EndOfFlow
 	return nil
 }
 
@@ -422,9 +452,6 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	if !ok {
 		return errors.Errorf("could not convert %+v to int", versionIface)
 	}
-	if !(version == 10 || version == 9) {
-		return errors.Errorf("unsupported netflow version: %d", version)
-	}
 
 	//set the loaded contents
 	i.ID = id
@@ -437,8 +464,7 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	} else if i.Netflow.Version == 9 {
 		return i.fillFromNetflowv9BSONMap(netflowMap)
 	}
-
-	return errors.Errorf("illegal parsing state")
+	return errors.Errorf("unsupported netflow version: %d", i.Netflow.Version)
 }
 
 //SourceIPAddress returns the source IPv4 or IPv6 address
