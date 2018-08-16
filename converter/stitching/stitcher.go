@@ -6,6 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"math"
+
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching"
@@ -109,56 +111,62 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 	//matchFound is true when another session is found with the same
 	//AggregateQuery in the matcher, and the
 	//sessions qualify for merging/ stitching
-	matchFound := false
+	var matchFound = false
+	var matchAgg session.Aggregate
+	matchCost := int64(math.MaxInt64)
 
 	var oldSessAgg session.Aggregate
 	oldSessAggIter := s.matcher.Find(&newSessAgg.AggregateQuery)
-
-	//TODO: stitch with flow with closest timestamps rather than
-	//taking the first one that matches
-
 	//iterate over the possible matches
-	for oldSessAggIter.Next(&oldSessAgg) && !matchFound {
+	for oldSessAggIter.Next(&oldSessAgg) {
 		//its possible these flows shouldn't be merged based on timestamps
 		//and FlowEndReasons
 		if s.shouldMerge(&newSessAgg, &oldSessAgg) {
-			matchFound = true
 
-			//merge the session aggregates (adding data counts etc)
-			err = newSessAgg.Merge(&oldSessAgg)
-			if err != nil {
-				return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &oldSessAgg)
+			var diff1 = newSessAgg.FlowEndMilliseconds() - oldSessAgg.FlowEndMilliseconds()
+			if diff1 < 0 {
+				diff1 *= -1
 			}
-			//if both sides of the session have been filled, write it out
-			if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB {
-				err := s.matcher.Remove(&oldSessAgg)
-				if err != nil {
-					return errors.Wrap(err, "could not remove old session aggregate")
-				}
-				s.sessionsOut <- &newSessAgg
-			} else {
-				//otherwise update the database
-				newSessAgg.MatcherID = oldSessAgg.MatcherID
-				err := s.matcher.Update(&newSessAgg)
-				if err != nil {
-					return errors.Wrap(err, "could not update existing session aggregate")
-				}
+			var diff2 = newSessAgg.FlowStartMilliseconds() - oldSessAgg.FlowStartMilliseconds()
+			if diff2 < 0 {
+				diff2 *= -1
+			}
+
+			newMatchCost := diff1 + diff2
+			if newMatchCost < matchCost {
+				matchFound = true
+				matchCost = newMatchCost
+				matchAgg = oldSessAgg
 			}
 		}
 	}
 
-	//if there's an error other than not found, return it up
-	if oldSessAggIter.Err() != nil /*&& oldSessAggIter.Err() != mgo.ErrNotFound*/ {
-		return errors.Wrap(oldSessAggIter.Err(), "could not find all matching session aggregates")
-	}
-
-	//no matching unstitched session found
-	if !matchFound {
+	if matchFound {
+		err = newSessAgg.Merge(&matchAgg)
+		if err != nil {
+			return errors.Wrapf(err, "cannot merge session\n%+v\nwith\n%+v", &newSessAgg, &matchAgg)
+		}
+		if newSessAgg.FilledFromSourceA && newSessAgg.FilledFromSourceB { //The session has both sides of the connection detailed
+			err := s.matcher.Remove(&matchAgg)
+			if err != nil {
+				return errors.Wrap(err, "could not remove old session aggregate")
+			}
+			s.sessionsOut <- &newSessAgg
+		} else { //The merge happened on the same side of the connection
+			//otherwise update the database
+			newSessAgg.MatcherID = matchAgg.MatcherID
+			err := s.matcher.Update(&newSessAgg)
+			if err != nil {
+				return errors.Wrap(err, "could not update existing session aggregate")
+			}
+		}
+	} else {
 		err := s.matcher.Insert(&newSessAgg)
 		if err != nil {
-			return errors.Wrap(err, "could not insert new session aggregate")
+			return errors.Wrap(err, "could not insert session aggregate")
 		}
 	}
+
 	return nil
 }
 
@@ -173,37 +181,11 @@ func (s *stitcher) shouldMerge(newSessAgg *session.Aggregate, oldSessAgg *sessio
 		return false
 	}
 
-	//grab the latest FlowEnd from the new session aggregate
-	newSessAggFlowEnd := newSessAgg.FlowEndMillisecondsAB
-	if newSessAgg.FlowEndMillisecondsBA > newSessAggFlowEnd {
-		newSessAggFlowEnd = newSessAgg.FlowEndMillisecondsBA
-	}
+	return oldSessAgg.FlowStartMilliseconds() <=
+		(newSessAgg.FlowEndMilliseconds()+s.sameSessionThreshold) &&
+		oldSessAgg.FlowEndMilliseconds() >=
+			(newSessAgg.FlowStartMilliseconds()-s.sameSessionThreshold)
 
-	//grab the earliest FlowStart from the new session aggregate
-	newSessAggFlowStart := newSessAgg.FlowStartMillisecondsAB
-	if newSessAggFlowStart == 0 || newSessAgg.FlowStartMillisecondsBA != 0 &&
-		newSessAgg.FlowStartMillisecondsBA < newSessAggFlowStart {
-		newSessAggFlowStart = newSessAgg.FlowStartMillisecondsBA
-	}
-
-	oldSessAggMinFlowEnd := newSessAggFlowStart - s.sameSessionThreshold
-	oldSessAggMaxFlowStart := newSessAggFlowEnd + s.sameSessionThreshold
-
-	//grab the latest FlowEnd from the old session aggregate
-	oldSessAggFlowEnd := oldSessAgg.FlowEndMillisecondsAB
-	if oldSessAgg.FlowEndMillisecondsBA > oldSessAggFlowEnd {
-		oldSessAggFlowEnd = oldSessAgg.FlowEndMillisecondsBA
-	}
-
-	//grab the earliest FlowStart from the old session aggregate
-	oldSessAggFlowStart := oldSessAgg.FlowStartMillisecondsAB
-	if oldSessAggFlowStart == 0 || oldSessAgg.FlowStartMillisecondsBA != 0 &&
-		oldSessAgg.FlowStartMillisecondsBA < oldSessAggFlowStart {
-		oldSessAggFlowStart = oldSessAgg.FlowStartMillisecondsBA
-	}
-
-	return oldSessAggFlowStart <= oldSessAggMaxFlowStart &&
-		oldSessAggFlowEnd >= oldSessAggMinFlowEnd
 }
 
 //shouldSkipStitching determines whether or not we know

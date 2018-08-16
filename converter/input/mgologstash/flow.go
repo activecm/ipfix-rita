@@ -207,8 +207,8 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	if !ok {
 		//Logstash creates these fields as 32 bit ints,
 		//Go handles them as 64 bit ints, provide both casts
-		octetTotal32, ok := octetTotalIface.(int)
-		if !ok {
+		octetTotal32, octetTotal32Ok := octetTotalIface.(int)
+		if !octetTotal32Ok {
 			return errors.Errorf("could not convert %+v to int", octetTotalIface)
 		}
 		octetTotal = int64(octetTotal32)
@@ -224,8 +224,8 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	if !ok {
 		//Logstash creates these fields as 32 bit ints,
 		//Go handles them as 64 bit ints, provide both casts
-		packetTotal32, ok := packetTotalIface.(int)
-		if !ok {
+		packetTotal32, packetTotal32Ok := packetTotalIface.(int)
+		if !packetTotal32Ok {
 			return errors.Errorf("could not convert %+v to int", packetTotalIface)
 		}
 		packetTotal = int64(packetTotal32)
@@ -247,15 +247,17 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	//fmt.Println("31")
 	//fmt.Println("32")
 
+	//assume EndOfFlow if flowEndReason is not present
+	flowEndReason := input.EndOfFlow
 	flowEndReasonIface, ok := netflowMap["flowEndReason"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.flowEndReason'")
+	if ok {
+		flowEndReasonInt, flowEndReasonIntOk := flowEndReasonIface.(int)
+		if !flowEndReasonIntOk {
+			return errors.Errorf("could not convert %+v to int", flowEndReasonIface)
+		}
+		flowEndReason = input.FlowEndReason(flowEndReasonInt)
 	}
 	//fmt.Println("33")
-	flowEndReason, ok := flowEndReasonIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", flowEndReasonIface)
-	}
 	//fmt.Println("34")
 
 	versionIface, ok := netflowMap["version"]
@@ -295,7 +297,7 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 	i.Netflow.OctetTotalCount = octetTotal
 	i.Netflow.PacketTotalCount = packetTotal
 	i.Netflow.ProtocolIdentifier = protocols.Identifier(protocolID)
-	i.Netflow.FlowEndReason = input.FlowEndReason(flowEndReason)
+	i.Netflow.FlowEndReason = flowEndReason
 	i.Netflow.Version = uint8(version)
 	return nil
 }
