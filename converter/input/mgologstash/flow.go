@@ -90,15 +90,6 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 			return errors.Errorf("could not convert %+v to string", sourceIPv4Iface)
 		}
 
-		postNatSourceIPv4Iface, postNatSourceIPv4Ok := netflowMap["postNATSourceIPv4Address"]
-
-		if postNatSourceIPv4Ok {
-			sourceIPv4, ok = postNatSourceIPv4Iface.(string)
-			if !ok {
-				return errors.Errorf("could not convert %+v to string", postNatSourceIPv4Iface)
-			}
-		}
-
 	} else if sourceIPv6Ok {
 		//fmt.Println("8")
 		sourceIPv6, ok = sourceIPv6Iface.(string)
@@ -148,6 +139,16 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
 		}
+
+		postNatDestIPv6Iface, postNatDestIPv6Ok := netflowMap["postNATDestinationIPv6Address"]
+
+		if postNatDestIPv6Ok {
+			destIPv6, ok = postNatDestIPv6Iface.(string)
+			if !ok {
+				return errors.Errorf("could not convert %+v to string", postNatDestIPv6Iface)
+			}
+		}
+
 	} else {
 		//fmt.Println("15")
 		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
