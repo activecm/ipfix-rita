@@ -89,6 +89,7 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", sourceIPv4Iface)
 		}
+
 	} else if sourceIPv6Ok {
 		//fmt.Println("8")
 		sourceIPv6, ok = sourceIPv6Iface.(string)
@@ -122,28 +123,59 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPv4Iface)
 		}
+
+		postNatDestIPv4Iface, postNatDestIPv4Ok := netflowMap["postNATDestinationIPv4Address"]
+
+		if postNatDestIPv4Ok {
+			destIPv4, ok = postNatDestIPv4Iface.(string)
+			if !ok {
+				return errors.Errorf("could not convert %+v to string", postNatDestIPv4Iface)
+			}
+		}
+
 	} else if destIPv6Ok {
 		//fmt.Println("14")
 		destIPv6, ok = destIPv6Iface.(string)
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
 		}
+
+		postNatDestIPv6Iface, postNatDestIPv6Ok := netflowMap["postNATDestinationIPv6Address"]
+
+		if postNatDestIPv6Ok {
+			destIPv6, ok = postNatDestIPv6Iface.(string)
+			if !ok {
+				return errors.Errorf("could not convert %+v to string", postNatDestIPv6Iface)
+			}
+		}
+
 	} else {
 		//fmt.Println("15")
 		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
 	}
-	//fmt.Println("16")
+
+	var destPort int
 
 	destPortIface, ok := netflowMap["destinationTransportPort"]
-	if !ok {
+	if ok {
+
+		destPort, ok = destPortIface.(int)
+
+		if !ok {
+			return errors.Errorf("could not convert %+v to int", destPortIface)
+		}
+
+		postNapDestPortIface, ok := netflowMap["postNAPTDestinationTransportPort"]
+		if ok {
+			destPort, ok = postNapDestPortIface.(int)
+			if !ok {
+				return errors.Errorf("could not convert %+v to int", postNapDestPortIface)
+			}
+		}
+
+	} else {
 		return errors.New("input map must contain key 'netflow.destinationTransportPort'")
 	}
-	//fmt.Println("17")
-	destPort, ok := destPortIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", destPortIface)
-	}
-	//fmt.Println("18")
 
 	flowStartIface, ok := netflowMap["flowStartMilliseconds"]
 	if !ok {
