@@ -201,7 +201,11 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 
 	octetTotalIface, ok := netflowMap["octetTotalCount"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.octetTotalCount'")
+		//delta counts CAN be total counts by RFC definition >.<"
+		octetTotalIface, ok = netflowMap["octetDeltaCount"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.octetTotalCount' or 'netflow.octetDeltaCount'")
+		}
 	}
 	//fmt.Println("23")
 	octetTotal, ok := octetTotalIface.(int64)
@@ -218,7 +222,11 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 
 	packetTotalIface, ok := netflowMap["packetTotalCount"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.packetTotalCount'")
+		//delta counts CAN be total counts by RFC definition >.<"
+		packetTotalIface, ok = netflowMap["packetDeltaCount"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.packetTotalCount' or 'netflow.packetDeltaCount'")
+		}
 	}
 	//fmt.Println("25")
 	packetTotal, ok := packetTotalIface.(int64)
