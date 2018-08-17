@@ -118,11 +118,11 @@ func (i *Flow) fillFromIPFIXBSONMap(ipfixMap bson.M) error {
 			return errors.Errorf("could not convert %+v to int", destPortIface)
 		}
 
-		postNapDestPortIface, ok := ipfixMap["postNAPTDestinationTransportPort"]
-		if ok {
-			destPort, ok = postNapDestPortIface.(int)
+		postNaptDestPortIface, postNaptDestPortIfaceOk := ipfixMap["postNAPTDestinationTransportPort"]
+		if postNaptDestPortIfaceOk {
+			destPort, ok = postNaptDestPortIface.(int)
 			if !ok {
-				return errors.Errorf("could not convert %+v to int", postNapDestPortIface)
+				return errors.Errorf("could not convert %+v to int", postNaptDestPortIface)
 			}
 		}
 
@@ -150,14 +150,18 @@ func (i *Flow) fillFromIPFIXBSONMap(ipfixMap bson.M) error {
 
 	octetTotalIface, ok := ipfixMap["octetTotalCount"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.octetTotalCount'")
+		//delta counts CAN be total counts by RFC definition >.<"
+		octetTotalIface, ok = ipfixMap["octetDeltaCount"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.octetTotalCount' or 'netflow.octetDeltaCount'")
+		}
 	}
 	octetTotal, ok := octetTotalIface.(int64)
 	if !ok {
 		//Logstash creates these fields as 32 bit ints,
 		//Go handles them as 64 bit ints, provide both casts
-		octetTotal32, ok := octetTotalIface.(int)
-		if !ok {
+		octetTotal32, octetTotal32Ok := octetTotalIface.(int)
+		if !octetTotal32Ok {
 			return errors.Errorf("could not convert %+v to int", octetTotalIface)
 		}
 		octetTotal = int64(octetTotal32)
@@ -165,14 +169,18 @@ func (i *Flow) fillFromIPFIXBSONMap(ipfixMap bson.M) error {
 
 	packetTotalIface, ok := ipfixMap["packetTotalCount"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.packetTotalCount'")
+		//delta counts CAN be total counts by RFC definition >.<"
+		packetTotalIface, ok = ipfixMap["packetDeltaCount"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.packetTotalCount' or 'netflow.packetDeltaCount'")
+		}
 	}
 	packetTotal, ok := packetTotalIface.(int64)
 	if !ok {
 		//Logstash creates these fields as 32 bit ints,
 		//Go handles them as 64 bit ints, provide both casts
-		packetTotal32, ok := packetTotalIface.(int)
-		if !ok {
+		packetTotal32, packetTotal32Ok := packetTotalIface.(int)
+		if !packetTotal32Ok {
 			return errors.Errorf("could not convert %+v to int", packetTotalIface)
 		}
 		packetTotal = int64(packetTotal32)
@@ -250,12 +258,12 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 			return errors.Errorf("could not convert %+v to string", sourceIPv6Iface)
 		}
 	} else {
-		return errors.New("input map must contain key 'netflow.sourceIPv4Address' or 'netflow.sourceIPv6Address'")
+		return errors.New("input map must contain key 'netflow.ipv4_src_addr' or 'netflow.ipv6_src_addr'")
 	}
 
 	sourcePortIface, ok := netflowMap["l4_src_port"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.sourceTransportPort'")
+		return errors.New("input map must contain key 'netflow.l4_src_port'")
 	}
 	sourcePort, ok := sourcePortIface.(int)
 	if !ok {
@@ -295,7 +303,7 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 		}
 
 	} else {
-		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
+		return errors.New("input map must contain key 'netflow.ipv4_dst_addr' or 'netflow.ipv6_dst_addr'")
 	}
 
 	var destPort int
@@ -315,12 +323,12 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 		}
 
 	} else {
-		return errors.New("input map must contain key 'netflow.destinationTransportPort'")
+		return errors.New("input map must contain key 'netflow.l4_dst_port'")
 	}
 
 	flowStartIface, ok := netflowMap["first_switched"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.flowStartMilliseconds'")
+		return errors.New("input map must contain key 'netflow.first_switched'")
 	}
 	flowStart, ok := flowStartIface.(string)
 	if !ok {
@@ -329,7 +337,7 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 
 	flowEndIface, ok := netflowMap["last_switched"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.flowEndMilliseconds'")
+		return errors.New("input map must contain key 'netflow.last_switched'")
 	}
 	flowEnd, ok := flowEndIface.(string)
 	if !ok {
@@ -338,11 +346,7 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 
 	octetTotalIface, ok := netflowMap["in_bytes"]
 	if !ok {
-		//delta counts CAN be total counts by RFC definition >.<"
-		octetTotalIface, ok = netflowMap["octetDeltaCount"]
-		if !ok {
-			return errors.New("input map must contain key 'netflow.octetTotalCount' or 'netflow.octetDeltaCount'")
-		}
+		return errors.New("input map must contain key 'netflow.in_bytes'")
 	}
 	octetTotal, ok := octetTotalIface.(int64)
 	if !ok {
@@ -357,11 +361,7 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 
 	packetTotalIface, ok := netflowMap["in_pkts"]
 	if !ok {
-		//delta counts CAN be total counts by RFC definition >.<"
-		packetTotalIface, ok = netflowMap["packetDeltaCount"]
-		if !ok {
-			return errors.New("input map must contain key 'netflow.packetTotalCount' or 'netflow.packetDeltaCount'")
-		}
+		return errors.New("input map must contain key 'netflow.in_pkts'")
 	}
 	packetTotal, ok := packetTotalIface.(int64)
 	if !ok {
@@ -376,7 +376,7 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 
 	protocolIDIface, ok := netflowMap["protocol"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.protocolIdentifier'")
+		return errors.New("input map must contain key 'netflow.protocol'")
 	}
 	protocolID, ok := protocolIDIface.(int)
 	if !ok {
