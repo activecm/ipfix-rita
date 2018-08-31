@@ -39,6 +39,16 @@ func NewAutoFlushCollection(mgoCollection *mgo.Collection, bufferSize int,
 	return coll
 }
 
+//Database returns the name of the database the collection is in
+func (b *AutoFlushCollection) Database() string {
+	return b.bufferedColl.Database()
+}
+
+//Name returns the name of the underlying MongoDB collection
+func (b *AutoFlushCollection) Name() string {
+	return b.bufferedColl.Name()
+}
+
 //StartAutoFlush starts the go routine which ensures the
 //AutoFlushCollection's buffer is flushed out within a deadline
 func (b *AutoFlushCollection) StartAutoFlush() bool {

@@ -41,6 +41,7 @@ services:
     build: ../../../converter
     command: run
     restart: unless-stopped
+    tty: true #handle sigint
     volumes:
       - "/etc/ipfix-rita/converter/converter.yaml:/etc/ipfix-rita/converter/converter.yaml:ro"
     depends_on:

@@ -23,6 +23,16 @@ func InitializeCollection(coll *Collection, mgoCollection *mgo.Collection, buffe
 	coll.mutex = new(sync.Mutex)
 }
 
+//Database returns the name of the database the collection is in
+func (b *Collection) Database() string {
+	return b.mgoCollection.Database.Name
+}
+
+//Name returns the name of the underlying MongoDB collection
+func (b *Collection) Name() string {
+	return b.mgoCollection.Name
+}
+
 //Insert writes a record into the Collection's buffer.
 //If the buffer is full after the insertion, Flush is called.
 func (b *Collection) Insert(data interface{}) error {

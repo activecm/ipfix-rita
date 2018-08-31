@@ -92,17 +92,13 @@ func (o OutputDB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection,
 		}
 	}
 
-	//ensure a MetaDB record exists for the collection
-	err := o.ensureMetaDBRecordExists(dbName)
-	if err != nil {
-		ssn.Close()
-		return nil, err //no need to wrap, wrapped in method
-	}
-
 	return connColl, nil
 }
 
-func (o OutputDB) ensureMetaDBRecordExists(dbName string) error {
+//EnsureMetaDBRecordExists ensures that a database record exists in the
+//MetaDatabase for a given database name. This allows RITA to manage
+//the database.
+func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
 	numRecords, err := o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
@@ -118,6 +114,26 @@ func (o OutputDB) ensureMetaDBRecordExists(dbName string) error {
 	})
 	if err != nil {
 		return errors.Wrapf(err, "could not insert MetaDB record with name: %s", dbName)
+	}
+	return nil
+}
+
+//MarkImportFinishedInMetaDB sets the import_finished flag on the
+//RITA MetaDatabase database record. This lets RITA know that no
+//more data will be placed in the database and that the database
+//is ready for analysis.
+func (o OutputDB) MarkImportFinishedInMetaDB(dbName string) error {
+	err := o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Update(
+		bson.M{"name": dbName},
+		bson.M{
+			"$set": bson.M{
+				"import_finished": true,
+			},
+		},
+	)
+
+	if err != nil {
+		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, o.metaDBName, metaDBDatabasesCollection)
 	}
 	return nil
 }

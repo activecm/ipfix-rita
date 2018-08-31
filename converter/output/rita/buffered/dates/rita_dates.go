@@ -10,11 +10,8 @@ import (
 	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
-	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
-	mgo "github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
 )
 
 //bufferedRITAConnDateWriter writes session aggregates to MongoDB
@@ -25,13 +22,12 @@ import (
 //before being sent to MongoDB. The buffers are flushed when
 //they are full or after a deadline passes for the individual buffer.
 type bufferedRITAConnDateWriter struct {
-	db                  rita.OutputDB
-	localNets           []net.IPNet
-	outputCollections   map[string]*buffered.AutoFlushCollection
-	metaDBDatabasesColl *mgo.Collection
-	bufferSize          int
-	autoFlushTime       time.Duration
-	log                 logging.Logger
+	db                rita.OutputDB
+	localNets         []net.IPNet
+	outputCollections map[string]*buffered.AutoFlushCollection
+	bufferSize        int
+	autoFlushTime     time.Duration
+	log               logging.Logger
 }
 
 //NewBufferedRITAConnDateWriter creates an buffered RITA compatible writer
@@ -54,13 +50,12 @@ func NewBufferedRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
 	}
 	//return the new writer
 	return &bufferedRITAConnDateWriter{
-		localNets:           localNets,
-		outputCollections:   make(map[string]*buffered.AutoFlushCollection),
-		metaDBDatabasesColl: db.NewMetaDBDatabasesConnection(),
-		bufferSize:          bufferSize,
-		autoFlushTime:       autoFlushTime,
-		db:                  db,
-		log:                 log,
+		localNets:         localNets,
+		outputCollections: make(map[string]*buffered.AutoFlushCollection),
+		bufferSize:        bufferSize,
+		autoFlushTime:     autoFlushTime,
+		db:                db,
+		log:               log,
 	}, nil
 }
 
@@ -68,7 +63,14 @@ func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
-		defer r.closeDBSessions()
+		defer func() {
+			closeErrs := r.closeDBSessions()
+			if closeErrs != nil {
+				for i := range closeErrs {
+					errs <- closeErrs[i]
+				}
+			}
+		}()
 
 		//loop over the input
 		for sess := range sessions {
@@ -89,12 +91,20 @@ func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <
 	return errs
 }
 
-func (r *bufferedRITAConnDateWriter) closeDBSessions() {
+func (r *bufferedRITAConnDateWriter) closeDBSessions() []error {
+	var errs []error
 	for i := range r.outputCollections {
-		//stops outputCollections from sending on errs
 		r.outputCollections[i].Close()
+
+		err := r.db.MarkImportFinishedInMetaDB(r.outputCollections[i].Database())
+		//stops outputCollections from sending on errs
+		if err != nil {
+			errs = append(errs, err)
+		}
+
 	}
-	r.metaDBDatabasesColl.Database.Session.Close()
+	r.db.Close()
+	return errs
 }
 
 func (r *bufferedRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
@@ -130,7 +140,11 @@ func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.A
 		}
 
 		//create the meta db record
-		r.ensureMetaDBRecordExists(outColl.Database.Name)
+		err = r.db.EnsureMetaDBRecordExists(outColl.Database.Name)
+		if err != nil {
+			outColl.Database.Session.Close()
+			return nil, false
+		}
 
 		//create the output buffer
 		outBufferedColl = buffered.NewAutoFlushCollection(outColl, r.bufferSize, r.autoFlushTime, errs)
@@ -140,24 +154,4 @@ func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.A
 		r.outputCollections[endTimeStr] = outBufferedColl
 	}
 	return outBufferedColl, true
-}
-
-func (r *bufferedRITAConnDateWriter) ensureMetaDBRecordExists(dbName string) error {
-	numRecords, err := r.metaDBDatabasesColl.Find(bson.M{"name": dbName}).Count()
-	if err != nil {
-		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
-	}
-	if numRecords != 0 {
-		return nil
-	}
-	err = r.metaDBDatabasesColl.Insert(rita_db.DBMetaInfo{
-		Name:           dbName,
-		Analyzed:       false,
-		ImportVersion:  "v1.0.0+ActiveCM-IPFIX",
-		AnalyzeVersion: "",
-	})
-	if err != nil {
-		return errors.Wrapf(err, "could not insert MetaDB record with name: %s", dbName)
-	}
-	return nil
 }
