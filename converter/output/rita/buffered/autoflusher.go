@@ -25,7 +25,7 @@ type AutoFlushCollection struct {
 //ensures the buffer is written to MongoDB within a deadline.
 //The deadline is pushed back to time.Now() + deadlineInterval
 //everytime Insert or Flush is called.
-func NewAutoFlushCollection(mgoCollection *mgo.Collection, bufferSize int,
+func NewAutoFlushCollection(mgoCollection *mgo.Collection, bufferSize int64,
 	deadlineInterval time.Duration, errs chan<- error) *AutoFlushCollection {
 	coll := &AutoFlushCollection{
 		wg:               new(sync.WaitGroup),
@@ -52,7 +52,7 @@ func (b *AutoFlushCollection) Name() string {
 //StartAutoFlush starts the go routine which ensures the
 //AutoFlushCollection's buffer is flushed out within a deadline
 func (b *AutoFlushCollection) StartAutoFlush() bool {
-	if b.autoFlushActive {
+	if b.autoFlushActive { //TODO: lock this var
 		return false
 	}
 	b.wg.Add(1)

@@ -1,4 +1,4 @@
-package buffered
+package dates
 
 import (
 	"net"
@@ -25,7 +25,7 @@ type bufferedRITAConnDateWriter struct {
 	db                rita.OutputDB
 	localNets         []net.IPNet
 	outputCollections map[string]*buffered.AutoFlushCollection
-	bufferSize        int
+	bufferSize        int64
 	autoFlushTime     time.Duration
 	log               logging.Logger
 }
@@ -35,7 +35,7 @@ type bufferedRITAConnDateWriter struct {
 //each record's flow end date. Metadatabase records are created
 //as the output databases are created. Each buffer is flushed
 //when the buffer is full or after a deadline passes.
-func NewBufferedRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX, bufferSize int, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
+func NewBufferedRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX, bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
 	db, err := rita.NewOutputDB(ritaConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
@@ -63,14 +63,7 @@ func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
-		defer func() {
-			closeErrs := r.closeDBSessions()
-			if closeErrs != nil {
-				for i := range closeErrs {
-					errs <- closeErrs[i]
-				}
-			}
-		}()
+		defer r.closeDBSessions(errs)
 
 		//loop over the input
 		for sess := range sessions {
@@ -91,20 +84,18 @@ func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <
 	return errs
 }
 
-func (r *bufferedRITAConnDateWriter) closeDBSessions() []error {
-	var errs []error
+func (r *bufferedRITAConnDateWriter) closeDBSessions(errs chan<- error) {
 	for i := range r.outputCollections {
 		r.outputCollections[i].Close()
 
 		err := r.db.MarkImportFinishedInMetaDB(r.outputCollections[i].Database())
 		//stops outputCollections from sending on errs
 		if err != nil {
-			errs = append(errs, err)
+			errs <- err
 		}
 
 	}
 	r.db.Close()
-	return errs
 }
 
 func (r *bufferedRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
@@ -119,10 +110,7 @@ func (r *bufferedRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
 
 func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate, errs chan<- error) (*buffered.AutoFlushCollection, bool) {
 	//get the latest flowEnd time
-	endTimeMilliseconds := sess.FlowEndMillisecondsAB
-	if sess.FlowEndMillisecondsBA > endTimeMilliseconds {
-		endTimeMilliseconds = sess.FlowEndMillisecondsBA
-	}
+	endTimeMilliseconds := sess.FlowEndMilliseconds()
 	//time.Unix(seconds, nanoseconds)
 	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
 	endTime := time.Unix(endTimeMilliseconds/1000, (endTimeMilliseconds%1000)*1000*1000)

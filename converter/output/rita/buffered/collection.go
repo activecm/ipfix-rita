@@ -17,7 +17,7 @@ type Collection struct {
 
 //InitializeCollection wraps a *mgo.Collection with a buffer of a given size
 //for performing buffered insertions.
-func InitializeCollection(coll *Collection, mgoCollection *mgo.Collection, bufferSize int) {
+func InitializeCollection(coll *Collection, mgoCollection *mgo.Collection, bufferSize int64) {
 	coll.mgoCollection = mgoCollection
 	coll.buffer = make([]interface{}, 0, bufferSize)
 	coll.mutex = new(sync.Mutex)
