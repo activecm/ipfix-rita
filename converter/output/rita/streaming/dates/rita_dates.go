@@ -84,7 +84,7 @@ func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(time time.Time,
 
 func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod(autoFlushErrChan chan<- error) error {
 	currTime := time.Now()
-	currTimeMillis := time.Now().UnixNano() / 1000000
+	currTimeMillis := currTime.UnixNano() / 1000000
 
 	s.currentSegmentTS = s.segmentTSFactory.GetSegmentRelativeTimestamp(currTimeMillis)
 	s.inGracePeriod = s.currentSegmentTS.OffsetFromSegmentStartMillis < s.gracePeriodCutoffMillis
@@ -114,7 +114,7 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 
 func (s *streamingRITATimeIntervalWriter) at(unixTSMillis int64) <-chan time.Time {
 	currTime := time.Now()
-	currTimeMillis := time.Now().UnixNano() / 1000000
+	currTimeMillis := currTime.UnixNano() / 1000000
 	if currTimeMillis >= unixTSMillis {
 		instantChan := make(chan time.Time, 1)
 		instantChan <- currTime
@@ -149,7 +149,7 @@ FlushLoop:
 			//trash the time sent on the updateChan since the scheduler might
 			//have been lazy and might have blocked us from getting to it instantly
 			currTime := time.Now()
-			currTimeMillis := time.Now().UnixNano() / 1000000
+			currTimeMillis := currTime.UnixNano() / 1000000
 
 			s.currentSegmentTS = s.segmentTSFactory.GetSegmentRelativeTimestamp(currTimeMillis)
 			s.inGracePeriod = s.currentSegmentTS.OffsetFromSegmentStartMillis < s.gracePeriodCutoffMillis
@@ -227,6 +227,8 @@ WriteLoop:
 
 			sessEndMillis := sess.FlowEndMilliseconds()
 			sessEndSegmentTS := s.segmentTSFactory.GetSegmentRelativeTimestamp(sessEndMillis)
+
+			//TODO: Lock over currentSegmentTS, inGracePeriod, currentCollection, previousCollection
 
 			//we drop the sameDuration check off the result from the next call
 			//since we know we are only using a single segmentTSFactory

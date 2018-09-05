@@ -49,6 +49,7 @@ func (b *AutoFlushCollection) Name() string {
 	return b.bufferedColl.Name()
 }
 
+//TODO: Figure out a way to shut down a user of the class if an error occurs. (cancelFunc)
 //StartAutoFlush starts the go routine which ensures the
 //AutoFlushCollection's buffer is flushed out within a deadline
 func (b *AutoFlushCollection) StartAutoFlush() bool {
