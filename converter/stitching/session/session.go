@@ -121,35 +121,32 @@ func (s *Aggregate) Merge(other *Aggregate) error {
 	s.PacketTotalCountAB += other.PacketTotalCountAB
 	s.PacketTotalCountBA += other.PacketTotalCountBA
 
-	s.FilledFromSourceA = s.FilledFromSourceA || other.FilledFromSourceA
-	s.FilledFromSourceB = s.FilledFromSourceB || other.FilledFromSourceB
-
 	//if other has the field set, and s doesn't or other's is earlier
-	if other.FlowStartMillisecondsAB != 0 && (s.FlowStartMillisecondsAB == 0 ||
+	if other.FilledFromSourceA && (!s.FilledFromSourceA ||
 		other.FlowStartMillisecondsAB < s.FlowStartMillisecondsAB) {
 		s.FlowStartMillisecondsAB = other.FlowStartMillisecondsAB
 	}
 
-	if other.FlowStartMillisecondsBA != 0 && (s.FlowStartMillisecondsBA == 0 ||
+	if other.FilledFromSourceB && (!s.FilledFromSourceB ||
 		other.FlowStartMillisecondsBA < s.FlowStartMillisecondsBA) {
 		s.FlowStartMillisecondsBA = other.FlowStartMillisecondsBA
 	}
 
 	//if other has the field set, and s other's is later
-	//we don't have to check if s's field is unset since the is later condition
-	//covers it
-	if other.FlowEndMillisecondsAB != 0 &&
-		other.FlowEndMillisecondsAB > s.FlowEndMillisecondsAB {
+	if other.FilledFromSourceA && (!s.FilledFromSourceA ||
+		other.FlowEndMillisecondsAB > s.FlowEndMillisecondsAB) {
 		s.FlowEndMillisecondsAB = other.FlowEndMillisecondsAB
 		s.FlowEndReasonAB = other.FlowEndReasonAB
 	}
 
-	if other.FlowEndMillisecondsBA != 0 &&
-		other.FlowEndMillisecondsBA > s.FlowEndMillisecondsBA {
+	if other.FilledFromSourceB && (!s.FilledFromSourceB ||
+		other.FlowEndMillisecondsBA > s.FlowEndMillisecondsBA) {
 		s.FlowEndMillisecondsBA = other.FlowEndMillisecondsBA
 		s.FlowEndReasonBA = other.FlowEndReasonBA
 	}
 
+	s.FilledFromSourceA = s.FilledFromSourceA || other.FilledFromSourceA
+	s.FilledFromSourceB = s.FilledFromSourceB || other.FilledFromSourceB
 	return nil
 }
 

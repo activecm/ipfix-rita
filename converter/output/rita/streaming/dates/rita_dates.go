@@ -14,6 +14,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
+	"github.com/benbjohnson/clock"
 	"github.com/pkg/errors"
 )
 
@@ -26,15 +27,19 @@ type streamingRITATimeIntervalWriter struct {
 	gracePeriodCutoffMillis int64
 	timeFormatString        string
 
+	clock              clock.Clock
 	inGracePeriod      bool
 	currentSegmentTS   SegmentRelativeTimestamp
 	previousCollection *buffered.AutoFlushCollection
 	currentCollection  *buffered.AutoFlushCollection
+	collectionMutex    *sync.Mutex
+
+	log logging.Logger
 }
 
 func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
 	bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
-	gracePeriodCutoffMillis int64, timeFormatString string,
+	gracePeriodCutoffMillis int64, clock clock.Clock, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
 
 	db, err := rita.NewOutputDB(ritaConf)
@@ -51,39 +56,46 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.I
 	}
 
 	return &streamingRITATimeIntervalWriter{
-		ritaDBManager:           db,
-		localNets:               localNets,
-		collectionBufferSize:    bufferSize,
-		autoflushDeadline:       autoFlushTime,
-		segmentTSFactory:        SegmentRelativeTimestampFactory{segmentDurationMillis: intervalLengthMillis},
+		ritaDBManager:        db,
+		localNets:            localNets,
+		collectionBufferSize: bufferSize,
+		autoflushDeadline:    autoFlushTime,
+		segmentTSFactory:     SegmentRelativeTimestampFactory{segmentDurationMillis: intervalLengthMillis},
+		clock:                clock,
 		gracePeriodCutoffMillis: gracePeriodCutoffMillis,
 		timeFormatString:        timeFormatString,
+		collectionMutex:         new(sync.Mutex),
+		log:                     log,
 	}, nil
 }
 
-func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(time time.Time,
+func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis int64,
 	autoFlushErrChan chan<- error) (*buffered.AutoFlushCollection, error) {
 
-	newColl, err := s.ritaDBManager.NewRITAOutputConnection(time.Format(s.timeFormatString))
+	//time.Unix(seconds, nanoseconds)
+	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
+	newTime := time.Unix(unixTSMillis/1000, (unixTSMillis%1000)*1000*1000)
+
+	newColl, err := s.ritaDBManager.NewRITAOutputConnection(newTime.Format(s.timeFormatString))
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to start auto flusher for collection %s.%s", s.currentCollection.Database(), s.currentCollection.Name())
+		return nil, errors.Wrapf(err, "failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
 	}
 	err = s.ritaDBManager.EnsureMetaDBRecordExists(newColl.Database.Name)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to start auto flusher for collection %s.%s", s.currentCollection.Database(), s.currentCollection.Name())
+		return nil, errors.Wrapf(err, "failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
 	}
 
 	newAutoFlushCollection := buffered.NewAutoFlushCollection(newColl, s.collectionBufferSize, s.autoflushDeadline, autoFlushErrChan)
-	started := s.currentCollection.StartAutoFlush()
+	started := newAutoFlushCollection.StartAutoFlush()
 	if !started {
-		errmsg := fmt.Sprintf("failed to start auto flusher for collection %s.%s", s.currentCollection.Database(), s.currentCollection.Name())
+		errmsg := fmt.Sprintf("failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
 		return nil, errors.New(errmsg)
 	}
 	return newAutoFlushCollection, nil
 }
 
 func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod(autoFlushErrChan chan<- error) error {
-	currTime := time.Now()
+	currTime := s.clock.Now()
 	currTimeMillis := currTime.UnixNano() / 1000000
 
 	s.currentSegmentTS = s.segmentTSFactory.GetSegmentRelativeTimestamp(currTimeMillis)
@@ -91,13 +103,10 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 
 	//set previousCollection if needed
 	if s.inGracePeriod {
-		//time.Unix(seconds, nanoseconds)
-		//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
 		prevTimeMillis := s.currentSegmentTS.SegmentStartMillis - s.currentSegmentTS.SegmentDurationMillis
-		prevTime := time.Unix(prevTimeMillis/1000, (prevTimeMillis%1000)*1000*1000)
 
 		var err error
-		s.previousCollection, err = s.newAutoFlushCollection(prevTime, autoFlushErrChan)
+		s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, autoFlushErrChan)
 		if err != nil {
 			return errors.Wrap(err, "could not initialize streaming RITA interval writer")
 		}
@@ -105,7 +114,7 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 
 	//set currentCollection
 	var err error
-	s.currentCollection, err = s.newAutoFlushCollection(currTime, autoFlushErrChan)
+	s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, autoFlushErrChan)
 	if err != nil {
 		return errors.Wrap(err, "could not initialize streaming RITA interval writer")
 	}
@@ -113,19 +122,24 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 }
 
 func (s *streamingRITATimeIntervalWriter) at(unixTSMillis int64) <-chan time.Time {
-	currTime := time.Now()
+	currTime := s.clock.Now()
 	currTimeMillis := currTime.UnixNano() / 1000000
 	if currTimeMillis >= unixTSMillis {
 		instantChan := make(chan time.Time, 1)
 		instantChan <- currTime
 		return instantChan
 	}
-	return time.After(
+	return s.clock.After(
 		time.Duration(unixTSMillis-currTimeMillis) * time.Millisecond,
 	)
 }
 
 func (s *streamingRITATimeIntervalWriter) getNextUpdateChan() <-chan time.Time {
+
+	//Naively, we would need to lock over inGracePeriod and currentSegmentTS
+	//However, this method is only called on the FlushLoop after modifications have
+	//been made. We are only reading in this function, so we do not have to lock.
+
 	if s.inGracePeriod {
 		//update after the grace period expires
 		return s.at(s.currentSegmentTS.SegmentStartMillis + s.gracePeriodCutoffMillis)
@@ -148,8 +162,10 @@ FlushLoop:
 
 			//trash the time sent on the updateChan since the scheduler might
 			//have been lazy and might have blocked us from getting to it instantly
-			currTime := time.Now()
+			currTime := s.clock.Now()
 			currTimeMillis := currTime.UnixNano() / 1000000
+
+			s.collectionMutex.Lock()
 
 			s.currentSegmentTS = s.segmentTSFactory.GetSegmentRelativeTimestamp(currTimeMillis)
 			s.inGracePeriod = s.currentSegmentTS.OffsetFromSegmentStartMillis < s.gracePeriodCutoffMillis
@@ -163,13 +179,24 @@ FlushLoop:
 
 				var err error
 				//set currentCollection
-				s.currentCollection, err = s.newAutoFlushCollection(currTime, errsOut)
+				s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, errsOut)
 				if err != nil {
 					errsOut <- err
+
+					//don't let go of the lock until we send the cancelOnError message
+					defer s.collectionMutex.Unlock()
 					break FlushLoop
 				}
+
+				//no error
+				s.collectionMutex.Unlock()
 			} else {
 				//End of grace period, same segment
+
+				//unlock the mutex immediately since previousCollection will not be
+				//used until the next grace period. Also, we don't want to
+				//hold the lock while we flush a buffer.
+				s.collectionMutex.Unlock()
 
 				//Flush the previous collection and close it out
 				s.previousCollection.Flush()
@@ -190,6 +217,8 @@ FlushLoop:
 		}
 	}
 
+	//This loop should only exit if there is an error (or the user shuts down the program)
+
 	//wrap up the previous collection if it is open
 	if s.previousCollection != nil {
 		s.previousCollection.Flush()
@@ -201,11 +230,13 @@ FlushLoop:
 	}
 
 	//Wrap up the current collection
-	s.currentCollection.Flush()
-	s.currentCollection.Close()
-	err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.currentCollection.Database())
-	if err != nil {
-		errsOut <- err
+	if s.currentCollection != nil { //could be nil due to error
+		s.currentCollection.Flush()
+		s.currentCollection.Close()
+		err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.currentCollection.Database())
+		if err != nil {
+			errsOut <- err
+		}
 	}
 
 	wg.Done()
@@ -221,14 +252,16 @@ WriteLoop:
 		case <-breakOnErrorContext.Done():
 			break WriteLoop
 		case sess, ok := <-sessions:
-			if !ok {
+			if !ok { //how we know the program is shutting down
 				break WriteLoop
 			}
 
 			sessEndMillis := sess.FlowEndMilliseconds()
 			sessEndSegmentTS := s.segmentTSFactory.GetSegmentRelativeTimestamp(sessEndMillis)
 
-			//TODO: Lock over currentSegmentTS, inGracePeriod, currentCollection, previousCollection
+			//ensure currentSegmentTS, inGracePeriod, currentCollection, and previousCollection
+			//are consistent
+			s.collectionMutex.Lock()
 
 			//we drop the sameDuration check off the result from the next call
 			//since we know we are only using a single segmentTSFactory
@@ -240,7 +273,6 @@ WriteLoop:
 
 				//Insert into today's db
 				s.currentCollection.Insert(ritaConn)
-
 			} else if segOffset == -1 && s.inGracePeriod {
 				var ritaConn parsetypes.Conn
 				sess.ToRITAConn(&ritaConn, s.isIPLocal)
@@ -248,8 +280,12 @@ WriteLoop:
 				//Insert into yesterday's db
 				s.previousCollection.Insert(ritaConn)
 			} else {
+				s.log.Info("dropping out-of-time-segment session", logging.Fields{
+					"session": fmt.Sprintf("%+v", sess),
+				})
 				//Drop the connection record
 			}
+			s.collectionMutex.Unlock()
 		}
 	}
 
@@ -274,6 +310,7 @@ func (s *streamingRITATimeIntervalWriter) Write(sessions <-chan *session.Aggrega
 	//start the flush to maintain the previous and current databases
 	go func() {
 		wg := new(sync.WaitGroup)
+		wg.Add(2)
 		breakOnErrorContext, cancelOnError := context.WithCancel(context.Background())
 		go s.flushLoop(breakOnErrorContext, cancelOnError, wg, errs)
 		go s.writeLoop(breakOnErrorContext, cancelOnError, wg, sessions, errs)
