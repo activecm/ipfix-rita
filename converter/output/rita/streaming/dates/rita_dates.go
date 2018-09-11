@@ -279,9 +279,9 @@ WriteLoop:
 				//Insert into yesterday's db
 				s.previousCollection.Insert(ritaConn)
 			} else {
-				/*s.log.Info("dropping out-of-time-segment session", logging.Fields{
+				s.log.Info("dropping out-of-time-segment session", logging.Fields{
 					"session": fmt.Sprintf("%+v", sess),
-				})*/
+				})
 				//TODO: Add counters and track this
 				//Drop the connection record
 			}
