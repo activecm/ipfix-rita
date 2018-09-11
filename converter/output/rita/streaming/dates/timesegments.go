@@ -24,11 +24,17 @@ func NewSegmentRelativeTimestampFactory(segmentDurationMillis int64) SegmentRela
 //from a unix timestamp given in milliseconds relative to the segment length
 //determined during the construction of the SegmentRelativeTimestampFactory.
 func (t SegmentRelativeTimestampFactory) GetSegmentRelativeTimestamp(unixTSMillis int64) SegmentRelativeTimestamp {
-	return SegmentRelativeTimestamp{
+	s := SegmentRelativeTimestamp{
 		SegmentStartMillis:           (unixTSMillis / t.segmentDurationMillis) * t.segmentDurationMillis,
 		SegmentDurationMillis:        t.segmentDurationMillis,
 		OffsetFromSegmentStartMillis: unixTSMillis % t.segmentDurationMillis,
 	}
+	//handle times before the unix epoch
+	if s.OffsetFromSegmentStartMillis < 0 {
+		s.SegmentStartMillis -= t.segmentDurationMillis
+		s.OffsetFromSegmentStartMillis = t.segmentDurationMillis + s.OffsetFromSegmentStartMillis
+	}
+	return s
 }
 
 //Now creates a new SegmentRelativeTimestamp for the current local time

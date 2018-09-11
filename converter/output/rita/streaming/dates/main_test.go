@@ -2,6 +2,7 @@ package dates_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,27 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 		}
 
 		return ritaWriter, true
+	},
+	After: func(t *testing.T, fixtures integrationtest.FixtureData) (interface{}, bool) {
+		mongoContainer := fixtures.Get(mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+		env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+		sess, err := mongoContainer.NewSession()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dbNames, err := sess.DatabaseNames()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range dbNames {
+			if strings.HasPrefix(dbNames[i], env.GetOutputConfig().GetRITAConfig().GetDBRoot()) {
+				err := sess.DB(dbNames[i]).DropDatabase()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return nil, false
 	},
 }
 

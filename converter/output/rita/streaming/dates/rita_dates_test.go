@@ -24,10 +24,10 @@ func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
 	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
 	currDBTime := clock.Now()
 	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
-	targetTime := clock.Now().Add(-2 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := clock.Now().Add(-2 * time.Duration(intervalLengthMillis) * time.Millisecond)
 
 	sessionChan := make(chan *session.Aggregate, bufferSize)
-	sessions := generateNSessions(bufferSize, targetTime)
+	sessions := generateNSessions(bufferSize, targetDBTime)
 	for i := range sessions {
 		sessionChan <- &sessions[i]
 	}
@@ -47,7 +47,7 @@ func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
 	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
 	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
-	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
 	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
 	require.Nil(t, err)
@@ -63,18 +63,488 @@ func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
 	ssn.Close()
 }
 
-//TODO: simulate sessions over time
-//TODO: create random sessions
-//TODO: control in/ vs out of grace period
+func TestOutOfPeriodSessionsOutOfGracePeriod(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
 
-//To be working correctly:
-//The current time is used to set the previous and current collections
-//The data comes in on sessions channel
-//The data is diverted towards the previous, current, or neither collection based on timestamp
-//If the data's timestamp doesn't match the current collection
-//The data is inserted into a buffer
-//Data is buffered. If the buffer is full, the data is flushed on the write thread
-//
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	//don't adjust clock so db names align with intervals
+	currDBTime := clock.Now()
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := clock.Now().Add(-2 * time.Duration(intervalLengthMillis) * time.Millisecond)
+
+	//clock starts outside of the grace period
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+	sessions := generateNSessions(bufferSize, targetDBTime)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, targetDBCount)
+	ssn.Close()
+}
+
+func TestPreviousPeriodSessionsInGracePeriod(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts out in grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+	currDBTime := clock.Now()
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := prevDBTime
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+	sessions := generateNSessions(bufferSize, targetDBTime)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, prevDBCount)
+
+	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, targetDBCount)
+	ssn.Close()
+}
+
+func TestPreviousPeriodSessionsOutOfGracePeriod(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts outside of the grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	//don't adjust clock so db names align with intervals
+	currDBTime := clock.Now()
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := prevDBTime
+
+	//clock starts outside of the grace period
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+
+	//test snapping dbnames to interval times
+	targetDBTimeWithOffset := targetDBTime.Add(time.Duration(gracePeriodCutoffMillis/2) * time.Millisecond)
+	sessions := generateNSessions(bufferSize, targetDBTimeWithOffset)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, targetDBCount)
+	ssn.Close()
+}
+
+func TestCurrentPeriodSessionsInGracePeriod(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts out in grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+	currDBTime := clock.Now()
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := currDBTime
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+	sessions := generateNSessions(bufferSize, targetDBTime)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, targetDBCount)
+	ssn.Close()
+}
+
+func TestCurrentPeriodSessionsOutOfGracePeriod(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts outside of the grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	//don't adjust clock so db names align with intervals
+	currDBTime := clock.Now()
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := currDBTime
+
+	//clock starts outside of the grace period
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+
+	//test snapping dbnames to interval times
+	targetDBTimeWithOffset := targetDBTime.Add(time.Duration(gracePeriodCutoffMillis/2) * time.Millisecond)
+	sessions := generateNSessions(bufferSize, targetDBTimeWithOffset)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, targetDBCount)
+	ssn.Close()
+}
+
+func TestGracePeriodFlip(t *testing.T) {
+	//If this test fails, its probably because of the bad waits needed
+	//Ideally these would be replaced with a time-bounded check loop
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+	currDBTime := clock.Now()
+	nextDBTime := clock.Now().Add(1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	prevDBTime := clock.Now().Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	nextDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + nextDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+
+	//get the mongo session ready for checking
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+
+	errChan := ritaWriter.Write(sessionChan)
+	var errs []error
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+	}()
+
+	//We need to wait for asynchronous operations to finish at several
+	//points in the test.
+	waitTime := 5 * time.Second
+
+	prevSessions := generateNSessions(bufferSize, prevDBTime)
+
+	for i := range prevSessions {
+		sessionChan <- &prevSessions[i]
+	}
+
+	//Wait for buffer to clear. This might cause the test to fail on
+	//slow machines
+	time.Sleep(waitTime)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, prevDBCount)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	nextDBCount, err := ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, nextDBCount)
+
+	//This should advance up past the grace period
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	time.Sleep(waitTime)
+
+	for i := range prevSessions {
+		sessionChan <- &prevSessions[i]
+	}
+
+	//Wait for buffer to clear. This might cause the test to fail on
+	//slow machines
+	time.Sleep(waitTime)
+
+	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, prevDBCount)
+
+	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, nextDBCount)
+
+	//This should advance us to the next time segment.
+	//prev will now be outside of scope, curr will be prev, and next will be curr
+	clock.Add(time.Duration(intervalLengthMillis-gracePeriodCutoffMillis) * time.Millisecond)
+
+	//Wait for changes to take place
+	time.Sleep(waitTime)
+
+	newPrevOldCurrSessions := generateNSessions(bufferSize, currDBTime)
+	for i := range newPrevOldCurrSessions {
+		sessionChan <- &newPrevOldCurrSessions[i]
+	}
+
+	//Wait for buffer to clear. This might cause the test to fail on
+	//slow machines
+	time.Sleep(waitTime)
+
+	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, prevDBCount)
+
+	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, currDBCount)
+
+	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, nextDBCount)
+
+	newCurrOldNextSessions := generateNSessions(bufferSize, nextDBTime)
+	for i := range newCurrOldNextSessions {
+		sessionChan <- &newCurrOldNextSessions[i]
+	}
+
+	//Wait for buffer to clear. This might cause the test to fail on
+	//slow machines
+	time.Sleep(waitTime)
+
+	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, prevDBCount)
+
+	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, currDBCount)
+
+	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 5, nextDBCount)
+
+	close(sessionChan)
+
+	for i := range errs {
+		t.Fatal(errs[i])
+	}
+}
+
+func TestBufferFlushOnClose(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts out in grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+	currDBTime := clock.Now()
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+	sessions := generateNSessions(bufferSize-1, currDBTime)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 4, currDBCount)
+	ssn.Close()
+}
+
+func TestBufferFlushOnTimeout(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts out in grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+	currDBTime := clock.Now()
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+	errChan := ritaWriter.Write(sessionChan)
+	var errs []error
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+	}()
+
+	sessions := generateNSessions(bufferSize-1, currDBTime)
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+
+	time.Sleep(2 * autoFlushTime)
+
+	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 4, currDBCount)
+	ssn.Close()
+
+	close(sessionChan)
+	for i := range errs {
+		t.Fatal(errs[i])
+	}
+}
 
 //Test Cases:
 //Open, send 1 current
