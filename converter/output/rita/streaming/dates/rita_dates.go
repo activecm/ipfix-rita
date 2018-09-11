@@ -70,7 +70,7 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.I
 }
 
 func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis int64,
-	autoFlushErrChan chan<- error) (*buffered.AutoFlushCollection, error) {
+	cancelOnAutoFlushError func(), autoFlushErrChan chan<- error) (*buffered.AutoFlushCollection, error) {
 
 	//time.Unix(seconds, nanoseconds)
 	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
@@ -86,7 +86,7 @@ func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis in
 	}
 
 	newAutoFlushCollection := buffered.NewAutoFlushCollection(newColl, s.collectionBufferSize, s.autoflushDeadline, autoFlushErrChan)
-	started := newAutoFlushCollection.StartAutoFlush()
+	started := newAutoFlushCollection.StartAutoFlush(cancelOnAutoFlushError)
 	if !started {
 		errmsg := fmt.Sprintf("failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
 		return nil, errors.New(errmsg)
@@ -94,7 +94,8 @@ func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis in
 	return newAutoFlushCollection, nil
 }
 
-func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod(autoFlushErrChan chan<- error) error {
+func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod(
+	cancelOnAutoFlushError func(), autoFlushErrChan chan<- error) error {
 	currTime := s.clock.Now()
 	currTimeMillis := currTime.UnixNano() / 1000000
 
@@ -106,7 +107,7 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 		prevTimeMillis := s.currentSegmentTS.SegmentStartMillis - s.currentSegmentTS.SegmentDurationMillis
 
 		var err error
-		s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, autoFlushErrChan)
+		s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, cancelOnAutoFlushError, autoFlushErrChan)
 		if err != nil {
 			return errors.Wrap(err, "could not initialize streaming RITA interval writer")
 		}
@@ -114,7 +115,7 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 
 	//set currentCollection
 	var err error
-	s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, autoFlushErrChan)
+	s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, cancelOnAutoFlushError, autoFlushErrChan)
 	if err != nil {
 		return errors.Wrap(err, "could not initialize streaming RITA interval writer")
 	}
@@ -179,7 +180,7 @@ FlushLoop:
 
 				var err error
 				//set currentCollection
-				s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, errsOut)
+				s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, cancelOnError, errsOut)
 				if err != nil {
 					errsOut <- err
 
@@ -296,8 +297,9 @@ WriteLoop:
 func (s *streamingRITATimeIntervalWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 	//initialize the current time derived variables (including MongoDB databases)
 	errs := make(chan error)
+	breakOnErrorContext, cancelOnError := context.WithCancel(context.Background())
 
-	err := s.initializeCurrentSegmentAndGracePeriod(errs)
+	err := s.initializeCurrentSegmentAndGracePeriod(cancelOnError, errs)
 	if err != nil {
 		//If we couldn't contact MongoDB, we need to return an error
 		//errs has a buffer for an error so we don't deadlock ourselves here
@@ -311,7 +313,6 @@ func (s *streamingRITATimeIntervalWriter) Write(sessions <-chan *session.Aggrega
 	go func() {
 		wg := new(sync.WaitGroup)
 		wg.Add(2)
-		breakOnErrorContext, cancelOnError := context.WithCancel(context.Background())
 		go s.flushLoop(breakOnErrorContext, cancelOnError, wg, errs)
 		go s.writeLoop(breakOnErrorContext, cancelOnError, wg, sessions, errs)
 		wg.Wait()

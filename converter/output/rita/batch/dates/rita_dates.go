@@ -78,7 +78,10 @@ func (r *bufferedRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <
 			}
 
 			//insert the record
-			outColl.Insert(connRecord)
+			err := outColl.Insert(connRecord)
+			if err != nil {
+				break
+			}
 		}
 	}()
 	return errs
@@ -136,7 +139,7 @@ func (r *bufferedRITAConnDateWriter) getConnCollectionForSession(sess *session.A
 
 		//create the output buffer
 		outBufferedColl = buffered.NewAutoFlushCollection(outColl, r.bufferSize, r.autoFlushTime, errs)
-		outBufferedColl.StartAutoFlush()
+		outBufferedColl.StartAutoFlush(func() { /*unneeded*/ }) //TODO: stop write module when stopped.
 
 		//cache the result
 		r.outputCollections[endTimeStr] = outBufferedColl
