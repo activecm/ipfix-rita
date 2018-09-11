@@ -42,6 +42,14 @@
   version = "v1.0.3"
 
 [[projects]]
+  branch = "master"
+  digest = "1:afaa6de27e2d86b66cf71d55096f00e32b2ef40ec3349b535555aa81c77bc7d3"
+  name = "github.com/benbjohnson/clock"
+  packages = ["."]
+  pruneopts = ""
+  revision = "7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19"
+
+[[projects]]
   digest = "1:79421244ba5848aae4b0a5c41e633a04e4894cb0b164a219dc8c15ec7facb7f1"
   name = "github.com/blang/semver"
   packages = ["."]
@@ -258,6 +266,7 @@
     "github.com/activecm/mgosec",
     "github.com/activecm/rita/database",
     "github.com/activecm/rita/parser/parsetypes",
+    "github.com/benbjohnson/clock",
     "github.com/davecgh/go-spew/spew",
     "github.com/globalsign/mgo",
     "github.com/globalsign/mgo/bson",

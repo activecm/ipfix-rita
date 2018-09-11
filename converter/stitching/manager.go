@@ -24,10 +24,10 @@ type Manager struct {
 	numStitchers int32
 	//stitcherBufferSize determines how many input flows should be buffered for
 	//each stitcher
-	stitcherBufferSize int
+	stitcherBufferSize int64
 	//outputBufferSize determines how many output session aggregates should
 	//be buffered overall
-	outputBufferSize int
+	outputBufferSize int64
 	//matcherMaxSize determines the max amount of unmatched session aggregates
 	//that may exist in the sessions table/collection before a flush happens
 	matcherMaxSize int64
@@ -41,7 +41,7 @@ type Manager struct {
 
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
-	stitcherBufferSize, outputBufferSize int, matcherMaxSize int64,
+	stitcherBufferSize, outputBufferSize int64, matcherMaxSize int64,
 	matcherFlushToPercent float64, log logging.Logger) Manager {
 
 	return Manager{

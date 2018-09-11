@@ -24,7 +24,7 @@ type idBulkBuffer struct {
 }
 
 //NewIDBulkBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
-func NewIDBulkBuffer(input *mgo.Collection, bufferSize int, log logging.Logger) Buffer {
+func NewIDBulkBuffer(input *mgo.Collection, bufferSize int64, log logging.Logger) Buffer {
 	return &idBulkBuffer{
 		input:    input,
 		buffer:   make([]bson.M, 0, bufferSize),
