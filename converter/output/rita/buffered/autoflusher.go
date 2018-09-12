@@ -27,10 +27,9 @@ type AutoFlushCollection struct {
 //The deadline is pushed back to time.Now() + deadlineInterval
 //everytime Insert or Flush is called.
 func NewAutoFlushCollection(mgoCollection *mgo.Collection, bufferSize int64,
-	deadlineInterval time.Duration, autoFlushErrChan chan<- error) *AutoFlushCollection {
+	deadlineInterval time.Duration) *AutoFlushCollection {
 	coll := &AutoFlushCollection{
 		wg:                   new(sync.WaitGroup),
-		autoFlushErrChan:     autoFlushErrChan,
 		stopChan:             make(chan struct{}),
 		resetTimer:           make(chan bool, 1),
 		deadlineInterval:     deadlineInterval,
@@ -54,20 +53,21 @@ func (b *AutoFlushCollection) Name() string {
 //StartAutoFlush starts the go routine which ensures the
 //AutoFlushCollection's buffer is flushed out within a deadline.
 //autoFlushStopped will be called once the auto flusher has exited
-func (b *AutoFlushCollection) StartAutoFlush(autoFlushStopped func()) bool {
+func (b *AutoFlushCollection) StartAutoFlush(autoFlushErrChan chan<- error, onFatal func()) bool {
 	b.autoFlushActiveMutex.Lock()
 	defer b.autoFlushActiveMutex.Unlock()
 	if b.autoFlushActive {
 		return false
 	}
 	b.wg.Add(1)
-	go b.autoFlush(autoFlushStopped)
+	go b.autoFlush(autoFlushErrChan, onFatal)
 	b.autoFlushActive = true
 	return true
 }
 
-func (b *AutoFlushCollection) autoFlush(autoFlushStopped func()) {
+func (b *AutoFlushCollection) autoFlush(autoFlushErrChan chan<- error, onFatal func()) {
 	timer := time.NewTimer(b.deadlineInterval)
+	exitWasFatal := false
 Loop:
 	for {
 		select {
@@ -78,16 +78,19 @@ Loop:
 		case <-timer.C:
 			err := b.Flush()
 			if err != nil {
-				b.autoFlushErrChan <- err
+				autoFlushErrChan <- err
+				exitWasFatal = true
 				break Loop
 			}
 		}
 	}
-	b.wg.Done()
 	b.autoFlushActiveMutex.Lock()
 	b.autoFlushActive = false
 	b.autoFlushActiveMutex.Unlock()
-	autoFlushStopped()
+	if exitWasFatal {
+		onFatal()
+	}
+	b.wg.Done()
 }
 
 //Insert writes a record into the Collection's buffer.

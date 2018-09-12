@@ -26,8 +26,8 @@ func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
 	coll := ssn.DB(testDBName).C(testCollectionName)
 
 	errs := make(chan error, 100)
-	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 5*time.Second, errs)
-	started := autoFlushColl.StartAutoFlush(func() { /*unneeded*/ })
+	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 5*time.Second)
+	started := autoFlushColl.StartAutoFlush(errs, func() { /*unneeded*/ })
 	require.True(t, started)
 
 	var inRecords []bson.M
@@ -91,8 +91,8 @@ func TestAutoFlushCollectionAutoFlush(t *testing.T) {
 	errs := make(chan error, 100)
 	buffSize := 5
 	deadlineInterval := 1 * time.Second
-	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 1*time.Second, errs)
-	started := autoFlushColl.StartAutoFlush(func() { /*unneeded*/ })
+	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 1*time.Second)
+	started := autoFlushColl.StartAutoFlush(errs, func() { /*unneeded*/ })
 	require.True(t, started)
 
 	var inRecords []bson.M

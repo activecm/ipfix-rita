@@ -13,6 +13,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/mgo.v2/bson"
 )
 
 func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
@@ -546,8 +547,107 @@ func TestBufferFlushOnTimeout(t *testing.T) {
 	}
 }
 
-//Test Cases:
-//Open, send 1 current
+func TestMetaDBRecords(t *testing.T) {
+	//If this test fails, its probably because of the bad waits needed
+	//Ideally these would be replaced with a time-bounded check loop
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+
+	//get the mongo session ready for checking
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionChan := make(chan *session.Aggregate, bufferSize)
+
+	errChan := ritaWriter.Write(sessionChan)
+	var errs []error
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+	}()
+
+	//We need to wait for asynchronous operations to finish at several
+	//points in the test.
+	waitTime := 5 * time.Second
+
+	time.Sleep(waitTime)
+
+	currDBTime := clock.Now()
+	prevDBTime := currDBTime.Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	nextDBTime := currDBTime.Add(1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+	nextDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + nextDBTime.Format(timeFormatString)
+
+	var dbInfo rita.DBMetaInfo
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+		bson.M{"name": currDBName},
+	).One(&dbInfo)
+
+	require.Equal(t, currDBName, dbInfo.Name)
+	require.Equal(t, false, dbInfo.ImportFinished)
+
+	dbInfo = rita.DBMetaInfo{}
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+		bson.M{"name": prevDBName},
+	).One(&dbInfo)
+
+	require.Equal(t, prevDBName, dbInfo.Name)
+	require.Equal(t, false, dbInfo.ImportFinished)
+
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	time.Sleep(waitTime)
+
+	dbInfo = rita.DBMetaInfo{}
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+		bson.M{"name": prevDBName},
+	).One(&dbInfo)
+
+	require.Equal(t, prevDBName, dbInfo.Name)
+	require.Equal(t, true, dbInfo.ImportFinished)
+
+	clock.Add(time.Duration(intervalLengthMillis-gracePeriodCutoffMillis) * time.Millisecond)
+
+	time.Sleep(waitTime)
+
+	dbInfo = rita.DBMetaInfo{}
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+		bson.M{"name": nextDBName},
+	).One(&dbInfo)
+
+	require.Equal(t, nextDBName, dbInfo.Name)
+	require.Equal(t, false, dbInfo.ImportFinished)
+
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	time.Sleep(waitTime)
+
+	dbInfo = rita.DBMetaInfo{}
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+		bson.M{"name": currDBName},
+	).One(&dbInfo)
+
+	require.Equal(t, currDBName, dbInfo.Name)
+	require.Equal(t, true, dbInfo.ImportFinished)
+
+	ssn.Close()
+
+	close(sessionChan)
+	for i := range errs {
+		t.Fatal(errs[i])
+	}
+}
 
 func generateNSessions(n int64, targetSessionEnd time.Time) []session.Aggregate {
 	targetSessionEndMillis := targetSessionEnd.UnixNano() / 1000000

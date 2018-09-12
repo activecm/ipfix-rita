@@ -2,12 +2,12 @@
 
 
 [[projects]]
-  digest = "1:6331095c1906771fbe129fe4a1f94ac5b5a97b0f60f2f80653bb95c3e5dad81e"
+  digest = "1:d1c8ad95f22ee72c8331280268e4658ef4119e5c16ee916d223bf1d56c09d33a"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
   pruneopts = ""
-  revision = "7da180ee92d8bd8bb8c37fc560e673e6557c392f"
-  version = "v0.4.7"
+  revision = "3b8b3c98b207f95fe0cd6c7c311a9ac497ba7c0f"
+  version = "v0.3.3"
 
 [[projects]]
   branch = "master"
@@ -33,8 +33,6 @@
   name = "github.com/activecm/rita"
   packages = [
     "config",
-    "database",
-    "parser/fileparsetypes",
     "parser/parsetypes",
   ]
   pruneopts = ""
@@ -264,7 +262,6 @@
     "github.com/activecm/dbtest",
     "github.com/activecm/dbtest/docker",
     "github.com/activecm/mgosec",
-    "github.com/activecm/rita/database",
     "github.com/activecm/rita/parser/parsetypes",
     "github.com/benbjohnson/clock",
     "github.com/davecgh/go-spew/spew",

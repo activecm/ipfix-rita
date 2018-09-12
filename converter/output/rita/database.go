@@ -5,7 +5,6 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/database"
-	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
@@ -19,6 +18,17 @@ const MetaDBDatabasesCollection = "databases"
 //RitaConnInputCollection is the name of the RITA collection
 //which houses input connection data
 const RitaConnInputCollection = "conn"
+
+//TODO: Use version in RITA as dep
+// DBMetaInfo defines some information about the database
+type DBMetaInfo struct {
+	ID             bson.ObjectId `bson:"_id,omitempty"`   // Ident
+	Name           string        `bson:"name"`            // Name of the database
+	ImportFinished bool          `bson:"import_finished"` // Has this database finished being imported
+	Analyzed       bool          `bson:"analyzed"`        // Has this database been analyzed
+	ImportVersion  string        `bson:"import_version"`  // Rita version at import
+	AnalyzeVersion string        `bson:"analyze_version"` // Rita version at analyze
+}
 
 //OutputDB wraps a *mgo.Session connected to MongoDB
 //and provides facility for interacting with RITA compatible databases
@@ -106,8 +116,9 @@ func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
 	if numRecords != 0 {
 		return nil
 	}
-	err = o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Insert(rita_db.DBMetaInfo{
+	err = o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
 		Name:           dbName,
+		ImportFinished: false,
 		Analyzed:       false,
 		ImportVersion:  "v1.0.3+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
