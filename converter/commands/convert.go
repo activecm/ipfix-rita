@@ -142,7 +142,7 @@ func convert() error {
 		env.GetIPFIXConfig(),
 		bulkBatchSize, flushDeadline,
 		dayRotationPeriodMillis, oneAMGracePeriodMillis,
-		clock.New(), dateFormatString,
+		clock.New(), time.Local, dateFormatString,
 		env.Logger,
 	)
 	if err != nil {

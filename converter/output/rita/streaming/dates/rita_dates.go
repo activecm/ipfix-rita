@@ -26,6 +26,7 @@ type streamingRITATimeIntervalWriter struct {
 	segmentTSFactory        SegmentRelativeTimestampFactory
 	gracePeriodCutoffMillis int64
 	timeFormatString        string
+	timezone                *time.Location
 
 	clock              clock.Clock
 	inGracePeriod      bool
@@ -39,7 +40,7 @@ type streamingRITATimeIntervalWriter struct {
 
 func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
 	bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
-	gracePeriodCutoffMillis int64, clock clock.Clock, timeFormatString string,
+	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
 
 	db, err := rita.NewOutputDB(ritaConf)
@@ -60,7 +61,8 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.I
 		localNets:            localNets,
 		collectionBufferSize: bufferSize,
 		autoflushDeadline:    autoFlushTime,
-		segmentTSFactory:     SegmentRelativeTimestampFactory{segmentDurationMillis: intervalLengthMillis},
+		segmentTSFactory:     NewSegmentRelativeTimestampFactory(intervalLengthMillis, timezone),
+		timezone:             timezone,
 		clock:                clock,
 		gracePeriodCutoffMillis: gracePeriodCutoffMillis,
 		timeFormatString:        timeFormatString,
@@ -74,7 +76,7 @@ func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis in
 
 	//time.Unix(seconds, nanoseconds)
 	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
-	newTime := time.Unix(unixTSMillis/1000, (unixTSMillis%1000)*1000*1000)
+	newTime := time.Unix(unixTSMillis/1000, (unixTSMillis%1000)*1000*1000).In(s.timezone)
 
 	newColl, err := s.ritaDBManager.NewRITAOutputConnection(newTime.Format(s.timeFormatString))
 	if err != nil {

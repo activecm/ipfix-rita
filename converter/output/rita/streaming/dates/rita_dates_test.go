@@ -361,7 +361,7 @@ func TestGracePeriodFlip(t *testing.T) {
 
 	//We need to wait for asynchronous operations to finish at several
 	//points in the test.
-	waitTime := 5 * time.Second
+	waitTime := 10 * time.Second
 
 	prevSessions := generateNSessions(bufferSize, prevDBTime)
 
@@ -534,7 +534,8 @@ func TestBufferFlushOnTimeout(t *testing.T) {
 	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
 	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
 
-	time.Sleep(2 * autoFlushTime)
+	waitTime := 10 * time.Second
+	time.Sleep(waitTime)
 
 	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
 	require.Nil(t, err)
@@ -578,7 +579,7 @@ func TestMetaDBRecords(t *testing.T) {
 
 	//We need to wait for asynchronous operations to finish at several
 	//points in the test.
-	waitTime := 5 * time.Second
+	waitTime := 10 * time.Second
 
 	time.Sleep(waitTime)
 

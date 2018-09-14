@@ -56,7 +56,7 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 			env.GetIPFIXConfig(),
 			bufferSize, autoFlushTime,
 			intervalLengthMillis, gracePeriodCutoffMillis,
-			clock, timeFormatString,
+			clock, time.UTC, timeFormatString,
 			env.Logger,
 		)
 
@@ -78,7 +78,8 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 			t.Fatal(err)
 		}
 		for i := range dbNames {
-			if strings.HasPrefix(dbNames[i], env.GetOutputConfig().GetRITAConfig().GetDBRoot()) {
+			if strings.HasPrefix(dbNames[i], env.GetOutputConfig().GetRITAConfig().GetDBRoot()) ||
+				dbNames[i] == env.GetOutputConfig().GetRITAConfig().GetMetaDB() {
 				err := sess.DB(dbNames[i]).DropDatabase()
 				if err != nil {
 					t.Fatal(err)
