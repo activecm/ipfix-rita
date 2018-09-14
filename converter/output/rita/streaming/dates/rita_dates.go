@@ -38,6 +38,18 @@ type streamingRITATimeIntervalWriter struct {
 	log logging.Logger
 }
 
+//NewStreamingRITATimeIntervalWriter creates a new session-> rita Conn
+//writer which writes sessions to a different databases depending on which
+//interval of time they fall in. Sessions with a FlowEndMilliseconds
+//timestamp in the current time interval are always written
+//to the current interval database. For a portion of the current interval,
+//the grace period, sessions with a FlowEndMilliseconds timestamp in
+//the previous time interval are written to the previous interval database.
+//The streamingRITATimeIntervalWriter automatically buffers and flushes
+//sessions as needed. Additionally, it automatically maintains the
+//Metadatabase records for each collection. A database is marked as
+//ImportFinished in the Metadatabase when the database is the previous
+//database and the grace period expires.
 func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
 	bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
 	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
@@ -45,7 +57,7 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, ipfixConf config.I
 
 	db, err := rita.NewOutputDB(ritaConf)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not connecto to RITA MongoDB")
+		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}
 
 	//parse local networks
@@ -141,7 +153,8 @@ func (s *streamingRITATimeIntervalWriter) getNextUpdateChan() <-chan time.Time {
 
 	//Naively, we would need to lock over inGracePeriod and currentSegmentTS
 	//However, this method is only called on the FlushLoop after modifications have
-	//been made. We are only reading in this function, so we do not have to lock.
+	//been made. We are only reading in this function and no one else is writing,
+	//so we do not have to lock.
 
 	if s.inGracePeriod {
 		//update after the grace period expires
@@ -296,6 +309,10 @@ WriteLoop:
 	wg.Done()
 }
 
+//Write starts the threads needed to back the streamingRITATimeIntervalWriter
+//and sets up databases in MongoDB to hold the output sessions.
+//Closing the sessions channel shuts down the threads. The error channel
+//will close when the module has shut down.
 func (s *streamingRITATimeIntervalWriter) Write(sessions <-chan *session.Aggregate) <-chan error {
 	//initialize the current time derived variables (including MongoDB databases)
 	errs := make(chan error)
