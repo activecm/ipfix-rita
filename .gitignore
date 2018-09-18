@@ -1,3 +1,4 @@
+*.swp
 debug
 debug-configuration.json
-ipfix-rita
+ipfix-rita-*.tgz

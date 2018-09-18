@@ -5,9 +5,9 @@ version: '3.3'
 # for docker-compose
 configs:
   converter_config:
-    file: ./etc/converter/converter.yaml
+    file: ../etc/converter/converter.yaml
   logstash_mongo_config:
-    file: ./etc/collector/logstash/mongo.conf
+    file: ../etc/collector/logstash/mongo.conf
 
 volumes:
   db:
@@ -32,7 +32,7 @@ services:
 
   logstash:
     image: quay.io/activecm/ipfix-rita-logstash:${IPFIX_RITA_VERSION:-latest}
-    build: ../collector/logstash
+    build: ../../collector/logstash
     restart: unless-stopped
     ports:
       - 2055:2055/udp # IPFIX/Netflow endpoint udp
@@ -41,7 +41,7 @@ services:
       - INPUT_WORKERS=4
     volumes:
       - collector_template_cache:/usr/share/logstash/template_cache
-      - "./etc/collector/logstash/mongo.conf:/usr/share/logstash/pipeline/mongo.conf:ro"
+      - "../etc/collector/logstash/mongo.conf:/usr/share/logstash/pipeline/mongo.conf:ro"
     configs:
       - source: logstash_mongo_config
         target: /usr/share/logstash/pipeline/mongo.conf
@@ -50,11 +50,11 @@ services:
 
   converter:
     image: quay.io/activecm/ipfix-rita-converter:${IPFIX_RITA_VERSION:-latest}
-    build: ../converter
+    build: ../../converter
     command: run
     restart: unless-stopped
     volumes:
-      - "./etc/converter/converter.yaml:/etc/ipfix-rita/converter.yaml:ro"
+      - "../etc/converter/converter.yaml:/etc/ipfix-rita/converter.yaml:ro"
     configs:
       - source: converter_config
         target: /etc/ipfix-rita/converter.yaml

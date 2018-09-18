@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+# Change dir to script dir
+pushd "$(dirname "$BASH_SOURCE[0]")" > /dev/null
+
+set -o errexit
+set -o errtrace
+set -o pipefail
+
+export IPFIX_RITA_VERSION="$(cat ./VERSION)"
+
+RELEASE_DIR="./ipfix-rita"
+
+RELEASE_ETC_DIR="$RELEASE_DIR/etc"
+IN_DEV_ETC_DIR="./docker/etc"
+
+RELEASE_DOCKER_DIR="$RELEASE_DIR/docker-compose"
+IN_DEV_DOCKER_DIR="./docker/docker-compose"
+
+RELEASE_MAIN_COMPOSE_FILE="$RELEASE_DOCKER_DIR/main.yaml"
+IN_DEV_MAIN_COMPOSE_FILE="$IN_DEV_DOCKER_DIR/main.yaml"
+
+RELEASE_MAIN_SCRIPT="$RELEASE_DIR/ipfix-rita"
+IN_DEV_MAIN_SCRIPT="./docker/ipfix-rita"
+
+RELEASE_TARBALL="./ipfix-rita-$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g').tgz"
+
+echo "Creating release tarball $RELEASE_TARBALL..."
+
+if [ -d $RELEASE_DIR ]; then
+    rm -rf $RELEASE_DIR
+fi
+
+if [ -f $RELEASE_TARBALL ]; then
+    rm $RELEASE_TARBALL
+fi
+
+mkdir $RELEASE_DIR
+mkdir $RELEASE_DOCKER_DIR
+
+cp -r docker/etc $RELEASE_ETC_DIR
+
+# Get rid of the build statements in the docker-compose file
+grep -v '^\s*build' $IN_DEV_MAIN_COMPOSE_FILE > $RELEASE_MAIN_COMPOSE_FILE
+
+# Copy the shebang line in
+head -n 1 $IN_DEV_MAIN_SCRIPT >> $RELEASE_MAIN_SCRIPT
+
+# Ensure the right versions of the images are pulled down
+echo "export IPFIX_RITA_VERSION=$IPFIX_RITA_VERSION" >> $RELEASE_MAIN_SCRIPT
+chmod +x $RELEASE_MAIN_SCRIPT
+
+# Copy the rest of the script in
+
+tail -n +2 $IN_DEV_MAIN_SCRIPT >> $RELEASE_MAIN_SCRIPT
+
+tar -czf $RELEASE_TARBALL $RELEASE_DIR
+
+rm -rf $RELEASE_DIR
+
+read -p "Tag this release and publish the Docker images? " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 0
+fi
+
+echo "Ensure the current Git branch is master."
+
+GIT_BRANCH_NAME=$(git symbolic-ref -q HEAD)
+GIT_BRANCH_NAME=${GIT_BRANCH_NAME##refs/heads/}
+GIT_BRANCH_NAME=${GIT_BRANCH_NAME:-HEAD}
+if [[ $GIT_BRANCH_NAME != "master" ]]; then
+    exit 1
+fi
+
+echo "Ensure all local changes are committed and pushed before proceeding."
+
+if git diff-index --quiet HEAD -- ; then
+    exit 1
+fi
+
+echo "Creating a tagged version for the current Git commit."
+git tag -a "$IPFIX_RITA_VERSION" -m "version $IPFIX_RITA_VERSION"
+git push --tags
+
+echo "Building and pushing current images to quay.io."
+export COMPOSE_FILE="$IN_DEV_MAIN_COMPOSE_FILE"
+
+$IN_DEV_MAIN_SCRIPT build
+
+echo "Tagging the $IPFIX_RITA_VERSION as latest"
+# Set the latest tag as docker doesn't do that itself
+docker tag quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION quay.io/activecm/ipfix-rita-converter:latest
+docker tag quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION quay.io/activecm/ipfix-rita-logstash:latest
+
+echo "Pushing to quay.io"
+docker login quay.io
+docker push quay.io/activecm/ipfix-rita-converter:latest
+docker push quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION
+    
+docker push quay.io/activecm/ipfix-rita-logstash:latest
+docker push quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION
+
+echo "The current git commit has been tagged as $IPFIX_RITA_VERSION and quay.io has been updated. Please publish $RELEASE_TARBALL on the GitHub releases page."
+
+# Change back to original directory
+popd > /dev/null
+
