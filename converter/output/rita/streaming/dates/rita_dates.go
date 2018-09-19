@@ -115,24 +115,6 @@ func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod
 
 	s.currentSegmentTS = s.segmentTSFactory.GetSegmentRelativeTimestamp(currTimeMillis)
 	s.inGracePeriod = s.currentSegmentTS.OffsetFromSegmentStartMillis < s.gracePeriodCutoffMillis
-
-	//set previousCollection if needed
-	if s.inGracePeriod {
-		prevTimeMillis := s.currentSegmentTS.SegmentStartMillis - s.currentSegmentTS.SegmentDurationMillis
-
-		var err error
-		s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, onFatal, autoFlushErrChan)
-		if err != nil {
-			return errors.Wrap(err, "could not initialize streaming RITA interval writer")
-		}
-	}
-
-	//set currentCollection
-	var err error
-	s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, onFatal, autoFlushErrChan)
-	if err != nil {
-		return errors.Wrap(err, "could not initialize streaming RITA interval writer")
-	}
 	return nil
 }
 
@@ -190,40 +172,31 @@ FlushLoop:
 			if s.inGracePeriod {
 				//Beginning of grace period, different time segment
 
-				//set previousCollection
+				//set previousCollection to currentCollection
 				s.previousCollection = s.currentCollection
 
-				var err error
-				//set currentCollection
-				s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, onFatal, errsOut)
-				if err != nil {
-					errsOut <- err
-
-					//don't let go of the lock until we send the onFatal message
-					defer s.collectionMutex.Unlock()
-					break FlushLoop
-				}
-
-				//no error
+				//clear currentCollection so it is created when needed
+				s.currentCollection = nil
 				s.collectionMutex.Unlock()
-			} else {
+			} else if s.previousCollection != nil {
 				//End of grace period, same segment
 
-				//unlock the mutex immediately since previousCollection will not be
-				//used until the next grace period. Also, we don't want to
+				//unlock the mutex immediately since we don't want to
 				//hold the lock while we flush a buffer.
+				prevColl := s.previousCollection
+				s.previousCollection = nil
 				s.collectionMutex.Unlock()
 
 				//Flush the previous collection and close it out
-				s.previousCollection.Flush()
-				s.previousCollection.Close()
-				err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.previousCollection.Database())
+				prevColl.Flush()
+				prevColl.Close()
+				err := s.ritaDBManager.MarkImportFinishedInMetaDB(prevColl.Database())
 				if err != nil {
 					errsOut <- err
 					break FlushLoop
 				}
-				s.previousCollection = nil
-
+			} else {
+				s.collectionMutex.Unlock()
 			}
 
 			//Note that getNextUpdateChan doesn't use the cached timestamp
@@ -286,14 +259,42 @@ WriteLoop:
 				var ritaConn parsetypes.Conn
 				sess.ToRITAConn(&ritaConn, s.isIPLocal)
 
+				if s.currentCollection == nil {
+					var err error
+					s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, onFatal, errsOut)
+					if err != nil {
+						errsOut <- errors.Wrap(err, "could not lazily initialize MongoDB output collection")
+						break WriteLoop
+					}
+				}
+
 				//Insert into today's db
-				s.currentCollection.Insert(ritaConn)
+				err := s.currentCollection.Insert(ritaConn)
+				if err != nil {
+					errsOut <- errors.Wrap(err, "could not insert session into the current period collection")
+					break WriteLoop
+				}
 			} else if segOffset == -1 && s.inGracePeriod {
 				var ritaConn parsetypes.Conn
 				sess.ToRITAConn(&ritaConn, s.isIPLocal)
 
+				if s.previousCollection == nil {
+					prevTimeMillis := s.currentSegmentTS.SegmentStartMillis - s.currentSegmentTS.SegmentDurationMillis
+
+					var err error
+					s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, onFatal, errsOut)
+					if err != nil {
+						errsOut <- errors.Wrap(err, "could not lazily initialize MongoDB output collection")
+						break WriteLoop
+					}
+				}
+
 				//Insert into yesterday's db
-				s.previousCollection.Insert(ritaConn)
+				err := s.previousCollection.Insert(ritaConn)
+				if err != nil {
+					errsOut <- errors.Wrap(err, "could not insert session into the previous period collection")
+					break WriteLoop
+				}
 			} else {
 				s.log.Info("dropping out-of-time-segment session", logging.Fields{
 					"session": fmt.Sprintf("%+v", sess),
@@ -301,6 +302,7 @@ WriteLoop:
 				//TODO: Add counters and track this
 				//Drop the connection record
 			}
+
 			s.collectionMutex.Unlock()
 		}
 	}
