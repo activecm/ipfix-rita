@@ -21,7 +21,9 @@ const bufferSize = int64(5)
 const autoFlushTime = 5 * time.Second
 const intervalLengthMillis = int64(30 * 1000)
 const gracePeriodCutoffMillis = int64(10 * 1000)
-const timeFormatString = "Jan-_2-15:04:05-000"
+const timeFormatString = "Jan-02-15:04:05-000"
+
+var timezone = time.UTC
 
 var clockFixture = integrationtest.TestFixture{
 	Key:         "clock",
@@ -56,7 +58,7 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 			env.GetIPFIXConfig(),
 			bufferSize, autoFlushTime,
 			intervalLengthMillis, gracePeriodCutoffMillis,
-			clock, time.UTC, timeFormatString,
+			clock, timezone, timeFormatString,
 			env.Logger,
 		)
 
