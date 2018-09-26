@@ -4,13 +4,31 @@ set -e
 
 # Change dir to script dir
 pushd "$(dirname "$BASH_SOURCE[0]")" > /dev/null
-COMPOSE_FILE="docker-compose/main.yaml"
+export COMPOSE_FILE="docker-compose/main.yaml"
 
-# TODO: set the udp recieve buffer limit
-# sudo sysctl -w net.core.rmem_max=$((1024*1024*64))
+# Let users/ the install script override the version to run
+IPFIX_RITA_VERSION="${IPFIX_RITA_VERSION:-latest}"
+DOCKER_IMAGE_IN="images-${IPFIX_RITA_VERSION}.tgz"
+LOGSTASH_IMG="quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION"
+CONVERTER_IMG="quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION"
+
+# TODO: set the udp recieve buffer limit automatically
+RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
+RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
+if [ "$1" == "up" -a "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
+  echo "Please enlarge the UDP receive buffer to at least $RECV_BUFF_OPT_SIZE."
+  echo "This can be done by running 'sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE' from a root console."
+  exit 1
+fi
+
+# TODO: check docker install/ permissions
+
+if ! docker inspect "$CONVERTER_IMG" > /dev/null 2>&1 && [ -f "$DOCKER_IMAGE_IN" ]; then
+  echo "Loading IPFIX-RITA Docker images... This may take a few minutes."
+  gzip -d -c "$DOCKER_IMAGE_IN" | docker load
+fi
 
 docker-compose "$@"
 
 # Change back to original directory
 popd > /dev/null
-

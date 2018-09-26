@@ -8,37 +8,45 @@ set -o errtrace
 set -o pipefail
 
 export IPFIX_RITA_VERSION="$(cat ./VERSION)"
-
-RELEASE_DIR="./ipfix-rita"
-
-RELEASE_ETC_DIR="$RELEASE_DIR/etc"
+DOCKER_IMAGE_OUT="images-${IPFIX_RITA_VERSION}.tgz"
+IPFIX_RITA_ARCHIVE="ipfix-rita-$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g')"
 IN_DEV_ETC_DIR="./docker/etc"
-
-RELEASE_DOCKER_DIR="$RELEASE_DIR/docker-compose"
 IN_DEV_DOCKER_DIR="./docker/docker-compose"
-
-RELEASE_MAIN_COMPOSE_FILE="$RELEASE_DOCKER_DIR/main.yaml"
 IN_DEV_MAIN_COMPOSE_FILE="$IN_DEV_DOCKER_DIR/main.yaml"
-
-RELEASE_MAIN_SCRIPT="$RELEASE_DIR/ipfix-rita"
 IN_DEV_MAIN_SCRIPT="./docker/ipfix-rita"
 
-RELEASE_TARBALL="./ipfix-rita-$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g').tgz"
+################################################################################
+echo "Building Docker images"
+export COMPOSE_FILE="$IN_DEV_MAIN_COMPOSE_FILE"
+
+$IN_DEV_MAIN_SCRIPT build
+################################################################################
+TMP_DIR=`mktemp -d -q "/tmp/IPFIX-RITA.XXXXXXXX" </dev/null`
+if [ ! -d $TMP_DIR ]; then
+  echo "Unable to create temporary directory."
+  exit 1
+else
+  mkdir -p $TMP_DIR/$IPFIX_RITA_ARCHIVE
+  RELEASE_DIR=$TMP_DIR/$IPFIX_RITA_ARCHIVE
+  echo "Building release in temporary directory: $RELEASE_DIR"
+fi
+
+RELEASE_ETC_DIR="$RELEASE_DIR/etc"
+RELEASE_DOCKER_DIR="$RELEASE_DIR/docker-compose"
+RELEASE_MAIN_COMPOSE_FILE="$RELEASE_DOCKER_DIR/main.yaml"
+RELEASE_MAIN_SCRIPT="$RELEASE_DIR/ipfix-rita"
+
+RELEASE_TARBALL="./$IPFIX_RITA_ARCHIVE.tgz"
 
 echo "Creating release tarball $RELEASE_TARBALL..."
-
-if [ -d $RELEASE_DIR ]; then
-    rm -rf $RELEASE_DIR
-fi
 
 if [ -f $RELEASE_TARBALL ]; then
     rm $RELEASE_TARBALL
 fi
 
-mkdir $RELEASE_DIR
 mkdir $RELEASE_DOCKER_DIR
 
-cp -r docker/etc $RELEASE_ETC_DIR
+cp -r $IN_DEV_ETC_DIR $RELEASE_ETC_DIR
 
 # Get rid of the build statements in the docker-compose file
 grep -v '^\s*build' $IN_DEV_MAIN_COMPOSE_FILE > $RELEASE_MAIN_COMPOSE_FILE
@@ -48,15 +56,22 @@ head -n 1 $IN_DEV_MAIN_SCRIPT >> $RELEASE_MAIN_SCRIPT
 
 # Ensure the right versions of the images are pulled down
 echo "export IPFIX_RITA_VERSION=$IPFIX_RITA_VERSION" >> $RELEASE_MAIN_SCRIPT
-chmod +x $RELEASE_MAIN_SCRIPT
 
 # Copy the rest of the script in
-
 tail -n +2 $IN_DEV_MAIN_SCRIPT >> $RELEASE_MAIN_SCRIPT
 
-tar -czf $RELEASE_TARBALL $RELEASE_DIR
+chmod +x $RELEASE_MAIN_SCRIPT
 
-rm -rf $RELEASE_DIR
+# Copy in the docker images
+# TODO: load the docker images in the main script
+docker save \
+  quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION \
+  quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION \
+  | gzip -c - > $RELEASE_DIR/$DOCKER_IMAGE_OUT
+
+tar -C $TMP_DIR -czf $RELEASE_TARBALL $IPFIX_RITA_ARCHIVE
+
+################################################################################
 
 read -p "Tag this release and publish the Docker images? " -n 1 -r
 echo
@@ -83,11 +98,6 @@ echo "Creating a tagged version for the current Git commit."
 git tag -a "$IPFIX_RITA_VERSION" -m "version $IPFIX_RITA_VERSION"
 git push --tags
 
-echo "Building and pushing current images to quay.io."
-export COMPOSE_FILE="$IN_DEV_MAIN_COMPOSE_FILE"
-
-$IN_DEV_MAIN_SCRIPT build
-
 echo "Tagging the $IPFIX_RITA_VERSION as latest"
 # Set the latest tag as docker doesn't do that itself
 docker tag quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION quay.io/activecm/ipfix-rita-converter:latest
@@ -97,7 +107,7 @@ echo "Pushing to quay.io"
 docker login quay.io
 docker push quay.io/activecm/ipfix-rita-converter:latest
 docker push quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION
-    
+
 docker push quay.io/activecm/ipfix-rita-logstash:latest
 docker push quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION
 
@@ -105,4 +115,3 @@ echo "The current git commit has been tagged as $IPFIX_RITA_VERSION and quay.io 
 
 # Change back to original directory
 popd > /dev/null
-
