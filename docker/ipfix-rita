@@ -21,13 +21,6 @@ if [ "$1" == "up" -a "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
   exit 1
 fi
 
-# TODO: check docker install/ permissions
-
-if ! docker inspect "$CONVERTER_IMG" > /dev/null 2>&1 && [ -f "$DOCKER_IMAGE_IN" ]; then
-  echo "Loading IPFIX-RITA Docker images... This may take a few minutes."
-  gzip -d -c "$DOCKER_IMAGE_IN" | docker load
-fi
-
 docker-compose "$@"
 
 # Change back to original directory
