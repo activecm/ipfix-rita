@@ -4,7 +4,8 @@ set -e
 
 # Change dir to script dir
 pushd "$(dirname "$BASH_SOURCE[0]")" > /dev/null
-export COMPOSE_FILE="docker-compose/main.yaml"
+export COMPOSE_FILE="../lib/docker-compose/main.yaml"
+export COMPOSE_PROJECT_NAME=IPFIX_RITA
 
 # Let users/ the install script override the version to run
 IPFIX_RITA_VERSION="${IPFIX_RITA_VERSION:-latest}"

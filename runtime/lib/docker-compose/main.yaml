@@ -23,7 +23,7 @@ services:
 
   logstash:
     image: quay.io/activecm/ipfix-rita-logstash:${IPFIX_RITA_VERSION:-latest}
-    build: ../../collector/logstash
+    build: ../../../collector/logstash
     restart: unless-stopped
     ports:
       - 2055:2055/udp # IPFIX/Netflow endpoint udp
@@ -38,7 +38,7 @@ services:
 
   converter:
     image: quay.io/activecm/ipfix-rita-converter:${IPFIX_RITA_VERSION:-latest}
-    build: ../../converter
+    build: ../../../converter
     command: run
     restart: unless-stopped
     volumes:

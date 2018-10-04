@@ -13,10 +13,12 @@ IPFIX_RITA_VERSION_HYPHENATED="$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g')"
 DOCKER_IMAGE_OUT="images-$IPFIX_RITA_VERSION_HYPHENATED.tgz"
 IPFIX_RITA_ARCHIVE="ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED"
 
-IN_DEV_DOCKER_DIR="../docker"
-IN_DEV_ETC_DIR="$IN_DEV_DOCKER_DIR/etc"
-IN_DEV_MAIN_SCRIPT="$IN_DEV_DOCKER_DIR/ipfix-rita"
-IN_DEV_COMPOSE_DIR="$IN_DEV_DOCKER_DIR/docker-compose"
+IN_DEV_BIN_DIR="../runtime/bin"
+IN_DEV_LIB_DIR="../runtime/lib"
+IN_DEV_ETC_DIR="../runtime/etc"
+
+IN_DEV_MAIN_SCRIPT="$IN_DEV_BIN_DIR/ipfix-rita"
+IN_DEV_COMPOSE_DIR="$IN_DEV_LIB_DIR/docker-compose"
 IN_DEV_MAIN_COMPOSE_FILE="$IN_DEV_COMPOSE_DIR/main.yaml"
 
 ################################################################################
@@ -29,29 +31,30 @@ if [ ! -d "$TMP_DIR" ]; then
   echo "Unable to create temporary directory."
   exit 1
 else
-  mkdir -p "$TMP_DIR/$IPFIX_RITA_ARCHIVE"
   INSTALLER_DIR="$TMP_DIR/$IPFIX_RITA_ARCHIVE"
+  INSTALLER_PKG_DIR="$INSTALLER_DIR/pkg"
+  mkdir -p "$INSTALLER_PKG_DIR"
   echo "Building installer in temporary directory: $INSTALLER_DIR"
 fi
 
-INSTALLER_DOCKER_DIR="$INSTALLER_DIR/docker"
-INSTALLER_COMPOSE_DIR="$INSTALLER_DOCKER_DIR/docker-compose"
-INSTALLER_MAIN_SCRIPT="$INSTALLER_DOCKER_DIR/ipfix-rita"
-INSTALLER_ETC_DIR="$INSTALLER_DIR/etc"
+INSTALLER_BIN_DIR="$INSTALLER_PKG_DIR/bin"
+INSTALLER_LIB_DIR="$INSTALLER_PKG_DIR/lib"
+INSTALLER_ETC_DIR="$INSTALLER_PKG_DIR/etc"
+
+INSTALLER_COMPOSE_DIR="$INSTALLER_LIB_DIR/docker-compose"
+INSTALLER_MAIN_SCRIPT="$INSTALLER_BIN_DIR/ipfix-rita"
 
 INSTALLER_INSTALL_SCRIPT="$INSTALLER_DIR/install-ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED.sh"
 
 INSTALLER_TARBALL="./$IPFIX_RITA_ARCHIVE.tgz"
 
 # Final installation locations
-# Notice the single quotes so the env variables aren't expanded yet
-INSTALLATION_ETC_DIR='/etc/ipfix-rita'
-INSTALLATION_DOCKER_DIR='$HOME/ipfix-rita'
+INSTALLATION_DIR="/opt/ipfix-rita"
+INSTALLATION_ETC_DIR="/etc/ipfix-rita"
 
 echo "Creating installer tarball $INSTALLER_TARBALL..."
 
 if [ -f "$INSTALLER_TARBALL" ]; then
-    # TODO: Warn on removal
     rm "$INSTALLER_TARBALL"
 fi
 
@@ -60,14 +63,13 @@ cp -r "$IN_DEV_ETC_DIR" "$INSTALLER_ETC_DIR"
 
 # Get rid of the build statements in the docker-compose files
 # and add them to the install tarball
-mkdir "$INSTALLER_DOCKER_DIR"
+mkdir "$INSTALLER_LIB_DIR"
 mkdir "$INSTALLER_COMPOSE_DIR"
 for file in "$IN_DEV_COMPOSE_DIR"/*.yaml; do
   grep -v '^\s*build' $file > "$INSTALLER_COMPOSE_DIR/$(basename $file)"
 done
 
-cp "$IN_DEV_DOCKER_DIR/.env" "$INSTALLER_DOCKER_DIR/.env"
-
+mkdir "$INSTALLER_BIN_DIR"
 # Construct the main script
 # Copy the shebang line in
 head  "$IN_DEV_MAIN_SCRIPT" >> "$INSTALLER_MAIN_SCRIPT"
@@ -98,47 +100,39 @@ if [[ \$EUID -ne 0 ]]; then
    exit 1
 fi
 
-if [ -n "\$SUDO_USER" ]; then
-  HOME="\$(getent passwd \$SUDO_USER | cut -d: -f6)"
-fi
-
 # Set by make-release
+INSTALLATION_DIR="$INSTALLATION_DIR"
+INSTALLATION_BIN_DIR="$INSTALLATION_DIR/bin"
+INSTALLATION_LIB_DIR="$INSTALLATION_DIR/lib"
 INSTALLATION_ETC_DIR="$INSTALLATION_ETC_DIR"
-INSTALLATION_DOCKER_DIR="$INSTALLATION_DOCKER_DIR"
 DOCKER_IMAGES="./$DOCKER_IMAGE_OUT"
 
 echo "Loading IPFIX-RITA images... This may take a few minutes."
 gzip -d -c \${DOCKER_IMAGES} | docker load
 
-shopt -s dotglob # Grab dot files with *
-
 echo "Installing configuration files to \$INSTALLATION_ETC_DIR"
 
 SETUP_CONFIG="true"
 if [ ! -d "\$INSTALLATION_ETC_DIR" ]; then
-  cp -r ./etc "\$INSTALLATION_ETC_DIR"
-  chown root:root "\$INSTALLATION_ETC_DIR"
+  cp -r pkg/etc "\$INSTALLATION_ETC_DIR"
 else
   # TODO: set up migration
   echo "Existing configuration found. Skipping..."
   SETUP_CONFIG="false"
 fi
 
-echo "Installing ipfix-rita executables in \$INSTALLATION_DOCKER_DIR"
+echo "Installing ipfix-rita in \$INSTALLATION_DIR"
 
-if [ -d "\$INSTALLATION_DOCKER_DIR" ]; then
-  rm -rf "\$INSTALLATION_DOCKER_DIR"
+if [ -d "\$INSTALLATION_DIR" ]; then
+  rm -rf "\$INSTALLATION_DIR"
 fi
 
-cp -r ./docker "\$INSTALLATION_DOCKER_DIR"
+mkdir -p "\$INSTALLATION_DIR"
 
-if [ -n "\$SUDO_USER" ]; then
-  chown -R "\$SUDO_USER:\$SUDO_USER" "\$INSTALLATION_DOCKER_DIR"
-fi
+cp -r ./pkg/bin "\$INSTALLATION_BIN_DIR"
+chmod +x "\$INSTALLATION_BIN_DIR/ipfix-rita"
 
-chmod +x "\$INSTALLATION_DOCKER_DIR/ipfix-rita"
-
-shopt -u dotglob # Restore * semantics
+cp -r ./pkg/lib "\$INSTALLATION_LIB_DIR"
 
 # set receive buffer size for logstash collector
 RECV_BUFF_SIZE=\$(sysctl -n net.core.rmem_max)
@@ -148,7 +142,7 @@ if [ "\$RECV_BUFF_SIZE" -lt "\$RECV_BUFF_OPT_SIZE" ]; then
   echo "net.core.rmem_max=\$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf
 fi
 
-"\$INSTALLATION_DOCKER_DIR/ipfix-rita" up --no-start
+"\$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
 
 if [ "\$SETUP_CONFIG" = "true" ]; then
 
@@ -157,6 +151,8 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
 
   echo "IPFIX-RITA needs to output to an active RITA instance."
   echo "By default, IPFIX-RITA assumes RITA is installed on the docker host."
+  echo "If you use RITA and IPFIX-RITA on the same machine, you will need to"
+  echo "add the docker interface to the list of bindIP's in /etc/mongod.conf."
   echo "However, this configuration is not recommened for performance reasons."
   read -p "What MongoDB URI should IPFIX-RITA use to contact the RITA database [\$RITA_MONGO_URI]: " -r
   if [ -n "\$REPLY" ]; then
@@ -292,7 +288,7 @@ fi
 
 echo "Starting IPFIX-RITA..."
 
-"\$INSTALLATION_DOCKER_DIR/ipfix-rita" up -d
+"\$INSTALLATION_BIN_DIR/ipfix-rita" up -d
 
 echo "The IPFIX-RITA installer has finished."
 
