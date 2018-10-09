@@ -13,8 +13,8 @@ import (
 	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	mgo "github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 )
 
 //bufferedRITAConnDateWriter writes session aggregates to MongoDB

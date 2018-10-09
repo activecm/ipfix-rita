@@ -6,7 +6,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/pkg/errors"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo/bson"
 )
 
 //Flow represents an IPFIX/ Netflowv9 flow record stored in MongoDB via Logstash.

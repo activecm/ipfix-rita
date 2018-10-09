@@ -395,7 +395,7 @@ func TestGoRoutineLeaks(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	//annoyingly, mgo may stay open for 15 seconds
-	//see: gopkg.in/mgo.v2/server.go:301
+	//see: github.com/globalsign/mgo/server.go:301
 	time.Sleep(15 * time.Second)
 	require.Equal(t, numGoRoutines, runtime.NumGoroutine())
 }

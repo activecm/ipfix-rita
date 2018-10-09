@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	mgo "gopkg.in/mgo.v2"
+	mgo "github.com/globalsign/mgo"
 )
 
 //AutoFlushCollection wraps a Collection and ensures

@@ -6,7 +6,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/database"
 	"github.com/pkg/errors"
-	mgo "gopkg.in/mgo.v2"
+	mgo "github.com/globalsign/mgo"
 )
 
 //LogstashMongoInputDB wraps a *mgo.Database connected

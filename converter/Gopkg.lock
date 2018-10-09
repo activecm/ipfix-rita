@@ -21,34 +21,25 @@
   revision = "8708113dbf4d3a403c7995dc0a17d05e693ccc4c"
 
 [[projects]]
-  digest = "1:04ed626ab9cd5ee4c5ffb7f57567b26b13647816ecedccde3698cc64fd074f42"
-  name = "github.com/activecm/mgorus"
-  packages = ["."]
-  pruneopts = ""
-  revision = "544a63f222470b2feb3b1142f7edb9a843f5120d"
-  version = "v0.1.0"
-
-[[projects]]
-  digest = "1:9cadfecde2e789a16945ab232c9e79df392329460810db463994b212bbb5231b"
+  digest = "1:df541133b5b4919a9f1a215283caeaaa24cb4b58bc7358c97b970e7baf930391"
   name = "github.com/activecm/mgosec"
   packages = ["."]
   pruneopts = ""
-  revision = "af42afa3ec74143661a863bdae62d36a93c6eca7"
-  version = "v0.1.0"
+  revision = "3940290cb0e63eafbbabeb8c4a0a788f80e6bc7d"
+  version = "v0.1.1"
 
 [[projects]]
-  digest = "1:0fdc7539d1b2345ecdbd6eea95cfd10dfeb47000d179d895ce27677001f95569"
+  digest = "1:61071d9a1546a51aae87b5eeccb9163450dd218ea739fd21e1ea74a993a933c8"
   name = "github.com/activecm/rita"
   packages = [
     "config",
     "database",
     "parser/fileparsetypes",
     "parser/parsetypes",
-    "util",
   ]
   pruneopts = ""
-  revision = "1b0497268f56c8bb4abe4c7398580d139ede67eb"
-  version = "v1.0.1"
+  revision = "dc5929b0a094dd8fdfbe67a7c0be6db412347d68"
+  version = "v1.0.3"
 
 [[projects]]
   digest = "1:79421244ba5848aae4b0a5c41e633a04e4894cb0b164a219dc8c15ec7facb7f1"
@@ -121,6 +112,20 @@
   revision = "9e638d38cf6977a37a8ea0078f3ee75a7cdb2dd1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:ff0a3cc34addcbd669622ba0dc8231d4eff046eec7b3eae1ccafd06a901279d3"
+  name = "github.com/globalsign/mgo"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram",
+  ]
+  pruneopts = ""
+  revision = "1ca0a4f7cbcbe61c005d1bd43fdd8bb8b71df6bc"
+
+[[projects]]
   digest = "1:0a3f6a0c68ab8f3d455f8892295503b179e571b7fefe47cc6c556405d1f83411"
   name = "github.com/gogo/protobuf"
   packages = ["proto"]
@@ -162,14 +167,6 @@
   pruneopts = ""
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
-
-[[projects]]
-  digest = "1:dbcda8b78eff6b96910dae77e3d05d2b0766ed18554a3f668b2d37f25c044685"
-  name = "github.com/rifflock/lfshook"
-  packages = ["."]
-  pruneopts = ""
-  revision = "bf539943797a1f34c1f502d07de419b5238ae6c6"
-  version = "v2.3"
 
 [[projects]]
   digest = "1:8cf46b6c18a91068d446e26b67512cf16f1540b45d90b28b9533706a127f0ca6"
@@ -262,12 +259,12 @@
     "github.com/activecm/rita/database",
     "github.com/activecm/rita/parser/parsetypes",
     "github.com/davecgh/go-spew/spew",
+    "github.com/globalsign/mgo",
+    "github.com/globalsign/mgo/bson",
     "github.com/pkg/errors",
     "github.com/sirupsen/logrus",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
-    "gopkg.in/mgo.v2",
-    "gopkg.in/mgo.v2/bson",
     "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"

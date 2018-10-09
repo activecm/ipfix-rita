@@ -9,7 +9,7 @@ import (
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo/bson"
 )
 
 func TestAutoFlushCollectionBufferedWrites(t *testing.T) {

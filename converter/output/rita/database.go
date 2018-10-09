@@ -7,9 +7,9 @@ import (
 	"github.com/activecm/ipfix-rita/converter/database"
 	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
+	mgo "github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 )
 
 //metaDBDatabasesCollection is the name of the RITA collection
@@ -113,7 +113,7 @@ func (o OutputDB) ensureMetaDBRecordExists(dbName string) error {
 	err = o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Insert(rita_db.DBMetaInfo{
 		Name:           dbName,
 		Analyzed:       false,
-		ImportVersion:  "v1.0.0+ActiveCM-IPFIX",
+		ImportVersion:  "v1.1.0+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
 	})
 	if err != nil {
