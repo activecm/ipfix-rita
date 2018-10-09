@@ -13,8 +13,8 @@ import (
 	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/benbjohnson/clock"
+	"github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
