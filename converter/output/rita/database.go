@@ -113,7 +113,7 @@ func (o OutputDB) ensureMetaDBRecordExists(dbName string) error {
 	err = o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Insert(rita_db.DBMetaInfo{
 		Name:           dbName,
 		Analyzed:       false,
-		ImportVersion:  "v1.1.0+ActiveCM-IPFIX",
+		ImportVersion:  "v1.0.3+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
 	})
 	if err != nil {
