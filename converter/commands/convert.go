@@ -132,7 +132,7 @@ func convert() error {
 	bulkBatchSize := outputBufferSize
 
 	dayRotationPeriodMillis := int64(1000 * 60 * 60 * 24) //daily datasets
-	oneAMGracePeriodMillis := int64(1000 * 60 * 60)       //analysis can happen after 1 am
+	gracePeriodMillis := int64(1000 * 60 * 5)             //analysis can happen after 12:05 am
 	dateFormatString := "2006-01-02"
 
 	//NewStreamingRITATimeIntervalWriter creates a MongoDB/RITA conn-record writer
@@ -141,7 +141,7 @@ func convert() error {
 		env.GetOutputConfig().GetRITAConfig(),
 		env.GetIPFIXConfig(),
 		bulkBatchSize, flushDeadline,
-		dayRotationPeriodMillis, oneAMGracePeriodMillis,
+		dayRotationPeriodMillis, gracePeriodMillis,
 		clock.New(), time.Local, dateFormatString,
 		env.Logger,
 	)

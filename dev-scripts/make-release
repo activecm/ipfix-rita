@@ -10,9 +10,10 @@ set -o pipefail
 export IPFIX_RITA_VERSION="$(cat ../VERSION)"
 IPFIX_RITA_VERSION_HYPHENATED="$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g')"
 
-DOCKER_IMAGE_OUT="images-$IPFIX_RITA_VERSION_HYPHENATED.tgz"
+DOCKER_IMAGE_OUT="docker-images.tgz"
 IPFIX_RITA_ARCHIVE="ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED"
 
+IN_DEV_README="../README.md"
 IN_DEV_BIN_DIR="../runtime/bin"
 IN_DEV_LIB_DIR="../runtime/lib"
 IN_DEV_ETC_DIR="../runtime/etc"
@@ -37,6 +38,7 @@ else
   echo "Building installer in temporary directory: $INSTALLER_DIR"
 fi
 
+INSTALLER_README="$INSTALLER_DIR/README.md"
 INSTALLER_BIN_DIR="$INSTALLER_PKG_DIR/bin"
 INSTALLER_LIB_DIR="$INSTALLER_PKG_DIR/lib"
 INSTALLER_ETC_DIR="$INSTALLER_PKG_DIR/etc"
@@ -44,7 +46,7 @@ INSTALLER_ETC_DIR="$INSTALLER_PKG_DIR/etc"
 INSTALLER_COMPOSE_DIR="$INSTALLER_LIB_DIR/docker-compose"
 INSTALLER_MAIN_SCRIPT="$INSTALLER_BIN_DIR/ipfix-rita"
 
-INSTALLER_INSTALL_SCRIPT="$INSTALLER_DIR/install-ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED.sh"
+INSTALLER_INSTALL_SCRIPT="$INSTALLER_DIR/install-ipfix-rita.sh"
 
 INSTALLER_TARBALL="./$IPFIX_RITA_ARCHIVE.tgz"
 
@@ -57,6 +59,9 @@ echo "Creating installer tarball $INSTALLER_TARBALL..."
 if [ -f "$INSTALLER_TARBALL" ]; then
     rm "$INSTALLER_TARBALL"
 fi
+
+# Copy in README
+cp "$IN_DEV_README" "$INSTALLER_README"
 
 # Copy over the etc files
 cp -r "$IN_DEV_ETC_DIR" "$INSTALLER_ETC_DIR"
@@ -100,6 +105,48 @@ if [[ \$EUID -ne 0 ]]; then
    exit 1
 fi
 
+# Ensure docker is functional
+if [ ! -x "\$(command -v docker)" ]; then
+  echo "'docker' was not found in the PATH. Please install the latest"
+  echo "version of Docker using the official instructions for your OS."
+	exit 1
+fi
+
+DOCKER_VERSION="\$(docker -v | sed 's/^.* \([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*$/\1 \2 \3/')"
+DOCKER_VERSION_MAJOR="\$(echo \$DOCKER_VERSION | cut -d' ' -f1)"
+DOCKER_VERSION_MINOR="\$(echo \$DOCKER_VERSION | cut -d' ' -f2)"
+
+MIN_DOCKER_VERSION_MAJOR=17
+MIN_DOCKER_VERSION_MINOR=06
+
+if [ "\$DOCKER_VERSION_MAJOR" -lt "\$MIN_DOCKER_VERSION_MAJOR" ] ||
+[ "\$DOCKER_VERSION_MAJOR" -eq "\$MIN_DOCKER_VERSION_MAJOR" -a "\$DOCKER_VERSION_MINOR" -lt "\$MIN_DOCKER_VERSION_MINOR" ]; then
+  echo "IPFIX_RITA requires Docker version \$MIN_DOCKER_VERSION_MAJOR.\$MIN_DOCKER_VERSION_MINOR+. Please upgrade to the latest"
+  echo "version of Docker using the official instructions for your OS."
+  exit 1
+fi
+
+# Ensure docker-compose is functional
+if [ ! -x "\$(command -v docker-compose)" ]; then
+  echo "'docker-compose' was not found in the PATH. Please install the latest"
+  echo "version of docker-compose using the official instructions for your OS."
+  exit 1
+fi
+
+DOCKER_COMPOSE_VERSION="\$(docker-compose -v | sed 's/^.* \([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*$/\1 \2 \3/')"
+DOCKER_COMPOSE_VERSION_MAJOR="\$(echo \$DOCKER_COMPOSE_VERSION | cut -d' ' -f1)"
+DOCKER_COMPOSE_VERSION_MINOR="\$(echo \$DOCKER_COMPOSE_VERSION | cut -d' ' -f2)"
+
+MIN_DOCKER_COMPOSE_VERSION_MAJOR=1
+MIN_DOCKER_COMPOSE_VERSION_MINOR=16
+
+if [ "\$DOCKER_COMPOSE_VERSION_MAJOR" -lt "\$MIN_DOCKER_COMPOSE_VERSION_MAJOR" ] ||
+[ "\$DOCKER_COMPOSE_VERSION_MAJOR" -eq "\$MIN_DOCKER_COMPOSE_VERSION_MAJOR" -a "\$DOCKER_COMPOSE_VERSION_MINOR" -lt "\$MIN_DOCKER_COMPOSE_VERSION_MINOR" ]; then
+  echo "IPFIX-RITA requires docker-compose version \$MIN_DOCKER_COMPOSE_VERSION_MAJOR.\$MIN_DOCKER_COMPOSE_VERSION_MINOR+. Please upgrade to the latest"
+  echo "version of docker-compose using the official instructions for your OS."
+  exit 1
+fi
+
 # Set by make-release
 INSTALLATION_DIR="$INSTALLATION_DIR"
 INSTALLATION_BIN_DIR="$INSTALLATION_DIR/bin"
@@ -107,7 +154,7 @@ INSTALLATION_LIB_DIR="$INSTALLATION_DIR/lib"
 INSTALLATION_ETC_DIR="$INSTALLATION_ETC_DIR"
 DOCKER_IMAGES="./$DOCKER_IMAGE_OUT"
 
-echo "Loading IPFIX-RITA images... This may take a few minutes."
+echo "Loading IPFIX-RITA Docker images... This may take a few minutes."
 gzip -d -c \${DOCKER_IMAGES} | docker load
 
 echo "Installing configuration files to \$INSTALLATION_ETC_DIR"
@@ -145,15 +192,18 @@ fi
 "\$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
 
 if [ "\$SETUP_CONFIG" = "true" ]; then
-
   IPFIX_RITA_NETWORK_GATEWAY=\$(docker inspect ipfix_rita_default --format "{{with (index .IPAM.Config 0)}}{{.Gateway}}{{end}}")
   RITA_MONGO_URI="mongodb://\$IPFIX_RITA_NETWORK_GATEWAY:27017"
 
-  echo "IPFIX-RITA needs to output to an active RITA instance."
-  echo "By default, IPFIX-RITA assumes RITA is installed on the docker host."
-  echo "If you use RITA and IPFIX-RITA on the same machine, you will need to"
-  echo "add the docker interface to the list of bindIP's in /etc/mongod.conf."
-  echo "However, this configuration is not recommened for performance reasons."
+  echo ""
+  echo "IPFIX-RITA needs to write to a MongoDB database controlled by RITA."
+  echo "By default, this installer assumes RITA and MongoDB are installed on the Docker host."
+  echo "In order to support this type of installation, you will need to"
+  echo "add the suggested Docker interface below to the list of bindIP's in /etc/mongod.conf."
+  echo "If needed, please do so, and restart MongoDB before continuing."
+  echo "Note: the default configuration is not recommended. IPFIX-RITA will likely perform"
+  echo "better if it is installed on a machine separate from RITA/ MongoDB."
+  echo ""
   read -p "What MongoDB URI should IPFIX-RITA use to contact the RITA database [\$RITA_MONGO_URI]: " -r
   if [ -n "\$REPLY" ]; then
     RITA_MONGO_URI="\$REPLY"
@@ -161,6 +211,7 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
 
   RITA_MONGO_AUTH="null"
 
+  echo ""
   echo "Which authentication scheme should be used to contact the database if any? [None]"
   echo "1) None"
   echo "2) SCRAM-SHA-1"
@@ -182,6 +233,7 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
   RITA_MONGO_TLS="false"
   RITA_MONGO_TLS_CHECK_CERT="false"
   RITA_MONGO_TLS_CERT_PATH="null"
+  echo ""
   read -p "Does the MongoDB server accept TLS connections? (y/n) [n] "  -r
   if [[ "\$REPLY" =~ ^[Yy]\$ ]]; then
     RITA_MONGO_TLS="true"
@@ -283,9 +335,19 @@ flag && NF && /DBRoot:/{
 ' \$INSTALLATION_ETC_DIR/converter/converter.yaml > \$INSTALLATION_ETC_DIR/converter/converter-new.yaml && \\
 mv \$INSTALLATION_ETC_DIR/converter/converter-new.yaml \$INSTALLATION_ETC_DIR/converter/converter.yaml
 
+echo ""
 echo "Your settings have been saved to \$INSTALLATION_ETC_DIR/converter/converter.yaml"
+echo "Note: By default IPFIX-RITA, considers all Class A, B, and C IPv4 networks"
+echo "as local networks. If this is not the case, please edit the list 'LocalNetworks'"
+echo "in \$INSTALLATION_ETC_DIR/converter/converter.yaml."
 fi
 
+echo ""
+echo "IPFIX-RITA will run at start up unless the system has been stopped."
+echo "In order to stop IPFIX-RITA, run '\$INSTALLATION_BIN_DIR/ipfix-rita stop'."
+echo "To restart IPFIX-RITA, run '\$INSTALLATION_BIN_DIR/ipfix-rita up -d'."
+echo "To view the system logs, run '\$INSTALLATION_BIN_DIR/ipfix-rita logs -f'."
+echo ""
 echo "Starting IPFIX-RITA..."
 
 "\$INSTALLATION_BIN_DIR/ipfix-rita" up -d
