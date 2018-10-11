@@ -254,17 +254,17 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
   fi
 
   echo ""
-  echo "Each dataset produced with IPFIX-RITA will be named PREFIX-DATE"
-  echo "where PREFIX consists of alphanumerics, underscores, and hyphens."
-  RITA_DATASET_PREFIX="IPFIX"
-  read -p "What PREFIX would you like to use for this IPFIX collector? [IPFIX] " -r
+  echo "Each dataset produced with IPFIX-RITA will be named DBROOT-DATE"
+  echo "where DBROOT consists of alphanumerics, underscores, and hyphens."
+  RITA_DATASET_DBROOT="IPFIX"
+  read -p "What would you like to set DBROOT to for this IPFIX collector? [IPFIX] " -r
   if [ -n "\$REPLY" ]; then
-    RITA_DATASET_PREFIX="\$REPLY"
+    RITA_DATASET_DBROOT="\$REPLY"
   fi
 
   #unindent to ensure nothing breaks with awk
 
-awk -v db_root="\$RITA_DATASET_PREFIX" \\
+awk -v db_root="\$RITA_DATASET_DBROOT" \\
 -v mongo_uri="\$RITA_MONGO_URI" \\
 -v mongo_auth="\$RITA_MONGO_AUTH" \\
 -v mongo_tls_enable="\$RITA_MONGO_TLS" \\
