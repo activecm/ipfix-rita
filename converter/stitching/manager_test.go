@@ -25,8 +25,8 @@ var thirtySecondsMillis = int64(1000 * 30)
 func newTestingStitchingManager(logger logging.Logger) Manager {
 	sameSessionThreshold := oneMinuteMillis //milliseconds
 	numStitchers := int32(5)                //number of workers
-	stitcherBufferSize := 5                 //number of flows that are buffered for each worker
-	outputBufferSize := 5                   //number of session aggregates that are buffered for output
+	stitcherBufferSize := int64(5)          //number of flows that are buffered for each worker
+	outputBufferSize := int64(5)            //number of session aggregates that are buffered for output
 	matcherMaxSize := int64(20)             //number of unstitched flows that can be held for matching
 	matcherFlushToPercent := 0.9
 	return NewManager(

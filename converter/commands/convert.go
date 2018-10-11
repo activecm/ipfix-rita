@@ -11,8 +11,9 @@ import (
 	"github.com/activecm/ipfix-rita/converter/environment"
 	input "github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
-	buffered "github.com/activecm/ipfix-rita/converter/output/rita/buffered/dates"
+	"github.com/activecm/ipfix-rita/converter/output/rita/streaming/dates"
 	"github.com/activecm/ipfix-rita/converter/stitching"
+	"github.com/benbjohnson/clock"
 	"github.com/urfave/cli"
 )
 
@@ -49,7 +50,7 @@ func convert() error {
 
 	//inputBufferSize is how much data is stored in RAM at a time
 	//for IDBulkBuffer this is also how much data is transferred in a single request
-	inputBufferSize := 10000
+	inputBufferSize := int64(10000)
 
 	//Readers read from Buffers
 	//reader will poll the MongoDB IDBulkBuffer which fetches records
@@ -74,18 +75,18 @@ func convert() error {
 	//whether two flows should be stitched together or not.
 	//If the time between one flow ending and the other flow starting
 	//exceeds sameSessionThreshold, they will not be stitched together.
-	sameSessionThreshold := 1000 * 60 //milliseconds
+	sameSessionThreshold := int64(1000 * 60) //milliseconds
 
 	//how many stitching workers to use. The stitching workers
 	//are assigned work by hash partitioning. Flows which may be stitched
 	//together are guaranteed to handled by the same worker.
-	numStitchers := 20
+	numStitchers := int32(20)
 
 	//each woker has an input buffer.
 	//if the inputBufferSize is evenly split among the stitching workers
 	//then each stitcher needs a buffer at least as big as
 	//inputBufferSize / numStitchers.
-	stitcherBufferSize := inputBufferSize / numStitchers
+	stitcherBufferSize := inputBufferSize / int64(numStitchers)
 
 	//matcherSize determines how many session.AggregateQuery
 	//objects can be considered a candidate for matching (stitching)
@@ -93,7 +94,7 @@ func convert() error {
 	//Increasing this value will likely increase the accuracy
 	//of the results. However, a larger matcher likely takes
 	//more resources (RAM/ CPU) to run at the same level of performance.
-	matcherSize := 5000
+	matcherSize := int64(5000)
 	//when the matcher must flush connection records out,
 	//the matcher will flush to matcherFlushToPercent * matcherSize
 	matcherFlushToPercent := 0.9
@@ -115,11 +116,11 @@ func convert() error {
 	//for providing the (CRUD+Flush) data structure needed for
 	//stitching.
 	stitchingManager := stitching.NewManager(
-		int64(sameSessionThreshold),
-		int32(numStitchers),
+		sameSessionThreshold,
+		numStitchers,
 		stitcherBufferSize,
 		outputBufferSize,
-		int64(matcherSize),
+		matcherSize,
 		matcherFlushToPercent,
 		env.Logger,
 	)
@@ -129,12 +130,19 @@ func convert() error {
 	flushDeadline := 1 * time.Minute
 	//bulkBatchSize is how much data is shipped to MongoDB at a time
 	bulkBatchSize := outputBufferSize
-	//NewBufferedRITAConnDateWriter creates a MongoDB/RITA conn-record writer
-	//which splits output records up by the time the connection finished
-	writer, err := buffered.NewBufferedRITAConnDateWriter(
+
+	dayRotationPeriodMillis := int64(1000 * 60 * 60 * 24) //daily datasets
+	oneAMGracePeriodMillis := int64(1000 * 60 * 60)       //analysis can happen after 1 am
+	dateFormatString := "2006-01-02"
+
+	//NewStreamingRITATimeIntervalWriter creates a MongoDB/RITA conn-record writer
+	//which splits output records up based on the time the connection finished
+	writer, err := dates.NewStreamingRITATimeIntervalWriter(
 		env.GetOutputConfig().GetRITAConfig(),
 		env.GetIPFIXConfig(),
 		bulkBatchSize, flushDeadline,
+		dayRotationPeriodMillis, oneAMGracePeriodMillis,
+		clock.New(), time.Local, dateFormatString,
 		env.Logger,
 	)
 	if err != nil {

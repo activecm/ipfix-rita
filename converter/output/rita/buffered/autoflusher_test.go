@@ -26,17 +26,21 @@ func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
 	coll := ssn.DB(testDBName).C(testCollectionName)
 
 	errs := make(chan error, 100)
-	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 5*time.Second, errs)
-	autoFlushColl.StartAutoFlush()
+	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 5*time.Second)
+	started := autoFlushColl.StartAutoFlush(errs, func() { /*unneeded*/ })
+	require.True(t, started)
+
 	var inRecords []bson.M
 	for i := 0; i < 11; i++ {
 		inRecords = append(inRecords, bson.M{"test": i})
 	}
 	for i := range inRecords {
-		autoFlushColl.Insert(inRecords[i])
+		err := autoFlushColl.Insert(inRecords[i])
+		require.Nil(t, err)
 	}
 
-	autoFlushColl.Flush()
+	err = autoFlushColl.Flush()
+	require.Nil(t, err)
 
 	var outRecords []bson.M
 	err = coll.Find(nil).All(&outRecords)
@@ -56,7 +60,9 @@ func TestAutoFlushCollectionBufferedWrites(t *testing.T) {
 		require.True(t, found)
 	}
 
-	autoFlushColl.Close()
+	err = autoFlushColl.Close()
+	require.Nil(t, err)
+
 	close(errs)
 
 	err, ok := <-errs
@@ -85,14 +91,17 @@ func TestAutoFlushCollectionAutoFlush(t *testing.T) {
 	errs := make(chan error, 100)
 	buffSize := 5
 	deadlineInterval := 1 * time.Second
-	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 1*time.Second, errs)
-	autoFlushColl.StartAutoFlush()
+	autoFlushColl := buffered.NewAutoFlushCollection(coll, 5, 1*time.Second)
+	started := autoFlushColl.StartAutoFlush(errs, func() { /*unneeded*/ })
+	require.True(t, started)
+
 	var inRecords []bson.M
 	for i := 0; i < buffSize-1; i++ {
 		inRecords = append(inRecords, bson.M{"test": i})
 	}
 	for i := range inRecords {
-		autoFlushColl.Insert(inRecords[i])
+		err := autoFlushColl.Insert(inRecords[i])
+		require.Nil(t, err)
 	}
 	//wait for the auto flush to happen, give some time for the sheduler
 	//to run the goroutine

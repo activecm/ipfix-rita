@@ -2,12 +2,12 @@
 
 
 [[projects]]
-  digest = "1:6331095c1906771fbe129fe4a1f94ac5b5a97b0f60f2f80653bb95c3e5dad81e"
+  digest = "1:d1c8ad95f22ee72c8331280268e4658ef4119e5c16ee916d223bf1d56c09d33a"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
   pruneopts = ""
-  revision = "7da180ee92d8bd8bb8c37fc560e673e6557c392f"
-  version = "v0.4.7"
+  revision = "3b8b3c98b207f95fe0cd6c7c311a9ac497ba7c0f"
+  version = "v0.3.3"
 
 [[projects]]
   branch = "master"
@@ -33,13 +33,19 @@
   name = "github.com/activecm/rita"
   packages = [
     "config",
-    "database",
-    "parser/fileparsetypes",
     "parser/parsetypes",
   ]
   pruneopts = ""
   revision = "dc5929b0a094dd8fdfbe67a7c0be6db412347d68"
   version = "v1.0.3"
+
+[[projects]]
+  branch = "master"
+  digest = "1:afaa6de27e2d86b66cf71d55096f00e32b2ef40ec3349b535555aa81c77bc7d3"
+  name = "github.com/benbjohnson/clock"
+  packages = ["."]
+  pruneopts = ""
+  revision = "7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19"
 
 [[projects]]
   digest = "1:79421244ba5848aae4b0a5c41e633a04e4894cb0b164a219dc8c15ec7facb7f1"
@@ -229,20 +235,6 @@
 
 [[projects]]
   branch = "v2"
-  digest = "1:c80894778314c7fb90d94a5ab925214900e1341afeddc953cda7398b8cdcd006"
-  name = "gopkg.in/mgo.v2"
-  packages = [
-    ".",
-    "bson",
-    "internal/json",
-    "internal/sasl",
-    "internal/scram",
-  ]
-  pruneopts = ""
-  revision = "3f83fa5005286a7fe593b055f0d7771a7dce4655"
-
-[[projects]]
-  branch = "v2"
   digest = "1:f0620375dd1f6251d9973b5f2596228cc8042e887cd7f827e4220bc1ce8c30e2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -256,8 +248,8 @@
     "github.com/activecm/dbtest",
     "github.com/activecm/dbtest/docker",
     "github.com/activecm/mgosec",
-    "github.com/activecm/rita/database",
     "github.com/activecm/rita/parser/parsetypes",
+    "github.com/benbjohnson/clock",
     "github.com/davecgh/go-spew/spew",
     "github.com/globalsign/mgo",
     "github.com/globalsign/mgo/bson",

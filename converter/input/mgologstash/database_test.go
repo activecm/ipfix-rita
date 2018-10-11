@@ -26,6 +26,7 @@ var inputDBTestFixture = integrationtest.TestFixture{
 
 		//Not a fan of busting through the config interface to set the data
 		//but the interface is immutable (and should be during normal operation)
+		//TODO: Add mutators to the MongoDB config interface
 		testLogstashConfig := env.GetInputConfig().GetLogstashMongoDBConfig()
 		testMongoConfig := testLogstashConfig.GetConnectionConfig().(*integrationtest.MongoDBConfig)
 		testMongoConfig.SetConnectionString(mongoContainer.GetMongoDBURI())

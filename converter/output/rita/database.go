@@ -5,20 +5,30 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/database"
-	rita_db "github.com/activecm/rita/database"
 	"github.com/activecm/rita/parser/parsetypes"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
 )
 
-//metaDBDatabasesCollection is the name of the RITA collection
+//MetaDBDatabasesCollection is the name of the RITA collection
 //in the RITA MetaDB that keeps track of RITA managed databases
-const metaDBDatabasesCollection = "databases"
+const MetaDBDatabasesCollection = "databases"
 
-//ritaConnInputCollection is the name of the RITA collection
+//RitaConnInputCollection is the name of the RITA collection
 //which houses input connection data
-const ritaConnInputCollection = "conn"
+const RitaConnInputCollection = "conn"
+
+//TODO: Use version in RITA as dep
+// DBMetaInfo defines some information about the database
+type DBMetaInfo struct {
+	ID             bson.ObjectId `bson:"_id,omitempty"`   // Ident
+	Name           string        `bson:"name"`            // Name of the database
+	ImportFinished bool          `bson:"import_finished"` // Has this database finished being imported
+	Analyzed       bool          `bson:"analyzed"`        // Has this database been analyzed
+	ImportVersion  string        `bson:"import_version"`  // Rita version at import
+	AnalyzeVersion string        `bson:"analyze_version"` // Rita version at analyze
+}
 
 //OutputDB wraps a *mgo.Session connected to MongoDB
 //and provides facility for interacting with RITA compatible databases
@@ -44,7 +54,7 @@ func NewOutputDB(ritaConf config.RITA) (OutputDB, error) {
 	db.dbRoot = ritaConf.GetDBRoot()
 	db.metaDBName = ritaConf.GetMetaDB()
 
-	db.ssn.DB(db.metaDBName).C(metaDBDatabasesCollection).EnsureIndex(mgo.Index{
+	db.ssn.DB(db.metaDBName).C(MetaDBDatabasesCollection).EnsureIndex(mgo.Index{
 		Key: []string{
 			"name",
 		},
@@ -64,7 +74,7 @@ func NewOutputDB(ritaConf config.RITA) (OutputDB, error) {
 //NewMetaDBDatabasesConnection returns a new socket connected to the
 //MetaDB databases collection
 func (o OutputDB) NewMetaDBDatabasesConnection() *mgo.Collection {
-	return o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).With(o.ssn.Copy())
+	return o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).With(o.ssn.Copy())
 }
 
 //NewRITAOutputConnection returns a new socket connected to the
@@ -77,7 +87,7 @@ func (o OutputDB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection,
 	}
 
 	//create the conn collection handle
-	connColl := ssn.DB(dbName).C(ritaConnInputCollection)
+	connColl := ssn.DB(dbName).C(RitaConnInputCollection)
 
 	//ensure RITA's needed indexes exist
 	tmpConn := parsetypes.Conn{}
@@ -92,32 +102,49 @@ func (o OutputDB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection,
 		}
 	}
 
-	//ensure a MetaDB record exists for the collection
-	err := o.ensureMetaDBRecordExists(dbName)
-	if err != nil {
-		ssn.Close()
-		return nil, err //no need to wrap, wrapped in method
-	}
-
 	return connColl, nil
 }
 
-func (o OutputDB) ensureMetaDBRecordExists(dbName string) error {
-	numRecords, err := o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
+//EnsureMetaDBRecordExists ensures that a database record exists in the
+//MetaDatabase for a given database name. This allows RITA to manage
+//the database.
+func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
+	numRecords, err := o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
 	}
 	if numRecords != 0 {
 		return nil
 	}
-	err = o.ssn.DB(o.metaDBName).C(metaDBDatabasesCollection).Insert(rita_db.DBMetaInfo{
+	err = o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
 		Name:           dbName,
+		ImportFinished: false,
 		Analyzed:       false,
-		ImportVersion:  "v1.0.3+ActiveCM-IPFIX",
+		ImportVersion:  "v1.1.0+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
 	})
 	if err != nil {
 		return errors.Wrapf(err, "could not insert MetaDB record with name: %s", dbName)
+	}
+	return nil
+}
+
+//MarkImportFinishedInMetaDB sets the import_finished flag on the
+//RITA MetaDatabase database record. This lets RITA know that no
+//more data will be placed in the database and that the database
+//is ready for analysis.
+func (o OutputDB) MarkImportFinishedInMetaDB(dbName string) error {
+	err := o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Update(
+		bson.M{"name": dbName},
+		bson.M{
+			"$set": bson.M{
+				"import_finished": true,
+			},
+		},
+	)
+
+	if err != nil {
+		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, o.metaDBName, MetaDBDatabasesCollection)
 	}
 	return nil
 }

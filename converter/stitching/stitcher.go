@@ -39,7 +39,7 @@ type stitcher struct {
 
 //newStitcher creates a new stitcher which uses the matcher
 //to match flows into session aggregates
-func newStitcher(id, bufferSize int, sameSessionThreshold int64,
+func newStitcher(id int, bufferSize int64, sameSessionThreshold int64,
 	matcher matching.Matcher, sessionsOut chan<- *session.Aggregate,
 	errs chan<- error) *stitcher {
 	return &stitcher{

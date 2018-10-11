@@ -6,7 +6,9 @@ COPY . .
 RUN make CGO_ENABLED=0 GOARCH=amd64 GOOS=linux
 RUN make install
 
-FROM scratch
+FROM alpine:3.8
+
+RUN apk add --no-cache tzdata
 
 # Use WORKDIR to create /etc/ipfix-rita since "mkdir" doesn't exist in scratch
 WORKDIR /etc/ipfix-rita
