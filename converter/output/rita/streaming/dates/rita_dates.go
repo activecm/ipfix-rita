@@ -212,20 +212,26 @@ FlushLoop:
 	if s.previousCollection != nil {
 		s.previousCollection.Flush()
 		s.previousCollection.Close()
-		err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.previousCollection.Database())
-		if err != nil {
-			errsOut <- err
-		}
+		/*
+			BUG: https://github.com/activecm/ipfix-rita/issues/35
+			err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.previousCollection.Database())
+			if err != nil {
+				errsOut <- err
+			}
+		*/
 	}
 
 	//Wrap up the current collection
 	if s.currentCollection != nil { //could be nil due to error
 		s.currentCollection.Flush()
 		s.currentCollection.Close()
-		err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.currentCollection.Database())
-		if err != nil {
-			errsOut <- err
-		}
+		/*
+			BUG: https://github.com/activecm/ipfix-rita/issues/35
+			err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.currentCollection.Database())
+			if err != nil {
+				errsOut <- err
+			}
+		*/
 	}
 
 	onFatal()
