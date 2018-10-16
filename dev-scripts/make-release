@@ -389,7 +389,7 @@ echo "Creating a tagged version for the current Git commit."
 git tag -a "$IPFIX_RITA_VERSION" -m "version $IPFIX_RITA_VERSION"
 git push --tags
 
-echo "Tagging the $IPFIX_RITA_VERSION as latest"
+echo "Tagging version $IPFIX_RITA_VERSION as latest"
 # Set the latest tag as docker doesn't do that itself
 docker tag quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION quay.io/activecm/ipfix-rita-converter:latest
 docker tag quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION quay.io/activecm/ipfix-rita-logstash:latest
