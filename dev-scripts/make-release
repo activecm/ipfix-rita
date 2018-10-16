@@ -380,7 +380,7 @@ if [[ $GIT_BRANCH_NAME != "master" ]]; then
     exit 1
 fi
 
-if git diff-index --quiet HEAD -- ; then
+if ! git diff-index --quiet HEAD -- ; then
     echo "Ensure all local changes are committed and pushed before proceeding."
     exit 1
 fi
