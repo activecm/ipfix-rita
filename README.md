@@ -16,7 +16,28 @@ IPFIX-RITA is made up of four components. These are the
 - RITA database (MongoDB)
   - Holds data processed by the Converter
 
+# Running IPFIX-RITA
+
+IPFIX-RITA is managed by `/opt/ipfix-rita/bin/ipfix-rita`. This script relays
+commands to `docker-compose` and finally, `docker`.
+
+IPFIX-RITA will start automatically after installation.
+In order to stop the system, run `ipfix-rita stop`. This will shut down
+IPFIX-RITA and prevent the program from starting when the system boots up.
+To bring the system back up, run `ipfix-rita up -d`.
+
+To view the IPFIX-RITA logs, run `ipfix-rita logs`.
+
+When IPFIX-RITA receives IPFIX or Netflow v9 records timestamped with the
+current date, it will begin writing records into the resulting RITA dataset.
+Every night at 5 minutes past midnight local time, the dataset will be closed,
+and it will become eligible for analysis by RITA. The resulting datasets will
+have names of the form `DBRoot-YYYY-MM-DD` where `DBRoot` is set during
+installation or configured in `/etc/ipfix-rita/converter/converter.yaml`.
+
 # Installing IPFIX-RITA
+
+### Preliminaries
 
 First, ensure you have a working installation of RITA and MongoDB. For the best performance,
 it is suggested that IPFIX-RITA is installed on a machine separate from RITA and MongoDB. However, if performance isn't a great concern, it is often practical to install everything in one place.
@@ -27,7 +48,9 @@ The installer will prompt you to ensure this change is made before continuing
 on.  If you intend to install IPFIX-RITA on the same machine as RITA
 and MongoDB, please add the IP address suggested by the installer.
 
-Next, download the latest archive from the releases page, unpack it, and run the
+### Running the Installer
+
+Download the latest archive from the [releases page](https://github.com/activecm/ipfix-rita/releases), unpack it, and run the
 installation script with administrator privileges.
 
 The installer should run on most modern Linux distributions as long as
@@ -59,20 +82,3 @@ By default, IPFIX-RITA will run at start up unless it is stopped.
 /opt/ipfix-rita/bin/ipfix-rita down -v
 sudo rm -rf /opt/ipfix-rita /etc/ipfix-rita
 ```
-
-# Running IPFIX-RITA
-
-IPFIX-RITA is managed by `/opt/ipfix-rita/bin/ipfix-rita`. This script relays
-commands to `docker-compose` and finally, `docker`.
-
-In order to stop the system, run `ipfix-rita stop`. This will shut down
-IPFIX-RITA and prevent execution on start up.
-
-To view the IPFIX-RITA logs, run `ipfix-rita logs`.
-
-When IPFIX-RITA receives IPFIX or Netflow v9 records timestamped with the
-current date, it will begin writing records into the resulting RITA dataset.
-Every night at 5 minutes past midnight local time, the dataset will be closed, and it will become
-eligible for analysis by RITA. The resulting datasets will have names of the form
-`DBRoot-YYYY-MM-DD` where `DBRoot` is set during installation or configured in
-`/etc/ipfix-rita/converter/converter.yaml`.
