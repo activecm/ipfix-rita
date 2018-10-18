@@ -152,8 +152,11 @@ func (s *stitcher) stitchFlow(flow input.Flow) error {
 				return errors.Wrap(err, "could not remove old session aggregate")
 			}
 			s.sessionsOut <- &newSessAgg
-		} else { //The merge happened on the same side of the connection
-			//otherwise update the database
+		} else {
+			//The merge happened on the same side of the connection
+			//The newly merged connection needs to replace the old connection in the matcher
+			//Merge doesn't carry the MatcherID through. We need to set the MatcherID
+			//so the Update method updates the right session aggregate.
 			newSessAgg.MatcherID = matchAgg.MatcherID
 			err := s.matcher.Update(&newSessAgg)
 			if err != nil {

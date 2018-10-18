@@ -2,7 +2,7 @@ GOPATH := $(GOPATH)
 BINARY := ipfix-rita-converter
 PREFIX := /usr/local
 
-ETC := /etc/ipfix-rita
+ETC := /etc/ipfix-rita/converter
 CONFIG := /converter.yaml
 
 TESTFLAGS := -p=1 -v

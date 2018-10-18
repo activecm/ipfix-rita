@@ -58,6 +58,23 @@ sudo make install
 sudo ldconfig
 ```
 
+#### Preparing a PCAP for use with IPFIX-RITA
+Before using YAF with IPFIX-RITA, you must ensure your PCAP file contains connection
+records timestamped within the current day. In order to fix up any old PCAP:
+
+- Find the start and end times of an existing PCAP file using `capinfos [pcap file]`
+- Split the pcap into 24H periods `editcap -i 86400 [in pcap file] [out pcap file]`
+   - `[out pcap file]` should be something of the form `my_pcap_name.pcap`. `editcap` will insert date information into the output file names right before the file extension.
+- Align a 24H PCAP with the current day
+  - One liner: `editcap -t $(expr $(date +%s --date="$(date -I)") -  $(date +%s --date="$(capinfos [split pcap file] | grep 'First packet time' | cut -d' ' -f6-)")) [split pcap file] [out pcap file]`
+  - Explanation:
+      - Find the current day's unix timestamp `date +%s --date="$(date -I)"`
+      - Find the start of the pcap's date: `capinfos [split pcap file] | grep 'First packet time' | cut -d' ' -f6-`
+          - This could be done manually by inspecting the output of `capinfos [split pcap file]`
+      - Find the unix timestamp for the start of the pcap: `date +%s --date="[date output from capinfos]"`
+      - Subtract the two timestamps using `expr`
+      - Pass the difference in time to `editcap` in order to shift all of the records to the current day
+
 #### Extract Flow Data from PCAPs using YAF
 YAF supports a variety of options, but most of it can be ignored when trying
 to convert PCAP files to IPFIX records for use with IPFIX-RITA.
@@ -68,6 +85,7 @@ the the domain name or IP address of the collector when running YAF.
 ```
 yaf --uniflow --in [input.pcap] --out [Collector Address] --ipfix-port 2055 --ipfix udp
 ```
+
 Note: `--uniflow` is required to produce the unidirectional flows needed by
 IPFIX-RITA. At the time of writing, most flow exporters do not support
 [RFC5103 Bidirectional Flows](https://tools.ietf.org/html/rfc5103). YAF, however,

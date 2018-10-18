@@ -82,3 +82,19 @@ By default, IPFIX-RITA will run at start up unless it is stopped.
 /opt/ipfix-rita/bin/ipfix-rita down -v
 sudo rm -rf /opt/ipfix-rita /etc/ipfix-rita
 ```
+
+---
+
+#### Developer Notes
+
+The converter may be built outside of Docker using the `Makefile` in the
+`converter/` directory. Before running the converter ensure you have a config
+file installed in `/etc/ipfix-rita/converter/converter.yaml`. This may be done
+one of three ways. First, you could manually copy `runtime/etc/converter/converter.yaml`
+to `/etc/ipfix-rita/converter/converter.yaml`. Alternatively, you could run `make install`
+to install the converter software natively. Or, finally, you could run the release installer.
+
+Once the configuration file has been installed, the converter executable will be able to run on its own. Additionally, `runtime/bin/ipfix-rita` should work to control the dockerized system as a whole.
+If you'd like to make a development build of the dockerized system run `runtime/bin/ipfix-rita build`.
+
+The `dev-scripts/make-release` script is used to produce a release tarball.
