@@ -69,7 +69,7 @@ installation script with administrator privileges.
 
 The installer should run on most modern Linux distributions as long as
 Docker and docker-compose are installed. The minimum supported versions of
-Docker and docker-compose are 17.06 and 1.16, respectively.
+Docker and docker-compose are 17.06 and 1.17, respectively.
 
 The installer will install Docker images for the components listed above, and
 create two new folders.
