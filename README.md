@@ -35,6 +35,20 @@ and it will become eligible for analysis by RITA. The resulting datasets will
 have names of the form `DBRoot-YYYY-MM-DD` where `DBRoot` is set during
 installation or configured in `/etc/ipfix-rita/converter/converter.yaml`.
 
+# Compatibility
+
+This is an incomplete list of devices which produce compatible IPFIX/ Netflow v9 records. More devices will be added as they are tested.
+
+Please select the most basic version of IPFIX/ Netflow v9 when setting up your router for use with IPFIX-RITA.
+
+|              | IPFIX | Netflow v9 |       Notes      |
+|--------------|-------|------------|------------------|
+|   Cisco ASA  |       |     ✔      |                  |
+| Cisco ASR 9k |       |     ✔      |                  |
+|   SonicWall  |   ✔   |            |                  |
+|     YAF      |   ✔   |            | Use `--uniflow`  |
+
+
 # Installing IPFIX-RITA
 
 ### Preliminaries
