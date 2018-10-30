@@ -21,7 +21,7 @@ Please select the most basic version of IPFIX/ Netflow v9 when setting up your r
 We need your help to expand the list of supported routers. Please help us by running the software,
 logging the errors and traffic, and sending us the results.
 
-Please see [Adding Support For Additional Routers](./docs/Router Support.md) for more information.
+Please see [Adding Support For Additional Routers](docs/Router Support.md) for more information.
 
 # Structure
 
