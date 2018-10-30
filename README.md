@@ -3,6 +3,26 @@
 IPFIX-RITA is a system for processing IPFIX/ Netflow v9 records for use with
 [RITA](https://github.com/activecm/rita).
 
+# Compatibility
+
+This is an incomplete list of devices which produce compatible IPFIX/ Netflow v9 records. More devices will be added as they are tested.
+
+Please select the most basic version of IPFIX/ Netflow v9 when setting up your router for use with IPFIX-RITA.
+
+|              | IPFIX | Netflow v9 |       Notes      |
+|--------------|-------|------------|------------------|
+|   Cisco ASA  |       |     ✔      |                  |
+| Cisco ASR 9k |       |     ✔      |                  |
+|   SonicWall  |   ✔   |            |                  |
+|     YAF      |   ✔   |            | Use `--uniflow`  |
+
+## What Do I Do If My Router Isn't On the List?
+
+We need your help to expand the list of supported routers. Please help us by running the software,
+logging the errors and traffic, and sending us the results.
+
+Please see [Adding Support For Additional Routers](./docs/Router Support.md) for more information.
+
 # Structure
 
 IPFIX-RITA is made up of four components. These are the
@@ -34,20 +54,6 @@ Every night at 5 minutes past midnight local time, the dataset will be closed,
 and it will become eligible for analysis by RITA. The resulting datasets will
 have names of the form `DBRoot-YYYY-MM-DD` where `DBRoot` is set during
 installation or configured in `/etc/ipfix-rita/converter/converter.yaml`.
-
-# Compatibility
-
-This is an incomplete list of devices which produce compatible IPFIX/ Netflow v9 records. More devices will be added as they are tested.
-
-Please select the most basic version of IPFIX/ Netflow v9 when setting up your router for use with IPFIX-RITA.
-
-|              | IPFIX | Netflow v9 |       Notes      |
-|--------------|-------|------------|------------------|
-|   Cisco ASA  |       |     ✔      |                  |
-| Cisco ASR 9k |       |     ✔      |                  |
-|   SonicWall  |   ✔   |            |                  |
-|     YAF      |   ✔   |            | Use `--uniflow`  |
-
 
 # Installing IPFIX-RITA
 
