@@ -13,7 +13,7 @@ Please select the most basic version of IPFIX/ Netflow v9 when setting up your r
 |--------------|-------|------------|------------------|
 |   Cisco ASA  |       |     ✔      |                  |
 | Cisco ASR 9k |       |     ✔      |                  |
-|   SonicWall  |   ✔   |            |                  |
+|   SonicWall  |       |     ✔      |                  |
 |     YAF      |   ✔   |            | Use `--uniflow`  |
 
 ## What Do I Do If My Router Isn't On the List?
