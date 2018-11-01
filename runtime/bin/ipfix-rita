@@ -3,7 +3,7 @@
 set -e
 
 # Change dir to script dir
-pushd "$(dirname "$BASH_SOURCE[0]")" > /dev/null
+pushd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" > /dev/null
 export COMPOSE_FILE="../lib/docker-compose/main.yaml"
 export COMPOSE_PROJECT_NAME=IPFIX_RITA
 
