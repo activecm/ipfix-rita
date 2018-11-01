@@ -344,9 +344,15 @@ fi
 
 echo ""
 echo "IPFIX-RITA will run at start up unless the system has been stopped."
-echo "In order to stop IPFIX-RITA, run '\$INSTALLATION_BIN_DIR/ipfix-rita stop'."
-echo "To restart IPFIX-RITA, run '\$INSTALLATION_BIN_DIR/ipfix-rita up -d'."
-echo "To view the system logs, run '\$INSTALLATION_BIN_DIR/ipfix-rita logs -f'."
+echo "In order to stop IPFIX-RITA, run 'ipfix-rita stop'."
+echo "To restart IPFIX-RITA, run 'ipfix-rita up -d'."
+echo "To view the system logs, run 'ipfix-rita logs -f'."
+echo ""
+
+echo "Adding a symbolic link from /usr/local/bin/ipfix-rita to \$INSTALLATION_BIN_DIR/ipfix-rita."
+
+ln -fs "\$INSTALLATION_BIN_DIR/ipfix-rita" /usr/local/bin/ipfix-rita
+
 echo ""
 echo "Starting IPFIX-RITA..."
 

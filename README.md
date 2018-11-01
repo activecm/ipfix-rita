@@ -100,6 +100,7 @@ By default, IPFIX-RITA will run at start up unless it is stopped.
 
 ```
 /opt/ipfix-rita/bin/ipfix-rita down -v
+sudo rm /usr/local/bin/ipfix-rita
 sudo rm -rf /opt/ipfix-rita /etc/ipfix-rita
 ```
 
