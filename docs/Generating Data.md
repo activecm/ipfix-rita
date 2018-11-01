@@ -1,4 +1,4 @@
-# Generating IPFIX Data
+# Generating IPFIX Data From a PCAP
 
 ### YAF (Yet Another Flowmeter)
 
@@ -60,21 +60,63 @@ sudo ldconfig
 
 #### Preparing a PCAP for use with IPFIX-RITA
 Before using YAF with IPFIX-RITA, you must ensure your PCAP file contains connection
-records timestamped within the current day. In order to fix up any old PCAP:
+records timestamped within the current day. In order to fix up any old PCAP, use the
+`align_pcap_to_today.sh` script in the `dev-scripts` folder. The script takes in a
+pcap, splits it up into 24 hour chunks, and aligns a given interval of the data to the current day.
 
-- Find the start and end times of an existing PCAP file using `capinfos [pcap file]`
-- Split the pcap into 24H periods `editcap -i 86400 [in pcap file] [out pcap file]`
-   - `[out pcap file]` should be something of the form `my_pcap_name.pcap`. `editcap` will insert date information into the output file names right before the file extension.
-- Align a 24H PCAP with the current day
-  - One liner: `editcap -t $(expr $(date +%s --date="$(date -I)") -  $(date +%s --date="$(capinfos [split pcap file] | grep 'First packet time' | cut -d' ' -f6-)")) [split pcap file] [out pcap file]`
-  - Explanation:
-      - Find the current day's unix timestamp `date +%s --date="$(date -I)"`
-      - Find the start of the pcap's date: `capinfos [split pcap file] | grep 'First packet time' | cut -d' ' -f6-`
-          - This could be done manually by inspecting the output of `capinfos [split pcap file]`
-      - Find the unix timestamp for the start of the pcap: `date +%s --date="[date output from capinfos]"`
-      - Subtract the two timestamps using `expr`
-      - Pass the difference in time to `editcap` in order to shift all of the records to the current day
+Example usage:
 
+```
+ipfix-rita/dev-scripts$ ./align_pcap_to_today.sh ps_empire_https_python.pcap ps_empire_https_python_today.pcap
+ps_empire_https_python.pcap consists of multiple 24H intervals.
+Which interval would you like to use?
+NOTE: The last interval may not contain a full 24H capture.
+
+ps_empire_https_python.pcap contained 2 intervals.
+        ps_empire_https_python_00000_20170815172141.pcap
+        ps_empire_https_python_00001_20170816172145.pcap
+
+File name:           /tmp/tmp.cSrLvbmX7B/ps_empire_https_python_00000_20170815172141.pcap
+File type:           Wireshark/... - pcapng
+Number of packets:   273 k
+File size:           81 MB
+First packet time:   2017-08-15 17:21:41.447486
+Last packet time:    2017-08-16 17:21:40.272218
+Align ps_empire_https_python_00000_20170815172141.pcap to today? (y/n) [n] y
+
+Writing out ps_empire_https_python_today.pcap
+
+ipfix-rita/dev-scripts$ capinfos ps_empire_https_python_today.pcap
+File name:           ps_empire_https_python_today.pcap
+File type:           Wireshark/... - pcapng
+File encapsulation:  Ethernet
+File timestamp precision:  microseconds (6)
+Packet size limit:   file hdr: (not set)
+Number of packets:   273 k
+File size:           81 MB
+Data size:           72 MB
+Capture duration:    86398.824732 seconds
+First packet time:   2018-11-01 00:00:00.447486
+Last packet time:    2018-11-01 23:59:59.272218
+Data byte rate:      839 bytes/s
+Data bit rate:       6713 bits/s
+Average packet size: 265.12 bytes
+Average packet rate: 3 packets/s
+SHA1:                8b8ed9f56abad4871a22562b35c53ae80b20f02a
+RIPEMD160:           76ed30abd854b2673eecf98a37fb5514430fd394
+MD5:                 d44550356003475d38f731866ad37b3d
+Strict time order:   True
+Capture application: Editcap 2.4.2
+Number of interfaces in file: 1
+Interface #0 info:
+                     Encapsulation = Ethernet (1 - ether)
+                     Capture length = 262144
+                     Time precision = microseconds (6)
+                     Time ticks per second = 1000000
+                     Number of stat entries = 0
+                     Number of packets = 273483
+
+```
 #### Extract Flow Data from PCAPs using YAF
 YAF supports a variety of options, but most of it can be ignored when trying
 to convert PCAP files to IPFIX records for use with IPFIX-RITA.

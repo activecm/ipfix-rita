@@ -3,7 +3,7 @@
 IPFIX-RITA is a system for processing IPFIX/ Netflow v9 records for use with
 [RITA](https://github.com/activecm/rita).
 
-# Compatibility
+# IPFIX/ Netflow v9 Compatibility
 
 This is an incomplete list of devices which produce compatible IPFIX/ Netflow v9 records. More devices will be added as they are tested.
 
