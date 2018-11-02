@@ -59,6 +59,8 @@ sudo ldconfig
 ```
 
 #### Preparing a PCAP for use with IPFIX-RITA
+NOTICE: If you already have a PCAP Active Countermeasures encourages you to convert the PCAP
+to Bro logs. This can be accomplished by [generating PCAPs outside of Bro](https://github.com/activecm/rita/blob/master/Readme.md#obtaining-data-generating-bro-logs).
 Before using YAF with IPFIX-RITA, you must ensure your PCAP file contains connection
 records timestamped within the current day. In order to fix up any old PCAP, use the
 `align_pcap_to_today.sh` script in the `dev-scripts` folder. The script takes in a
