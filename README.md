@@ -45,17 +45,20 @@ The installer will prompt you to ensure this change is made before continuing
 on.  If you intend to install IPFIX-RITA on the same machine as RITA
 and MongoDB, please add the IP address suggested by the installer.
 
+The installer should run on most Linux distributions provided Docker (min v17.06+) and
+docker-compose (min v1.17) are installed.
+
 ### Running the Installer
 
 Download the latest archive from the [releases page](https://github.com/activecm/ipfix-rita/releases), unpack it, and run the
 installation script with administrator privileges.
 
-The installer should run on most modern Linux distributions as long as
-Docker and docker-compose are installed. The minimum supported versions of
-Docker and docker-compose are 17.06 and 1.17, respectively.
-
 The installer will install Docker images for the components listed above, and
 create two new folders.
+
+```
+sudo ./install.sh
+```
 
 `/opt/ipfix-rita` contains the controller script for IPFIX-RITA and supporting
 code. The main script will be located at `/opt/ipfix-rita/bin/ipfix-rita`.
