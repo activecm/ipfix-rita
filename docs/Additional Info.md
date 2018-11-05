@@ -60,6 +60,11 @@ Shutdown IPFIX-RITA
 /opt/ipfix-rita/bin/ipfix-rita down -v
 ```
 
+Remove IPFIX-RITA Binary
+```
+sudo rm /usr/local/bin/ipfix-rita
+```
+
 Remove all IPFIX-RITA files and folders
 ```
 sudo rm -rf /opt/ipfix-rita /etc/ipfix-rita
