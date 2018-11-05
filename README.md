@@ -30,27 +30,27 @@ and steps to [install docker-compose](https://docs.docker.com/compose/install/).
 Download the latest archive from the [releases page](https://github.com/activecm/ipfix-rita/releases),
 unpack it, and run the installation script with administrator privileges.
 
+#### Download latest archive
 ```
-#The following gets the latest release as a tarzipped file & names it ipfix-rita.tgz
-#Accomplished by curling the release page information, finds the tar file's url and extracts it
-#then it calls that page and downloads the installer
 $ wget $(curl --silent "https://api.github.com/repos/activecm/ipfix-rita/releases/latest" \
 | grep '"browser_download_url":' | cut -d \" -f 4 ) -O ipfix-rita.tgz
+```
 
-#The following will unpack the ipfix-rita.tgz file
+#### Upack the installer
+```
 $ tar -zxf ipfix-rita.tgz
+```
 
-#Finds the extracted folder and executes the install script
-#By querying the working directory, limiting it to the first file with the name ipfix-rita in it
+#### Run the installer
+```
 $ sudo $(ls -d */ | grep "ipfix-rita" | head -1)install-ipfix-rita.sh
-
 ```
 
 You will prompt for configuration details regarding the RITA database
 connection and the names of the resulting datasets. Further configuration options
 can be set in `/etc/ipfix-rita/converter/converter.yaml`.
 
-By default, IPFIX-RITA will run at start up unless it is stopped. For more information
+By default, *IPFIX-RITA will run at start up unless it is stopped*. For more information
 see [Additional Info](docs/Additional/%20Info.md) full documentation can be found in
 the [docs](docs/) folder.
 
