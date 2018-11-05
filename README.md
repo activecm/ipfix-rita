@@ -45,8 +45,13 @@ $ sudo $(ls -d */ | grep "ipfix-rita" | head -1)install-ipfix-rita.sh
 
 ```
 
+You will prompt for configuration details regarding the RITA database
+connection and the names of the resulting datasets. Further configuration options
+can be set in `/etc/ipfix-rita/converter/converter.yaml`.
+
 By default, IPFIX-RITA will run at start up unless it is stopped. For more information
-see [Additional Info](docs/Additional\ Info.md)
+see [Additional Info](docs/Additional/%20Info.md) full documentation can be found in
+the [docs](docs/) folder.
 
 # IPFIX/ Netflow v9 Compatibility
 
