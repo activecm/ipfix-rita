@@ -22,7 +22,8 @@ on.  If you intend to install IPFIX-RITA on the same machine as RITA
 and MongoDB, please add the IP address suggested by the installer.
 
 The installer should run on most Linux distributions provided Docker (min v17.06+) and
-docker-compose (min v1.17) are installed.
+docker-compose (min v1.17) are installed. Steps to [Install Docker](https://docs.docker.com/install/)
+and steps to [install docker-compose](https://docs.docker.com/compose/install/).
 
 ### Installing
 
