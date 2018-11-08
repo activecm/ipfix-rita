@@ -12,18 +12,22 @@ NOTICE: IPFIX-RITA is still in beta, it has only been tested on a limited number
 
 First, ensure you have a working installation of RITA and MongoDB. For the best performance,
 it is suggested that IPFIX-RITA is installed on a machine separate from RITA and MongoDB.
-However, if performance isn't a great concern, it is often practical to install everything
+However, if performance is not a great concern, it is often practical to install everything
 in one place.
 
-Either way, you must ensure the RITA database can be contacted on an IP address other than
-localhost. This can be done by editing the `bindIP` setting in `/etc/mongod.conf`.
+**You must ensure the RITA database can be contacted on an IP address other than
+localhost**. This can be done by editing the `bindIP` setting in `/etc/mongod.conf`.
 The installer will prompt you to ensure this change is made before continuing
 on.  If you intend to install IPFIX-RITA on the same machine as RITA
 and MongoDB, please add the IP address suggested by the installer.
 
-The installer should run on most Linux distributions provided Docker (min v17.06+) and
-docker-compose (min v1.17) are installed. Steps to [Install Docker](https://docs.docker.com/install/)
-and steps to [install docker-compose](https://docs.docker.com/compose/install/).
+#### How to [Install RITA](https://github.com/activecm/rita#automatic-installation)
+
+\
+The IPFIX-RITA installer should run on most Linux distributions provided **Docker (min v17.06+)**
+and **docker-compose (min v1.17)** are installed.
+#### How to [Install Docker](https://docs.docker.com/install/)
+#### How to [Install docker-compose](https://docs.docker.com/compose/install/).
 
 ### Installing
 
@@ -46,20 +50,20 @@ $ tar -zxf ipfix-rita.tgz
 $ sudo $(ls -d */ | grep "ipfix-rita" | head -1)install-ipfix-rita.sh
 ```
 
-You will prompt for configuration details regarding the RITA database
+You will be prompted for configuration details regarding the RITA database
 connection and the names of the resulting datasets. Further configuration options
 can be set in `/etc/ipfix-rita/converter/converter.yaml`.
 
-By default, *IPFIX-RITA will run at start up unless it is stopped*. For more information
-see [Additional Info](docs/Additional/%20Info.md) full documentation can be found in
-the [docs](docs/) folder.
+By default, **IPFIX-RITA will run at start up unless it is stopped**. For more information
+see [Additional Info](docs/Additional%20Info.md). Full documentation for IPFIX-RITA can be
+found in the [docs](docs/) folder.
 
 # IPFIX/ Netflow v9 Compatibility
 
 This is an incomplete list of devices which produce compatible IPFIX/ Netflow v9 records.
 More devices will be added as they are tested.
 
-Please select the most basic version of IPFIX/ Netflow v9 when setting up your router for
+Please select the most basic version of IPFIX/Netflow v9 when setting up your router for
 use with IPFIX-RITA.
 
 |              | IPFIX | Netflow v9 |       Notes      |
