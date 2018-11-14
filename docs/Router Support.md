@@ -20,7 +20,7 @@ In the first terminal:
 - Go ahead, and leave the error log running
 
 Open up another terminal session and follow these steps:
-- Begin a packet capture using `sudo tcpdump -i -C 50 -w ipfix-rita-debug.pcap -s 0 'udp port 2055'`
+- Begin a packet capture using `sudo tcpdump -i [IPFIX/ Netflow v9 Interface] -C 50 -w ipfix-rita-debug.pcap -s 0 'udp port 2055'`
 - Leave the packet capture running
 
 Once both the error log and packet capture are running, continue to let them run for ten minutes or so. After some time has elapsed, hit `CTRL-C` in both terminal sessions.
