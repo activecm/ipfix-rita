@@ -22,20 +22,21 @@ func init() {
 		Name:  "run",
 		Usage: "Run the IPFIX-RITA converter",
 		Action: func(c *cli.Context) error {
-			err := convert()
+			env, err := environment.NewDefaultEnvironment()
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
+			}
+			err = convert(env)
+			if err != nil {
+				env.Logger.Error(err, nil)
+				return cli.NewExitError(nil, 1)
 			}
 			return nil
 		},
 	})
 }
 
-func convert() error {
-	env, err := environment.NewDefaultEnvironment()
-	if err != nil {
-		return err
-	}
+func convert(env environment.Environment) error {
 
 	//use CTRL-C as our signal to wrap up and exit
 	ctx, _ := interruptContext(env.Logger)
