@@ -357,7 +357,14 @@ def main():
             )
             ipfix_rita_monitor.start()
             if not ipfixErrOrExceptionEvent.wait(timeout=WAIT_MINUTES * 60):
-                print("No errors were found!")
+                print("No errors were found! Please check if RITA has received any data by")
+                print("running `rita show-databases` and looking for new results.")
+                print("If RITA has successfully received data from IPFIX-RITA and your")
+                print("IPFIX/ Netflow v9 device is not listed under the compatibility matrix")
+                print("in the main README.md, please contact support@activecountermeasures.com,")
+                print("and we will add your device to the list.")
+                print("")
+                print("Thank you for your time.")
                 tcpdump_monitor.stop()
                 tcpdump_monitor.join()
                 ipfix_rita_monitor.stop()
@@ -408,10 +415,14 @@ def main():
             return 1
 
     print(
-        "Please email {0}.tgz to support@activecountermeasures.com for further assistance.".format(
+        "Please email {0}.tgz along with a description of the settings and model of your IPFIX/ Netflow v9".format(
             ARCHIVE_NAME
         )
     )
+    print(
+        "device to support@activecountermeasures.com for further assistance."
+    )
+    print("")
     print(
         "Thank you for your time."
     )
