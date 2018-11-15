@@ -7,6 +7,12 @@ First off, run the installer as explained in the [Readme](../README.md).
 ### Automatic Data Collection
 The [ipfix-rita-debug script](../user-scripts/ipfix-rita-debug.py) may be used to automatically collect the information needed to support your router. The script will ensure data is arriving on UDP port 2055, capture that traffic, monitor the IPFIX-RITA logs for errors, and record the application log if an error is found. If no errors are found, all of the recorded data is deleted.
 
+Download the script by cloning the repository or by running:
+```
+wget https://raw.githubusercontent.com/activecm/ipfix-rita/master/user-scripts/ipfix-rita-debug.py
+chmod +x ipfix-rita-debug.py
+```
+
 The `ipfix-rita-debug.py` script must be run with administrator privileges in order to record a packet capture and start/ stop IPFIX-RITA. The script requires Python 3.4 or above which should be available for most modern linux distributions.
 
 If errors are found, the script will create an archive with the data it collected. Please email this archive
