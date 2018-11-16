@@ -3,7 +3,7 @@
 The stitching package implements the core of IPFIX-RITA. It handles
 piecing together flows into overall sessions.
 
-Flows contain connection information in the unidirectional form of "host A talked to host B ".
+Flows contain connection information in the unidirectional form of "host A talked to host B".
 Each flow records how many bytes and packets were sent from host A to host B and how long the connection lasted.
 
 However, sessions, as consumed by RITA, contain connection information in the bidirectional
@@ -13,6 +13,7 @@ records how may bytes and packets were sent from each host and how long the over
 The stitching package matches flows together to create sessions.
 
 Flows are generally matched using the 6 tuple of:
+
     - IP address A
     - IP address B
     - Port A
@@ -29,7 +30,8 @@ stream/ array of flows into a stream/ array of sessions.
 
 The stitching manager handles coordinating the work for a set of parallel stitching workers.
 
-The main stitching algorithm is explained in the following flowchart.
+The main stitching algorithm is explained in the following flowchart. You will likely need to zoom in on the SVG file.
+
 ![Stitching Manager Algorithm](Stitching%20Manager%20Algorithm.svg)
 
 The Stitching Manager contains the main processing loop. On each iteration, the manager consumes a new `input.Flow` object, distributes it to an appropriate stitcher, and checks if the stitching matcher needs flushed. If the stitching matcher needs flushed, the stitchers are flushed and paused, and the matcher is flushed. Then the loop begins again.
@@ -42,7 +44,7 @@ The selectSticher function must assign flows with the same 6-tuple to the same s
 
 Each stitcher works in tandem with the matcher to find appropriate matches for flows and transform them into session aggregates.
 
-The stitcher algorithm is explained by the following flowchart.
+The stitcher algorithm is explained by the following flowchart. You will likely need to zoom in on the SVG file.
 
 ![Stitcher Algorithm](Stitcher%20Algorithm.svg)
 
