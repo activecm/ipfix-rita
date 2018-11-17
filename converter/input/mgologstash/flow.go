@@ -412,6 +412,137 @@ func (i *Flow) fillFromNetflowv9BSONMap(netflowMap bson.M) error {
 	return nil
 }
 
+//fillFromNetflowv5BSONMap reads the data from a bson map representing
+//the Netflow field of Flow and inserts it into this flow,
+//returning nil if the conversion was successful.
+func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
+	//First grab all the data making sure it exists in the map
+	//All of these pieces of data come out as interface{}, we have
+	//to recast the data back into a typed form :(
+	//fmt.Println("0")
+	var ok bool
+	var sourceIPv4 string
+	sourceIPIface, sourceIPOk := netflowMap["srcaddr"]
+	if sourceIPOk {
+		sourceIPv4, ok = sourceIPIface.(string)
+		if !ok {
+			return errors.Errorf("could not convert %+v to string", sourceIPIface)
+		}
+	} else {
+		return errors.New("input map must contain key 'netflow.ipv4_src_addr' or 'netflow.ipv6_src_addr'")
+	}
+
+	sourcePortIface, ok := netflowMap["srcport"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.l4_src_port'")
+	}
+	sourcePort, ok := sourcePortIface.(int)
+	if !ok {
+		return errors.Errorf("could not convert %+v to int", sourcePortIface)
+	}
+
+	var destIP string
+	destIPIface, destIPOk := netflowMap["dstaddr"]
+	if destIPOk {
+		destIP, ok = destIPIface.(string)
+		if !ok {
+			return errors.Errorf("could not convert %+v to string", destIPIface)
+		}
+	} else {
+		return errors.New("input map must contain key 'netflow.dstaddr'")
+	}
+
+	var destPort int
+	destPortIface, ok := netflowMap["dstport"]
+	if ok {
+		destPort, ok = destPortIface.(int)
+		if !ok {
+			return errors.Errorf("could not convert %+v to int", destPortIface)
+		}
+	} else {
+		return errors.New("input map must contain key 'netflow.dstport'")
+	}
+
+	flowStartIface, ok := netflowMap["first"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.first'")
+	}
+	flowStart, ok := flowStartIface.(string)
+	if !ok {
+		return errors.Errorf("could not convert %+v to string", flowStartIface)
+	}
+
+	flowEndIface, ok := netflowMap["last"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.last'")
+	}
+	flowEnd, ok := flowEndIface.(string)
+	if !ok {
+		return errors.Errorf("could not convert %+v to string", flowEndIface)
+	}
+
+	octetTotalIface, ok := netflowMap["dOctets"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.dOctets'")
+	}
+	octetTotal, ok := octetTotalIface.(int64)
+	if !ok {
+		//Logstash creates these fields as 32 bit ints,
+		//Go handles them as 64 bit ints, provide both casts
+		octetTotal32, octetTotal32Ok := octetTotalIface.(int)
+		if !octetTotal32Ok {
+			return errors.Errorf("could not convert %+v to int", octetTotalIface)
+		}
+		octetTotal = int64(octetTotal32)
+	}
+
+	packetTotalIface, ok := netflowMap["dPkts"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.dPkts'")
+	}
+	packetTotal, ok := packetTotalIface.(int64)
+	if !ok {
+		//Logstash creates these fields as 32 bit ints,
+		//Go handles them as 64 bit ints, provide both casts
+		packetTotal32, packetTotal32Ok := packetTotalIface.(int)
+		if !packetTotal32Ok {
+			return errors.Errorf("could not convert %+v to int", packetTotalIface)
+		}
+		packetTotal = int64(packetTotal32)
+	}
+
+	protocolIDIface, ok := netflowMap["prot"]
+	if !ok {
+		return errors.New("input map must contain key 'netflow.prot'")
+	}
+	protocolID, ok := protocolIDIface.(int)
+	if !ok {
+		return errors.Errorf("could not convert %+v to int", protocolIDIface)
+	}
+
+	//Fill in the flow now that we know we have all the data
+	if sourceIPv4Ok {
+		i.Netflow.SourceIPv4 = sourceIPv4
+	}
+
+	i.Netflow.SourcePort = uint16(sourcePort)
+
+	if destIPv4Ok {
+		i.Netflow.DestinationIPv4 = destIPv4
+	}
+
+	i.Netflow.DestinationPort = uint16(destPort)
+
+	i.Netflow.FlowStartMilliseconds = flowStart
+	i.Netflow.FlowEndMilliseconds = flowEnd
+	i.Netflow.OctetTotalCount = octetTotal
+	i.Netflow.PacketTotalCount = packetTotal
+	i.Netflow.ProtocolIdentifier = protocols.Identifier(protocolID)
+	//assume end of flow since we don't have the data
+	i.Netflow.FlowEndReason = input.EndOfFlow
+	return nil
+}
+
 //FillFromBSONMap reads the data from a bson map and inserts
 //it into this flow, returning nil if the conversion was successful.
 //This method is used for filtering input data and adapting
@@ -463,6 +594,8 @@ func (i *Flow) FillFromBSONMap(inputMap bson.M) error {
 		return i.fillFromIPFIXBSONMap(netflowMap)
 	} else if i.Netflow.Version == 9 {
 		return i.fillFromNetflowv9BSONMap(netflowMap)
+	} else if i.Netflow.Version == 5 {
+		return i.fillFromNetflowv5BSONMap(netflowMap)
 	}
 	return errors.Errorf("unsupported netflow version: %d", i.Netflow.Version)
 }
