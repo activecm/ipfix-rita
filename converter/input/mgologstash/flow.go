@@ -422,17 +422,17 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 	//fmt.Println("0")
 	var ok bool
 	var sourceIP string
-	sourceIPIface, sourceIPOk := netflowMap["srcaddr"]
+	sourceIPIface, sourceIPOk := netflowMap["ipv4_src_addr"]
 	if sourceIPOk {
 		sourceIP, ok = sourceIPIface.(string)
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", sourceIPIface)
 		}
 	} else {
-		return errors.New("input map must contain key 'netflow.ipv4_src_addr' or 'netflow.ipv6_src_addr'")
+		return errors.New("input map must contain key 'netflow.ipv4_src_addr'")
 	}
 
-	sourcePortIface, ok := netflowMap["srcport"]
+	sourcePortIface, ok := netflowMap["l4_src_port"]
 	if !ok {
 		return errors.New("input map must contain key 'netflow.l4_src_port'")
 	}
@@ -442,48 +442,48 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 	}
 
 	var destIP string
-	destIPIface, destIPOk := netflowMap["dstaddr"]
+	destIPIface, destIPOk := netflowMap["ipv4_dst_addr"]
 	if destIPOk {
 		destIP, ok = destIPIface.(string)
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", destIPIface)
 		}
 	} else {
-		return errors.New("input map must contain key 'netflow.dstaddr'")
+		return errors.New("input map must contain key 'netflow.ipv4_dst_addr'")
 	}
 
 	var destPort int
-	destPortIface, ok := netflowMap["dstport"]
+	destPortIface, ok := netflowMap["l4_dst_port"]
 	if ok {
 		destPort, ok = destPortIface.(int)
 		if !ok {
 			return errors.Errorf("could not convert %+v to int", destPortIface)
 		}
 	} else {
-		return errors.New("input map must contain key 'netflow.dstport'")
+		return errors.New("input map must contain key 'netflow.l4_dst_port'")
 	}
 
-	flowStartIface, ok := netflowMap["first"]
+	flowStartIface, ok := netflowMap["first_switched"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.first'")
+		return errors.New("input map must contain key 'netflow.first_switched'")
 	}
 	flowStart, ok := flowStartIface.(string)
 	if !ok {
 		return errors.Errorf("could not convert %+v to string", flowStartIface)
 	}
 
-	flowEndIface, ok := netflowMap["last"]
+	flowEndIface, ok := netflowMap["last_switched"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.last'")
+		return errors.New("input map must contain key 'netflow.last_switched'")
 	}
 	flowEnd, ok := flowEndIface.(string)
 	if !ok {
 		return errors.Errorf("could not convert %+v to string", flowEndIface)
 	}
 
-	octetTotalIface, ok := netflowMap["dOctets"]
+	octetTotalIface, ok := netflowMap["in_bytes"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.dOctets'")
+		return errors.New("input map must contain key 'netflow.in_bytes'")
 	}
 	octetTotal, ok := octetTotalIface.(int64)
 	if !ok {
@@ -496,9 +496,9 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 		octetTotal = int64(octetTotal32)
 	}
 
-	packetTotalIface, ok := netflowMap["dPkts"]
+	packetTotalIface, ok := netflowMap["in_pkts"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.dPkts'")
+		return errors.New("input map must contain key 'netflow.in_pkts'")
 	}
 	packetTotal, ok := packetTotalIface.(int64)
 	if !ok {
@@ -511,9 +511,9 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 		packetTotal = int64(packetTotal32)
 	}
 
-	protocolIDIface, ok := netflowMap["prot"]
+	protocolIDIface, ok := netflowMap["protocol"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.prot'")
+		return errors.New("input map must contain key 'netflow.protocol'")
 	}
 	protocolID, ok := protocolIDIface.(int)
 	if !ok {
