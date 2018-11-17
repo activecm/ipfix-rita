@@ -421,10 +421,10 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 	//to recast the data back into a typed form :(
 	//fmt.Println("0")
 	var ok bool
-	var sourceIPv4 string
+	var sourceIP string
 	sourceIPIface, sourceIPOk := netflowMap["srcaddr"]
 	if sourceIPOk {
-		sourceIPv4, ok = sourceIPIface.(string)
+		sourceIP, ok = sourceIPIface.(string)
 		if !ok {
 			return errors.Errorf("could not convert %+v to string", sourceIPIface)
 		}
@@ -521,14 +521,14 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 	}
 
 	//Fill in the flow now that we know we have all the data
-	if sourceIPv4Ok {
-		i.Netflow.SourceIPv4 = sourceIPv4
+	if sourceIPOk {
+		i.Netflow.SourceIPv4 = sourceIP
 	}
 
 	i.Netflow.SourcePort = uint16(sourcePort)
 
-	if destIPv4Ok {
-		i.Netflow.DestinationIPv4 = destIPv4
+	if destIPOk {
+		i.Netflow.DestinationIPv4 = destIP
 	}
 
 	i.Netflow.DestinationPort = uint16(destPort)
