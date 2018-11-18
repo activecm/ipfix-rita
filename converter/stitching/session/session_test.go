@@ -7,8 +7,8 @@ import (
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
-	"github.com/stretchr/testify/require"
 	"github.com/globalsign/mgo/bson"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFromFlowASource(t *testing.T) {

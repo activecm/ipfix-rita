@@ -7,8 +7,8 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/mgosec"
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
+	"github.com/pkg/errors"
 )
 
 //Dial connects to MongoDB as specified in the mongoConfiguration

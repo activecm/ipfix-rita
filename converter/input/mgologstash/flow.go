@@ -5,8 +5,8 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/pkg/errors"
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 )
 
 //Flow represents an IPFIX/ Netflowv9 flow record stored in MongoDB via Logstash.
@@ -132,7 +132,10 @@ func (i *Flow) fillFromIPFIXBSONMap(ipfixMap bson.M) error {
 
 	flowStartIface, ok := ipfixMap["flowStartMilliseconds"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.flowStartMilliseconds'")
+		flowStartIface, ok = ipfixMap["flowStartSysUpTime"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.flowStartMilliseconds' or 'netflow.flowStartSysUpTime'")
+		}
 	}
 	flowStart, ok := flowStartIface.(string)
 	if !ok {
@@ -141,7 +144,10 @@ func (i *Flow) fillFromIPFIXBSONMap(ipfixMap bson.M) error {
 
 	flowEndIface, ok := ipfixMap["flowEndMilliseconds"]
 	if !ok {
-		return errors.New("input map must contain key 'netflow.flowEndMilliseconds'")
+		flowEndIface, ok = ipfixMap["flowEndSysUpTime"]
+		if !ok {
+			return errors.New("input map must contain key 'netflow.flowEndMilliseconds' or 'netflow.flowEndSysUpTime'")
+		}
 	}
 	flowEnd, ok := flowEndIface.(string)
 	if !ok {

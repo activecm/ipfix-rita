@@ -8,8 +8,8 @@ import (
 	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
-	"github.com/stretchr/testify/require"
 	"github.com/globalsign/mgo/bson"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAutoFlushCollectionBufferedWrites(t *testing.T) {

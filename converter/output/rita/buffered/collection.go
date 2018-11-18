@@ -3,8 +3,8 @@ package buffered
 import (
 	"sync"
 
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
+	"github.com/pkg/errors"
 )
 
 //Collection wraps an *mgo.Collection in order

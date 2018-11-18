@@ -7,8 +7,8 @@ import (
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/stretchr/testify/require"
 	"github.com/globalsign/mgo/bson"
+	"github.com/stretchr/testify/require"
 )
 
 func getTestFlow1() *mgologstash.Flow {

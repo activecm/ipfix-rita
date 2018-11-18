@@ -4,9 +4,9 @@ import (
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 )
 
 //idBulkBuffer is the main input buffer used by ipfix-rita to

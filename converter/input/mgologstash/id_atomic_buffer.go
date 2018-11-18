@@ -2,9 +2,9 @@ package mgologstash
 
 import (
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 )
 
 //idAtomicBuffer is not used within ipfix-rita. However, it does
