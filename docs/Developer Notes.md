@@ -56,7 +56,7 @@ versions of the software.
 Once the installer has been tested. edit the [VERSION](../VERSION) file
 such that it contains the version number for the release you would like to
 publish. After making the change, make a new git commit.
-Do not push this commit up. The `make-release` script will handle this during
+Do NOT push this commit up. The `make-release` script will handle this during
 the publish step.
 
 After updating the version, run `dev-scripts/make-release` again. The script
