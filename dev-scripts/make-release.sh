@@ -214,6 +214,15 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
     RITA_MONGO_URI="\$REPLY"
   fi
 
+  read -e -p "Should we automatically modify mongod.conf and restart mongo [y/n]: " -i "y" -r
+
+  if [[ \$REPLY =~ ^[Yy]\$ ]]; then
+    #modify mongod.conf and restart
+    #TODO see if we need to insert the machine's IP Address, we might need to do more modification here...
+    sed -i -e \"s/bindIp:\\ /bindIp:\\ '"$IPFIX_RITA_NETWORK_GATEWAY"',/g\" /etc/mongod.conf
+    systemctl restart mongod.service
+  fi
+
   RITA_MONGO_AUTH="null"
 
   echo ""
