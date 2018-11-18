@@ -5,7 +5,7 @@
 IPFIX-RITA is made up of four components. These are the
 
 - Collector (Logstash)
-  - Transforms IPFIX/ Netflow v9 records into records compatible with the Converter
+  - Transforms IPFIX/Netflow v9/Netflow v5 records into records compatible with the Converter
 - Buffer (MongoDB)
   - Used to buffer records created by the collector until they are read by the Converter
 - Converter (Written with Go)
