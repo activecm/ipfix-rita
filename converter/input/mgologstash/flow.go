@@ -521,16 +521,10 @@ func (i *Flow) fillFromNetflowv5BSONMap(netflowMap bson.M) error {
 	}
 
 	//Fill in the flow now that we know we have all the data
-	if sourceIPOk {
-		i.Netflow.SourceIPv4 = sourceIP
-	}
-
+	i.Netflow.SourceIPv4 = sourceIP
 	i.Netflow.SourcePort = uint16(sourcePort)
 
-	if destIPOk {
-		i.Netflow.DestinationIPv4 = destIP
-	}
-
+	i.Netflow.DestinationIPv4 = destIP
 	i.Netflow.DestinationPort = uint16(destPort)
 
 	i.Netflow.FlowStartMilliseconds = flowStart
