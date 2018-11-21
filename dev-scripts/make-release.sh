@@ -272,9 +272,9 @@ awk -v db_root="\$RITA_DATASET_DBROOT" \\
 -v mongo_tls_ca_path="\$RITA_MONGO_TLS_CERT_PATH" '
 # flag is used to determine if we are in the right scope
 
-# Unset the flag if we see "abc:" on a line
+# Unset the flag if we see "abc:" or "  abc:" on a line
 # by itself if there are 2 or less preceding spaces
-/^ {0,2}[^ ]*:\$/{
+/^(  )?[^ ]+:\$/{
   flag=""
 }
 
@@ -284,7 +284,7 @@ awk -v db_root="\$RITA_DATASET_DBROOT" \\
 }
 
 flag && NF && /ConnectionString:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=mongo_uri;
   print val \$0;
@@ -292,7 +292,7 @@ flag && NF && /ConnectionString:/{
 }
 
 flag && NF && /AuthenticationMechanism:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=mongo_auth;
   print val \$0;
@@ -300,7 +300,7 @@ flag && NF && /AuthenticationMechanism:/{
 }
 
 flag && NF && /Enable:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=mongo_tls_enable;
   print val \$0;
@@ -308,7 +308,7 @@ flag && NF && /Enable:/{
 }
 
 flag && NF && /VerifyCertificate:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=mongo_tls_cert_check;
   print val \$0;
@@ -316,7 +316,7 @@ flag && NF && /VerifyCertificate:/{
 }
 
 flag && NF && /CAFile:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=mongo_tls_ca_path;
   print val \$0;
@@ -324,7 +324,7 @@ flag && NF && /CAFile:/{
 }
 
 flag && NF && /DBRoot:/{
-  match(\$0,/^[[:space:]]+/);
+  match(\$0,/^ +/);
   val=substr(\$0,RSTART,RLENGTH);
   \$NF=db_root;
   print val \$0;
