@@ -43,8 +43,8 @@ necessary docker images and create an installer tarball.
 The resulting tarball will contain the docker images, the files in the
 runtime directory, the documentation files, and an installer script.
 Note that this will tag the resulting docker images with current version of the
-software. We may want to add a `--test` flag to `make-release` in the future
-to avoid this.
+software. We may want to add a `--test` flag to `make-release`
+to avoid this in the future.
 
 You will be asked if you would like to publish the resulting release. Enter
 `no` as this release is for testing purposes only.
@@ -63,10 +63,11 @@ After updating the version, run `dev-scripts/make-release` again. The script
 should run quickly as the resulting docker images should not have changed.
 When asked whether you would like to publish the release, enter `yes`.
 The script will then tag the latest commit with the version in the VERSION
-file and push the tag and commit up.
+file and push commit up with the new tag.
 
 The script will then ask for your quay.io credentials. After entering
-your credentials, the script will publish the new docker images to quay.io.
+your username and password, the script will then publish the newly built
+docker images to quay.io.
 
 The `make-release` script will then exit. Now, you must go to the Github page
 for the project and make a new release. Set the referenced tag for the release
