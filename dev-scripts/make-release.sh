@@ -14,6 +14,7 @@ DOCKER_IMAGE_OUT="docker-images.tgz"
 IPFIX_RITA_ARCHIVE="ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED"
 
 IN_DEV_README="../README.md"
+IN_DEV_DOCS_DIR="../docs"
 IN_DEV_BIN_DIR="../runtime/bin"
 IN_DEV_LIB_DIR="../runtime/lib"
 IN_DEV_ETC_DIR="../runtime/etc"
@@ -39,6 +40,7 @@ else
 fi
 
 INSTALLER_README="$INSTALLER_DIR/README.md"
+INSTALLER_DOCS_DIR="$INSTALLER_DIR/docs"
 INSTALLER_BIN_DIR="$INSTALLER_PKG_DIR/bin"
 INSTALLER_LIB_DIR="$INSTALLER_PKG_DIR/lib"
 INSTALLER_ETC_DIR="$INSTALLER_PKG_DIR/etc"
@@ -62,6 +64,9 @@ fi
 
 # Copy in README
 cp "$IN_DEV_README" "$INSTALLER_README"
+
+# Copy in docs
+cp -r "$IN_DEV_DOCS_DIR" "$INSTALLER_DOCS_DIR"
 
 # Copy over the etc files
 cp -r "$IN_DEV_ETC_DIR" "$INSTALLER_ETC_DIR"
@@ -394,6 +399,7 @@ fi
 echo "Creating a tagged version for the current Git commit."
 git tag -a "$IPFIX_RITA_VERSION" -m "version $IPFIX_RITA_VERSION"
 git push --tags
+git push origin master
 
 echo "Tagging version $IPFIX_RITA_VERSION as latest"
 # Set the latest tag as docker doesn't do that itself
