@@ -83,5 +83,69 @@ running the software, logging the errors and traffic, and sending us the
 results. If you are not comfortable emailing log files please contact us at
 support@activecountermeasures.com
 
-Please see [Adding Support For Additional Routers](docs/Router%20Support.md)
-for more information on gathering the data needed to get your device supported.
+Please see [Adding Support For Additional Routers](docs/Router%20Support.md) for more
+information on gathering the data needed to get your device supported.
+
+# Troubleshooting
+### Testing IPFix/Netflow Records
+To test that IPFix/Netflow records are arriving at you IPFIX-RITA system, run
+the following on the IPFIX-RITA system:
+```
+$ tcpdump -qtnp 'udp port 2055'
+```
+Though the actual IP addresses and length will be different, you should see
+lines like:
+```
+IP 10.0.0.5:2055 > 10.0.0.43:2055: UDP, length 212
+```
+arriving somewhat regularly. Press Ctrl-C to exit. If you don't get any of
+these lines after a minute or so, your router may not be configured correctly
+to send these records to the ipfix-rita system. Double check your router
+configuration; make sure it's sending records to the IPFIX-RITA system's IP
+address and to UDP port 2055.
+
+### Ensure Docker Containers are Running
+To make sure that all the docker containers are running correctly on the
+IPFIX-RITA system, run the following on that system:
+```
+sudo docker ps
+```
+You should get a header line starting with "CONTAINER ID" and then at least
+three lines of running ocntainers with a status on "Up (some amount of time)".
+The names of these containers should start with "ipfix_rita_logstash",
+"ipfix_rita_converter", and "ipfix_rita_mongodb". If you do not get these three
+lines, somehting may be wrong with the docker intances, please contact
+technical support.
+
+### Checking that IPFIX-RITA is Creating Mongo Databases
+To see if IPFIX-RITA is creating mongo databases, first find the container ID
+for the IPFIX-RITA-mongodb contianter. It's the 12 character hex string at the
+left of the ipfix_rita_mongodb... from the above docker command. Now run:
+```
+sudo docker exec -it **12_char_hex_id** mongo
+```
+You'll find yourself in a command prompt that accepts mongo commands. Type:
+```
+show dbs
+```
+Which will list the available databases. If you see:
+```
+IPFIX   0.000GB
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+```
+That means you're not yet saving data; skip to the next section to see why. If
+your output also includes "Metadatabase" and "IPFIX-YYMMDD" databases, that's a
+good sign. To get out of this terminal type "exit".
+
+### Checking for Errors from IPFIX-RITA
+To see if there are any error reported by IPFIX-RITA, run
+```
+sudo ipfix-rita logs | grep -i 'erro'
+```
+Any errors that show up here should be sent to technical support. Please
+include a brief descript of the router or filewall that's sending the IPFix
+records, as well as what type of records these are (Netflow V5, Netflow V9, or
+IPFix).
+
