@@ -4,9 +4,9 @@ import (
 	"sync"
 
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 )
 
 //idBulkBuffer is the main input buffer used by ipfix-rita to
@@ -21,15 +21,20 @@ type idBulkBuffer struct {
 	readIndex int
 	err       error
 	log       logging.Logger
+	*flowDeserializer
 }
 
 //NewIDBulkBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
 func NewIDBulkBuffer(input *mgo.Collection, bufferSize int64, log logging.Logger) Buffer {
 	return &idBulkBuffer{
-		input:    input,
-		buffer:   make([]bson.M, 0, bufferSize),
-		removeWG: new(sync.WaitGroup),
-		log:      log,
+		input:            input,
+		buffer:           make([]bson.M, 0, bufferSize),
+		removeWG:         new(sync.WaitGroup),
+		log:              log,
+		flowDeserializer: newFlowDeserializer(),
+		//Note: we may want to IFace + Inject + Mock flowDeserializer here
+		//Arguably the buffer has to be integration tested anyways
+		//as it's main function is to control MongoDB (in a nontrivial manner)
 	}
 }
 
@@ -93,7 +98,7 @@ func (b *idBulkBuffer) Next(out *Flow) bool {
 
 		inputMap := b.buffer[b.readIndex]
 		b.readIndex++
-		err := out.FillFromBSONMap(inputMap)
+		err := b.flowDeserializer.deserializeNextBSONMap(inputMap, out)
 		if err == nil {
 			getNextRecord = false
 		} else {
