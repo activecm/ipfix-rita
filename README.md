@@ -88,7 +88,7 @@ information on gathering the data needed to get your device supported.
 
 # Troubleshooting
 ### Testing IPFix/Netflow Records
-To test that IPFix/Netflow records are arriving at you IPFIX-RITA system, run
+To test that IPFix/Netflow records are arriving at your IPFIX-RITA system, run
 the following on the IPFIX-RITA system:
 ```
 $ tcpdump -qtnp 'udp port 2055'
@@ -137,7 +137,7 @@ local   0.000GB
 ```
 it might mean that you are logging to a different database, use the
 ConnectionString value under RITA-MongoDB in
-/etc/ipfix-rita/converter/converter.yaml, for example if your file looks like this:
+/etc/ipfix-rita/converter/converter.yaml .  For example, if your file looks like this:
 ```
 Output:
   RITA-MongoDB:
@@ -152,12 +152,12 @@ Output:
         CAFile: null
 ...
 ```
-try connection to mongo using 
+try connecting to mongo using 
 ```
 mongo [ipaddress]:[port]
 mongo 10.0.0.5:27017
 ```
-and running the command again, if you still see:
+and running the command again.  If you still see:
 ```
 admin   0.000GB
 config  0.000GB
