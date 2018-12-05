@@ -108,13 +108,13 @@ address and to UDP port 2055.
 To make sure that all the docker containers are running correctly on the
 IPFIX-RITA system, run the following on that system:
 ```
-sudo docker ps
+sudo ipfix-rita ps
 ```
 You should get a header line starting with "CONTAINER ID" and then at least
-three lines of running ocntainers with a status on "Up (some amount of time)".
+three lines of running containers with a status on "Up (some amount of time)".
 The names of these containers should start with "ipfix_rita_logstash",
 "ipfix_rita_converter", and "ipfix_rita_mongodb". If you do not get these three
-lines, somehting may be wrong with the docker intances, please contact
+lines, something may be wrong with the docker instances, please contact
 technical support.
 
 ### Checking that IPFIX-RITA is Creating Mongo Databases
@@ -135,12 +135,41 @@ admin   0.000GB
 config  0.000GB
 local   0.000GB
 ```
+it might mean that you are logging to a different database, use the
+ConnectionString value under RITA-MongoDB in
+/etc/ipfix-rita/converter/converter.yaml, for example if your file looks like this:
+```
+Output:
+  RITA-MongoDB:
+    MongoDB-Connection:
+      # See https://docs.mongodb.com/manual/reference/connection-string/
+      ConnectionString: mongodb://10.0.0.5:27017
+      # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
+      AuthenticationMechanism: null
+      TLS:
+        Enable: false
+        VerifyCertificate: false
+        CAFile: null
+...
+```
+try connection to mongo using 
+```
+mongo [ipaddress]:[port]
+mongo 10.0.0.5:27017
+```
+and running the command again, if you still see:
+```
+IPFIX   0.000GB
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+```
 That means you're not yet saving data; skip to the next section to see why. If
 your output also includes "Metadatabase" and "IPFIX-YYMMDD" databases, that's a
 good sign. To get out of this terminal type "exit".
 
 ### Checking for Errors from IPFIX-RITA
-To see if there are any error reported by IPFIX-RITA, run
+To see if there are any errors reported by IPFIX-RITA, run
 ```
 sudo ipfix-rita logs | grep -i 'erro'
 ```
