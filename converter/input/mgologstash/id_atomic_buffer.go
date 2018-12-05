@@ -2,9 +2,9 @@ package mgologstash
 
 import (
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 )
 
 //idAtomicBuffer is not used within ipfix-rita. However, it does
@@ -17,14 +17,19 @@ type idAtomicBuffer struct {
 	input *mgo.Collection
 	err   error
 	log   logging.Logger
+	*flowDeserializer
 }
 
 //NewIDAtomicBuffer returns an mgologstash.Buffer which pulls
 //input records atomically from MongoDB in (roughly) insertion order
 func NewIDAtomicBuffer(input *mgo.Collection, log logging.Logger) Buffer {
 	return &idAtomicBuffer{
-		input: input,
-		log:   log,
+		input:            input,
+		log:              log,
+		flowDeserializer: newFlowDeserializer(),
+		//Note: we may want to IFace + Inject + Mock flowDeserializer here
+		//Arguably the buffer has to be integration tested anyways
+		//as it's main function is to control MongoDB (in a nontrivial manner)
 	}
 }
 
@@ -50,7 +55,7 @@ func (b *idAtomicBuffer) Next(out *Flow) bool {
 			return false
 		}
 
-		err = out.FillFromBSONMap(input)
+		err = b.flowDeserializer.deserializeNextBSONMap(input, out)
 		if err == nil {
 			getNextRecord = false
 		} else {
