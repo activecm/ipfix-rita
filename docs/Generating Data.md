@@ -1,4 +1,4 @@
-# Generating IPFIX Data From a PCAP
+# Generating IPFix Data From a PCAP
 
 NOTICE: If you already have a PCAP Active Countermeasures encourages you to convert the PCAP
 to Bro logs. This can be accomplished by [generating PCAPs outside of Bro](https://github.com/activecm/rita/blob/master/Readme.md#obtaining-data-generating-bro-logs).
@@ -17,7 +17,7 @@ CERT is a part of the Software Engineering Institute (SEI), a federally
 funded research and development center (FFRDC) operated by Carnegie Mellon University.
 
 YAF is one of these open source monitoring tools. It is capable of creating
-and exporting IPFIX records from PCAP files and network taps.
+and exporting IPFix records from PCAP files and network taps.
 
 #### Installing
 Before installing YAF, install its dependencies libpcap, and glib2, and libfixbuf.
@@ -122,7 +122,7 @@ Interface #0 info:
 ```
 #### Extract Flow Data from PCAPs using YAF
 YAF supports a variety of options, but most of it can be ignored when trying
-to convert PCAP files to IPFIX records for use with IPFIX-RITA.
+to convert PCAP files to IPFix records for use with IPFIX-RITA.
 
 First, ensure the collector is running as you will need to specify
 the the domain name or IP address of the collector when running YAF.

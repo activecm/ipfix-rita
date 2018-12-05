@@ -14,7 +14,7 @@ can be set in `/etc/ipfix-rita/converter/converter.yaml` such as the CIDR
 ranges for local networks (by default all class A, B, and C networks are considered local).
 
 The installer will initialize and start the system. IPFIX-RITA will begin
-listening for IPFIX and Netflow v9/v5 traffic on UDP port 2055 on the Docker
+listening for IPFix and Netflow v9/v5 traffic on UDP port 2055 on the Docker
 host.
 
 # Running IPFIX-RITA
@@ -47,7 +47,7 @@ ipfix-rita logs
 
 ## IPFIX-RITA logging information
 
-When IPFIX-RITA receives IPFIX or Netflow v9/v5 records timestamped with the
+When IPFIX-RITA receives IPFix or Netflow v9/v5 records timestamped with the
 current date, it will begin writing records into the resulting RITA dataset.
 Every night at 5 minutes past midnight local time, the dataset will be closed,
 and it will become eligible for analysis by RITA. The resulting datasets will
