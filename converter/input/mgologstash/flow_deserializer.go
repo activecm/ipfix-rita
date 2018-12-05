@@ -9,9 +9,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-//flowDeserializer converts a sequence of IPFIX/
+//flowDeserializer converts a sequence of IPFIX/ Netflow v5/ v9 ,
+//Logstash created, BSON maps into mgologstash.Flow objects.
+//The deserializer encapsulates the deserialization methods
+//for IPFIX. Netflow v9, and Netflow v5.
+//Netflow v9 and v5 deserialization may as well be implemented as static
+//methods as they do not require state. They are not implemented as static
+//methods, however, in order to match the way IPFIX deserialization is implemented.
+//IPFIX deserialization requires state to be held while IPFIX
+//records are deserialized. This is due to the fact that IPFIX allows
+//timestamps to be represented as system boot time relative values.
+//The system boot time (systemInitTimeMilliseconds) may be sent in a
+//IPFIX record other than the record to be processed. As such,
+//the system boot time for each exporting host  must be held as state
+//while sequences of IPFIX records are deserialized.
 type flowDeserializer struct {
-	ipfixExporterUptimes map[string]int64 //map from exporter to systemInitTimeMilliseconds values
+	ipfixExporterUptimes map[string]int64 //map from exporting host to systemInitTimeMilliseconds values
 }
 
 func newFlowDeserializer() *flowDeserializer {
@@ -52,7 +65,7 @@ func (f *flowDeserializer) updateExporterUptimesMap(ipfixMap bson.M, host string
 //fillFromIPFIXBSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-//Host must be provided in order to resolve flowStartSysUpTime and
+//The exporting host must be provided in order to resolve flowStartSysUpTime and
 //flowEndSysUpTime timestamps.
 func (f *flowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flow, host string) error {
 	//First grab all the data making sure it exists in the map
@@ -595,7 +608,7 @@ func (f *flowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlo
 }
 
 //deserializeNextBSONMap reads the data from a bson map and inserts
-//it into the ouput flow, returning nil if the conversion was successful.
+//it into the output flow, returning nil if the conversion was successful.
 //This method is used for filtering input data and adapting
 //multiple versions of netflow records to the same data type.
 //If the inputMap contains data that must be maintained as state,
