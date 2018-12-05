@@ -1,7 +1,7 @@
 # Thank You For Your Interest In Helping Us Support More Devices
 
 The IPFIX-RITA project needs your help in order to support more
-IPFIX/Netflow v9/Netflow v5 enabled devices. In this guide, we will walk
+IPFix/Netflow v9/Netflow v5 enabled devices. In this guide, we will walk
 through gathering an error log, capturing relevant network traffic, and
 packaging up the results for analysis by the Active Countermeasures team.
 
@@ -29,7 +29,7 @@ If errors are found, the script will create an archive with the data it
 collected. Please email this archive to support@activecountermeasures.com along
 with a description of the device you are trying to use. Additionally, please
 include any relevant settings you have set on your device such as which flow
-version you are using (IPFIX, Netflow v9, or Netflow v5), if you are sending
+version you are using (IPFix, Netflow v9, or Netflow v5), if you are sending
 any "additional reports" (proprietary data), and the flow reporting mode being
 used (realtime/ bulk/ etc.).
 
@@ -42,16 +42,16 @@ are using and any relevant settings.
 If you want to manually collect the data instead of using the `ipfix-rita-debug.py` script, please follow the steps below.
 
 After IPFIX-RITA is installed and running, ensure your
-IPFIX/Netflow v9/Netflow v5 device is actively sending records to your
+IPFix/Netflow v9/Netflow v5 device is actively sending records to your
 collector using tcpdump. Tcpdump can be installed using your system package
 manager. Once tcpdump is installed, run `tcpdump -i 
-[IPFIX/Netflow v9/Netflow v5 Interface] 'udp port 2055'`. This will bring up a
-live stream of the IPFIX/Netflow v9/Netflow v5 data entering your system.
-Before continuing, ensure you see active IPFIX/Netflow v9/Netflow v5 traffic
+[IPFix/Netflow v9/Netflow v5 Interface] 'udp port 2055'`. This will bring up a
+live stream of the IPFix/Netflow v9/Netflow v5 data entering your system.
+Before continuing, ensure you see active IPFix/Netflow v9/Netflow v5 traffic
 appearing in your terminal. You can exit out of tcpdump by hitting `CTRL-C`.
 
-If tcpdump does not display any IFPIX/Netflow v9/Netflow v5 traffic, please
-ensure you have correctly configured your IPFIX/Netflow v9/Netflow v5 enabled
+If tcpdump does not display any IPFix/Netflow v9/Netflow v5 traffic, please
+ensure you have correctly configured your IPFix/Netflow v9/Netflow v5 enabled
 device and that the connection between your device and IPFIX-RITA system is
 working as it should.
 
@@ -70,7 +70,7 @@ In the first terminal:
 - Go ahead, and leave the error log running
 
 Open up another terminal session and follow these steps:
-- Begin a packet capture using `sudo tcpdump -i [IPFIX/Netflow v9/Netflow v5 Interface] -C 50 -w ipfix-rita-debug.pcap -s 0 'udp port 2055'`
+- Begin a packet capture using `sudo tcpdump -i [IPFix/Netflow v9/Netflow v5 Interface] -C 50 -w ipfix-rita-debug.pcap -s 0 'udp port 2055'`
 - Leave the packet capture running
 
 Once both the error log and packet capture are running, continue to let them run for five minutes or so. After some time has elapsed, hit `CTRL-C` in both terminal sessions.
@@ -84,4 +84,4 @@ In either terminal:
 
 Finally, send us an email at support@activecountermeasures.com with the name of
 the device you are using, the settings you have set on your device pertaining
-to IPFIX/Netflow v9/Netflow v5, and the compressed data we just gathered.
+to IPFix/Netflow v9/Netflow v5, and the compressed data we just gathered.
