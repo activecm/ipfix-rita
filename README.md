@@ -159,7 +159,6 @@ mongo 10.0.0.5:27017
 ```
 and running the command again, if you still see:
 ```
-IPFIX   0.000GB
 admin   0.000GB
 config  0.000GB
 local   0.000GB
