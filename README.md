@@ -1,6 +1,6 @@
 # IPFIX-RITA
 
-IPFIX-RITA is a system for processing IPFIX/Netflow v9/Netflow v5 records for
+IPFIX-RITA is a system for processing IPFix/Netflow v9/Netflow v5 records for
 use with [RITA](https://github.com/activecm/rita).
 
 
@@ -59,16 +59,16 @@ By default, **IPFIX-RITA will run at start up unless it is stopped**. For more
 information see [Additional Info](docs/Additional%20Info.md). Full
 documentation for IPFIX-RITA can be found in the [docs](docs/) folder.
 
-# IPFIX/Netflow v9/Netflow v5 Compatibility
+# IPFix/Netflow v9/Netflow v5 Compatibility
 
 This is an incomplete list of devices which produce compatible
-IPFIX/Netflow v9/Netflow v5 records. More devices will be added as they are
+IPFix/Netflow v9/Netflow v5 records. More devices will be added as they are
 tested.
 
-Please select the most basic version of IPFIX/Netflow v9/Netflow v5 when
+Please select the most basic version of IPFix/Netflow v9/Netflow v5 when
 setting up your router for use with IPFIX-RITA.
 
-|              | IPFIX | Netflow v9 | Netflow v5 |       Notes      |
+|              | IPFix | Netflow v9 | Netflow v5 |       Notes      |
 |--------------|-------|------------|------------|------------------|
 |   Cisco ASA  |       |     ✔      |            |                  |
 | Cisco ASR 9k |       |     ✔      |            |                  |
@@ -100,7 +100,7 @@ IP 10.0.0.5:2055 > 10.0.0.43:2055: UDP, length 212
 ```
 arriving somewhat regularly. Press Ctrl-C to exit. If you don't get any of
 these lines after a minute or so, your router may not be configured correctly
-to send these records to the ipfix-rita system. Double check your router
+to send these records to the IPFIX-RITA system. Double check your router
 configuration; make sure it's sending records to the IPFIX-RITA system's IP
 address and to UDP port 2055.
 
@@ -173,8 +173,13 @@ To see if there are any errors reported by IPFIX-RITA, run
 ```
 sudo ipfix-rita logs | grep -i 'erro'
 ```
-Any errors that show up here should be sent to technical support. Please
-include a brief descript of the router or filewall that's sending the IPFix
+If there are too many errors, simply run
+```
+sudo ipfix-rita logs --tail 20 -f | grep -i 'erro' [> error_report.txt]
+```
+Any errors that show up here (or the error_report.txt file) should be sent
+to technical support at support@activecountermeasures.com. Please
+include a brief description of the router or firewall that's sending the IPFix
 records, as well as what type of records these are (Netflow V5, Netflow V9, or
 IPFix).
 
