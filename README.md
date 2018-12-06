@@ -22,6 +22,12 @@ than localhost**. This can be done by editing the `bindIP` setting in
 before continuing on. If you intend to install IPFIX-RITA on the same machine 
 as RITA and MongoDB, please add the IP address suggested by the installer.
 \
+NOTE: if you want multiple bind IP addresses in your MongoDB config file you
+must place each of them on the same line separated by commas. For example if
+you want both `10.0.0.5` and `172.20.0.1` as bind IP's (one for RITA and one
+for IPFIX-RITA to access) your bind IP line should look like the following.
+`  bindIP: 10.0.0.5,172.20.0.1`
+\
 Also if your RITA config file (`/etc/rita/config.yaml`) connects to MongoDB on
 localhost you will need to change that to the same value as MongoDB is listening
 on. For example if you change the bindIP in your MongoDB config file to 10.0.0.5
