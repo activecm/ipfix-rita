@@ -19,8 +19,14 @@ often practical to install everything in one place.
 **You must ensure the RITA database can be contacted on an IP address other
 than localhost**. This can be done by editing the `bindIP` setting in
 `/etc/mongod.conf`. The installer will prompt you to ensure this change is made
-before continuing on.  If you intend to install IPFIX-RITA on the same machine 
+before continuing on. If you intend to install IPFIX-RITA on the same machine 
 as RITA and MongoDB, please add the IP address suggested by the installer.
+\
+Also if your RITA config file (`/etc/rita/config.yaml`) connects to MongoDB on
+localhost you will need to change that to the same value as MongoDB is listening
+on. For example if you change the bindIP in your MongoDB config file to 10.0.0.5
+and you check your RITA config file and the connection string is 
+`mongodb://localhost:27017` you'll need to change it to ` mongodb://10.0.0.5:27017`.
 
 #### How to [Install RITA](https://github.com/activecm/rita#automatic-installation)
 
