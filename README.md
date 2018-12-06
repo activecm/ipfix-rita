@@ -176,9 +176,19 @@ If there are too many errors, simply run
 ```
 sudo ipfix-rita logs --tail 20 -f | grep -i 'erro' [> error_report.txt]
 ```
+
 Any errors that show up here (or the error_report.txt file) should be sent
 to technical support at support@activecountermeasures.com. Please
 include a brief description of the router or firewall that's sending the IPFix
-records, as well as what type of records these are (Netflow V5, Netflow V9, or
+records, as well as what type of records these are (Netflow v5, Netflow v9, or
 IPFix).
 
+### NOTICE: KNOWN BUG
+A common error that might occur is something like
+```
+converter_1_a86985062afe | ERRO[1082] input map must contain key 'netflow.flowStartMilliseconds'  ...
+```
+If you are using IPFix this is likely caused by the router using an IPFix version
+that uses timestamps relative to the system initilization time and not Unix timestamps.
+This is a known issue and we are working on a solution to support more IPFix versions.
+If this error persists, Active Countermeasures recommends switching to Netflow v9 or v5.
