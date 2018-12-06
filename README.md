@@ -19,8 +19,20 @@ often practical to install everything in one place.
 **You must ensure the RITA database can be contacted on an IP address other
 than localhost**. This can be done by editing the `bindIP` setting in
 `/etc/mongod.conf`. The installer will prompt you to ensure this change is made
-before continuing on.  If you intend to install IPFIX-RITA on the same machine 
+before continuing on. If you intend to install IPFIX-RITA on the same machine 
 as RITA and MongoDB, please add the IP address suggested by the installer.
+\
+NOTE: if you want multiple bind IP addresses in your MongoDB config file you
+must place each of them on the same line separated by commas. For example if
+you want both `10.0.0.5` and `172.20.0.1` as bind IP's (one for RITA and one
+for IPFIX-RITA to access) your bind IP line should look like the following.
+`  bindIP: 10.0.0.5,172.20.0.1`
+\
+Also if your RITA config file (`/etc/rita/config.yaml`) connects to MongoDB on
+localhost you will need to change that to the same value as MongoDB is listening
+on. For example if you change the bindIP in your MongoDB config file to 10.0.0.5
+and you check your RITA config file and the connection string is 
+`mongodb://localhost:27017` you'll need to change it to ` mongodb://10.0.0.5:27017`.
 
 #### How to [Install RITA](https://github.com/activecm/rita#automatic-installation)
 
@@ -73,7 +85,7 @@ setting up your router for use with IPFIX-RITA.
 |   Cisco ASA  |       |     ✔      |            |                  |
 | Cisco ASR 9k |       |     ✔      |            |                  |
 |   SonicWall  |       |     ✔      |            |                  |
-|   MikroTik   |       |            |     ✔      |                  | 
+|   MikroTik   |       |     ✔      |     ✔      |                  | 
 |     YAF      |   ✔   |            |            | Use `--uniflow`  |
 
 ## What Do I Do If My Router Isn't On the List?
@@ -176,9 +188,19 @@ If there are too many errors, simply run
 ```
 sudo ipfix-rita logs --tail 20 -f | grep -i 'erro' [> error_report.txt]
 ```
+
 Any errors that show up here (or the error_report.txt file) should be sent
 to technical support at support@activecountermeasures.com. Please
 include a brief description of the router or firewall that's sending the IPFix
-records, as well as what type of records these are (Netflow V5, Netflow V9, or
+records, as well as what type of records these are (Netflow v5, Netflow v9, or
 IPFix).
 
+### NOTICE: KNOWN BUG
+A common error that might occur is something like
+```
+converter_1_a86985062afe | ERRO[1082] input map must contain key 'netflow.flowStartMilliseconds'  ...
+```
+If you are using IPFix this is likely caused by the router using an IPFix version
+that uses timestamps relative to the system initilization time and not Unix timestamps.
+This is a known issue and we are working on a solution to support more IPFix versions.
+If this error persists, Active Countermeasures recommends switching to Netflow v9 or v5.
