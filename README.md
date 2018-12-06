@@ -79,7 +79,7 @@ setting up your router for use with IPFIX-RITA.
 |   Cisco ASA  |       |     ✔      |            |                  |
 | Cisco ASR 9k |       |     ✔      |            |                  |
 |   SonicWall  |       |     ✔      |            |                  |
-|   MikroTik   |       |            |     ✔      |                  | 
+|   MikroTik   |       |     ✔      |     ✔      |                  | 
 |     YAF      |   ✔   |            |            | Use `--uniflow`  |
 
 ## What Do I Do If My Router Isn't On the List?
