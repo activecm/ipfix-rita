@@ -195,7 +195,11 @@ include a brief description of the router or firewall that's sending the IPFix
 records, as well as what type of records these are (Netflow v5, Netflow v9, or
 IPFix).
 
-### NOTICE: KNOWN BUG
+# BUG NOTICE
+The following bugs have been documented by Active Countermeasures and solutions
+are in development
+
+### IPFix Time Error
 A common error that might occur is something like
 ```
 converter_1_a86985062afe | ERRO[1082] input map must contain key 'netflow.flowStartMilliseconds'  ...
@@ -204,3 +208,10 @@ If you are using IPFix this is likely caused by the router using an IPFix versio
 that uses timestamps relative to the system initilization time and not Unix timestamps.
 This is a known issue and we are working on a solution to support more IPFix versions.
 If this error persists, Active Countermeasures recommends switching to Netflow v9 or v5.
+
+### Log Rotation Error
+In some instances it has been discovered that some flow logs will report flow
+start and end times in UTC+00:00 which means if you don't live in the UTC+00:00
+timezone you may see logs in MongoDB from a future date or not rotating when
+you expect them to. Until a fix is implemented, Active Countermeasures asks you
+to be aware of the issue.
