@@ -210,8 +210,8 @@ This is a known issue and we are working on a solution to support more IPFix ver
 If this error persists, Active Countermeasures recommends switching to Netflow v9 or v5.
 
 ### Log Rotation Error
-In some instances it has been discovered that some flow logs will report flow
-start and end times in UTC+00:00 which means if you don't live in the UTC+00:00
+It has been discovered that some flow logs will report flow start and end
+times in UTC+00:00. This means if you don't live in the UTC+00:00
 timezone you may see logs in MongoDB from a future date or not rotating when
 you expect them to. Until a fix is implemented, Active Countermeasures asks you
 to be aware of the issue.
