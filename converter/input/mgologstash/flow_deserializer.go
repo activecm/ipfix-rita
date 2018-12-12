@@ -9,7 +9,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-//flowDeserializer converts a sequence of IPFIX/ Netflow v5/ v9 ,
+type ipfixRelTime struct {
+	firstFlowMills int64
+	firstFlowTime  time.Time
+	firstFlowSet   bool
+}
+
+//flowDeserializer converts a sequence of IPFIX/Netflow v5/v9 ,
 //Logstash created, BSON maps into mgologstash.Flow objects.
 //The deserializer encapsulates the deserialization methods
 //for IPFIX. Netflow v9, and Netflow v5.
@@ -21,10 +27,12 @@ import (
 //timestamps to be represented as system boot time relative values.
 //The system boot time (systemInitTimeMilliseconds) may be sent in a
 //IPFIX record other than the record to be processed. As such,
-//the system boot time for each exporting host  must be held as state
+//the system boot time for each exporting host must be held as state
 //while sequences of IPFIX records are deserialized.
+
 type flowDeserializer struct {
 	ipfixExporterUptimes map[string]int64 //map from exporting host to systemInitTimeMilliseconds values
+	ipfixExporterRelUp   map[string]ipfixRelTime //map from exporting host to relative system uptime values
 }
 
 func newFlowDeserializer() *flowDeserializer {
@@ -60,6 +68,96 @@ func (f *flowDeserializer) updateExporterUptimesMap(ipfixMap bson.M, host string
 		}
 	}
 	return false
+}
+
+//updateExporterTimestamps will update the relative timestamps for each host
+//relative to the daily first flow, so if we don't have an instance of the
+//system init time we can still get results from RITA
+func (f *flowDeserializer) updateExporterTimestamps(ipfixMap bson.M, host string) bool {
+	//24 hrs in day, 60 mins in hr, 60 secs in min, and 1e9 ns in sec
+	nsInDay := time.Duration(24*60*60*1000000000)
+
+	//if we have a inital set value see if we need to update the value
+	if f.ipfixExporterRelUp[host].firstFlowSet == true {
+		//if a day or more has elapsed since last relative update we should
+		// reinitialize the relative system uptime
+		//get the timestamp value so we have the full picture
+		currDateIface, currDateOk := ipfixMap["@timestamp"]
+		if !currDateOk {
+			//if we don't have a timestamp return an error
+			return false
+		}
+		//convert the time to a string, so we can parse the string to a date/time vlaue
+		currDateStr, ok := currDateIface.(string)
+		if !ok {
+			return false
+		}
+		currDate, err := time.Parse(time.RFC3339, flowDateIface)
+		if err != nil {
+			return false
+		}
+
+		//get the difference between the first flow time and the current time
+		//  if the time elapsed is greater than a day reset the first flow info
+		timeElapsed := f.ipfixExporterRelUp[host].firstFlowTime.Sub(currDate)
+		if timeElapsed > nsInDay {
+			newExporter, err := getNewExporterUptime(ipfixMap)
+			if err != nil {
+				return false
+			}
+
+			f.ipfixExporterRel[host] = newExporter
+		}
+	} else {
+		newExporter, err := getNewExporterUptime(ipfixMap)
+		if err != nil {
+			return false
+		}
+		f.ipfixExporterRelUp[host] = newExporter
+
+		return true
+	}
+	return false
+}
+
+//Since the code for updating the relative system uptime and creating a new
+//relative system uptime are similar make a function so we don't repeat code
+func getNewExporterUptime(ipfixMap bson.M) (exporterUptime, error) {
+	//set the inital value if it hasn't been set
+	var startMills int64
+	startMillsIface, startMillsOk := ipfixMap["flowStartSysUpTime"]
+	//if the milliseconds since the init isn't present return false
+	if startMillsOk {
+		return nil, errors.Errorf("Couldn't find flowStartSysUpTime")
+	}
+	//try converting to an int64 first, handle any errors that come up
+	startMills, startMillsOk = startMillsIface.(int64)
+	if !startMillsOk {
+		startMills32, start32Ok = startMillsIface.(int)
+		if !start32Ok {
+			return nil, errors.Errorf("Couldn't convert values")
+		}
+		startMills = int64(startMills32)
+	}
+
+	//get the timestamp value so we have the full picture
+	flowDateIface, flowDateOk := ipfixMap["@timestamp"]
+	if !flowDateOk {
+		//if we don't have a timestamp return an error
+		return nil, errors.Errorf("Couldn't find timestamp")
+	}
+	//convert the time to a string, so we can parse the string to a date/time vlaue
+	flowDateStr, ok = flowDateIface.(string)
+	if !ok {
+		return nil, errors.Errorf("Couldn't convert timestamp to string")
+	}
+	flowDate, err := time.Parse(time.RFC3339, flowDateIface)
+	if err != nil {
+		return nil, err
+	}
+
+	return exporterUptime{startMills, flowDate, true}, nil
+
 }
 
 //fillFromIPFIXBSONMap reads the data from a bson map representing
@@ -160,12 +258,16 @@ func (f *flowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 
 	var flowStart, flowEnd string // RFC3339Nano timestamps
 
+	//Get the Start, and the end times of the flow
 	flowStartMillisIface, flowStartMillisOk := ipfixMap["flowStartMilliseconds"]
 	flowEndMillisIface, flowEndMillisOk := ipfixMap["flowEndMilliseconds"]
 
+	//Also attempt to get the start and end times relative to system init
 	flowStartUptimeMillisIface, flowStartUptimeMillisOk := ipfixMap["flowStartSysUpTime"]
 	flowEndUptimeMillisIface, flowEndUptimeMillisOk := ipfixMap["flowEndSysUpTime"]
+	//get the system init time if possible
 	systemInitTimeMillis, systemInitTimeMillisecondsOk := f.ipfixExporterUptimes[host]
+	systemRelativeMillis, systemRelativeOK := f.ipfix
 
 	if flowStartMillisOk && flowEndMillisOk {
 		flowStart, flowStartMillisOk = flowStartMillisIface.(string)
@@ -663,6 +765,7 @@ func (f *flowDeserializer) deserializeNextBSONMap(inputMap bson.M, outputFlow *F
 		//theres a chance that systemInitTimeMilliseconds
 		//came inside a flow record, parse the rest out just in case...
 		//unfortunately, we can't tell option records from flow records
+		f.updateExporterTimestamps(netflowMap)
 
 		return f.fillFromIPFIXBSONMap(netflowMap, outputFlow, host)
 	} else if outputFlow.Netflow.Version == 9 {
