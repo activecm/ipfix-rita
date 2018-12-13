@@ -27,6 +27,17 @@ export INPUT_WORKERS="$(expr 3 \* $(nproc) / 4)"
 if [ "$INPUT_WORKERS" -lt 1 ]; then
   export INPUT_WORKERS=1
 fi
+
+# Ensure the timezone is set inside the docker containers
+# We use the TZ variable rather than bind mount /etc/localtime 
+# into our containers since /etc/localtime is a symlink.
+# If the container's timezone data directory has the same 
+# layout as the host's then the bind mounted symlink would work.
+# However, this cannot be guaranteed.
+if [ -z "$TZ" ]; then
+  export TZ="$(basename $(dirname $(readlink /etc/localtime)))/$(basename $(readlink /etc/localtime))"
+fi
+
 docker-compose "$@"
 
 # Change back to original directory
