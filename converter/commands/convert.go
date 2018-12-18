@@ -11,22 +11,31 @@ import (
 	"github.com/activecm/ipfix-rita/converter/environment"
 	input "github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
-	"github.com/activecm/ipfix-rita/converter/output/rita/streaming/dates"
+	"github.com/activecm/ipfix-rita/converter/output"
+	batchRITAOutput "github.com/activecm/ipfix-rita/converter/output/rita/batch/dates"
+	streamingRITAOutput "github.com/activecm/ipfix-rita/converter/output/rita/streaming/dates"
 	"github.com/activecm/ipfix-rita/converter/stitching"
 	"github.com/benbjohnson/clock"
 	"github.com/urfave/cli"
 )
 
 func init() {
+	noRotateFlag := cli.BoolFlag{
+		Name:  "no-rotate, r",
+		Usage: "Do not create and rotate daily databases. Instead, split the incoming flows based on their timestamps into day-by-day databases and make them available to RITA when IPFIX-RITA shuts down.",
+	}
+
 	GetRegistry().RegisterCommands(cli.Command{
 		Name:  "run",
 		Usage: "Run the IPFIX-RITA converter",
+		Flags: []cli.Flag{noRotateFlag},
 		Action: func(c *cli.Context) error {
 			env, err := environment.NewDefaultEnvironment()
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}
-			err = convert(env)
+			noRotate := c.Bool("no-rotate")
+			err = convert(env, noRotate)
 			if err != nil {
 				env.Logger.Error(err, nil)
 				return cli.NewExitError(nil, 1)
@@ -36,7 +45,7 @@ func init() {
 	})
 }
 
-func convert(env environment.Environment) error {
+func convert(env environment.Environment, noRotate bool) error {
 
 	//use CTRL-C as our signal to wrap up and exit
 	ctx, _ := interruptContext(env.Logger)
@@ -132,22 +141,37 @@ func convert(env environment.Environment) error {
 	//bulkBatchSize is how much data is shipped to MongoDB at a time
 	bulkBatchSize := outputBufferSize
 
-	dayRotationPeriodMillis := int64(1000 * 60 * 60 * 24) //daily datasets
-	gracePeriodMillis := int64(1000 * 60 * 5)             //analysis can happen after 12:05 am
-	dateFormatString := "2006-01-02"
+	var writer output.SessionWriter
 
-	//NewStreamingRITATimeIntervalWriter creates a MongoDB/RITA conn-record writer
-	//which splits output records up based on the time the connection finished
-	writer, err := dates.NewStreamingRITATimeIntervalWriter(
-		env.GetOutputConfig().GetRITAConfig(),
-		env.GetIPFIXConfig(),
-		bulkBatchSize, flushDeadline,
-		dayRotationPeriodMillis, gracePeriodMillis,
-		clock.New(), time.Local, dateFormatString,
-		env.Logger,
-	)
-	if err != nil {
-		return err
+	if !noRotate {
+		dayRotationPeriodMillis := int64(1000 * 60 * 60 * 24) //daily datasets
+		gracePeriodMillis := int64(1000 * 60 * 5)             //analysis can happen after 12:05 am
+		dateFormatString := "2006-01-02"
+
+		//NewStreamingRITATimeIntervalWriter creates a MongoDB/RITA conn-record writer
+		//which splits output records up based on the time the connection finished
+		writer, err = streamingRITAOutput.NewStreamingRITATimeIntervalWriter(
+			env.GetOutputConfig().GetRITAConfig(),
+			env.GetIPFIXConfig(),
+			bulkBatchSize, flushDeadline,
+			dayRotationPeriodMillis, gracePeriodMillis,
+			clock.New(), time.Local, dateFormatString,
+			env.Logger,
+		)
+		if err != nil {
+			return err
+		}
+	} else {
+		writer, err = batchRITAOutput.NewBatchRITAConnDateWriter(
+			env.GetOutputConfig().GetRITAConfig(),
+			env.GetIPFIXConfig(),
+			bulkBatchSize, flushDeadline,
+			env.Logger,
+		)
+		if err != nil {
+			return err
+		}
+		env.Info("Database rotation has been disabled", nil)
 	}
 
 	//input channels

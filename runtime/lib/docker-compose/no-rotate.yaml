@@ -1,0 +1,5 @@
+version: '3.3'
+
+services:
+  converter:
+    command: run --no-rotate
