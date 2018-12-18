@@ -113,8 +113,8 @@ Netflow v5/ v9/ IPFix data as recorded in a PCAP.
 Restarting IPFix-RITA with the following commands prevents this problem from
 occurring by disabling the database rotation.
 ```
-sudo ipfix-rita down [-v]
-sudo ipfix-rita -f /opt/ipfix-rita/lib/docker-compose/no-rotate.yaml up [-d]
+sudo ipfix-rita rm -fs converter
+sudo ipfix-rita -f /opt/ipfix-rita/lib/docker-compose/no-rotate.yaml up -d converter
 ```
 
 IPFix-RITA will then place each stitched session into a database matching its
