@@ -76,41 +76,37 @@ func (f *flowDeserializer) updateExporterUptimesMap(ipfixMap bson.M, host string
 //relative to the daily first flow, so if we don't have an instance of the
 //system init time we can still get results from RITA
 func (f *flowDeserializer) updateExporterTimestamps(ipfixMap bson.M, host string) bool {
-	//24 hrs in day, 60 mins in hr, 60 secs in min, and 1e9 ns in sec
-	nsInDay := time.Duration(24*60*60*1000000000)
-
 	//if we have a inital set value see if we need to update the value
 	if f.ipfixExporterRelUp[host].firstFlowSet == true {
-		//if a day or more has elapsed since last relative update we should
-		// reinitialize the relative system uptime
+		//if the system has reinitialized then the relative timestamps will be off
+		//  as a result check if there is a change and update it if needed
 		//get the timestamp value so we have the full picture
-		var currDate time.Time
-		currDateIface, currDateOk := ipfixMap["timestamp"]
-		if currDateOk {
-			//convert the time to a string, then parse that string to a date/time value
-			currDateStr, ok := currDateIface.(string)
-			if !ok {
+		var startMills int64
+		startMillsIface, startMillsOk := ipfixMap["flowStartSysUpTime"]
+		if !startMillsOk {
+			return false
+		}
+		//try converting to an int64 first, handle any errors that come up
+		startMills, startMillsOk = startMillsIface.(int64)
+		if !startMillsOk {
+			startMills32, start32Ok := startMillsIface.(int)
+			if !start32Ok {
 				return false
 			}
-			var err error
-			currDate, err = time.Parse(time.RFC3339, currDateStr)
-			if err != nil {
-				return false
-			}
-		} else {
-			currDate = time.Now()
+			startMills = int64(startMills32)
 		}
 
-		//get the difference between the first flow time and the current time
-		//  if the time elapsed is greater than a day reset the first flow info
-		timeElapsed := f.ipfixExporterRelUp[host].firstFlowTime.Sub(currDate)
-		if timeElapsed > nsInDay {
+		//if the host's first flow milliseconds is greater than the new flow's
+		//  start milliseconds it implies that the system was reinitialized and it
+		//  is imparitive to update the information currently saved
+		if f.ipfixExporterRelUp[host].firstFlowMills > startMills {
 			newExporter, err := getNewExporterUptime(ipfixMap)
 			if err != nil {
 				return false
 			}
 
 			f.ipfixExporterRelUp[host] = newExporter
+			return true
 		}
 	} else {
 		newExporter, err := getNewExporterUptime(ipfixMap)
