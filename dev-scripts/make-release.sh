@@ -8,10 +8,9 @@ set -o errtrace
 set -o pipefail
 
 export IPFIX_RITA_VERSION="$(cat ../VERSION)"
-IPFIX_RITA_VERSION_HYPHENATED="$(echo $IPFIX_RITA_VERSION | sed 's/\./-/g')"
 
 DOCKER_IMAGE_OUT="docker-images.tgz"
-IPFIX_RITA_ARCHIVE="ipfix-rita-$IPFIX_RITA_VERSION_HYPHENATED"
+IPFIX_RITA_ARCHIVE="ipfix-rita"
 
 IN_DEV_README="../README.md"
 IN_DEV_DOCS_DIR="../docs"
@@ -206,6 +205,7 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
   echo "In order to support this type of installation, you will need to"
   echo "add the suggested Docker interface below to the list of bindIP's in /etc/mongod.conf."
   echo "If needed, please do so, and restart MongoDB before continuing."
+  echo "Restart MongoDB with \$ sudo systemctl restart mongod.service"
   echo "Note: the default configuration is not recommended. IPFIX-RITA will likely perform"
   echo "better if it is installed on a machine separate from RITA/ MongoDB."
   echo ""
