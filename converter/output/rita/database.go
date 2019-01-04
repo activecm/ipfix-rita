@@ -120,7 +120,7 @@ func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
 		Name:           dbName,
 		ImportFinished: false,
 		Analyzed:       false,
-		ImportVersion:  "v1.1.0+ActiveCM-IPFIX",
+		ImportVersion:  "v2.0.0+ActiveCM-IPFIX",
 		AnalyzeVersion: "",
 	})
 	if err != nil {
