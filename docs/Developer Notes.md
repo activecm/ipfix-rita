@@ -76,7 +76,7 @@ the new version and attach the resulting tarball to the release.
 
 ### Replaying a PCAP with Netflow Data
 
-While any PCAP can be converted into IPFIX records using YAF (see [Generating Data.md](./Generating%20Data.md)), PCAPs which contain raw Netflow v5/ v9/ IPFix
+While any PCAP can be converted into IPFIX records using YAF (see [Generating Data.md](./Generating%20Data.md)), PCAPs which contain raw Netflow v5/v9/IPFix
 data may be replayed directly using the [replay-pcap.py script](../dev-scripts/replay-pcap.py).
 
 The script requires **python3** and **scapy**. **scapy** can be installed by running `pip3 install scapy`.
@@ -108,7 +108,7 @@ Records stored in PCAP files can be converted into IPFIX flows using YAF. In thi
 in the PCAP can be aligned to the current date using the [align_pcap_to_today.sh](../dev-scripts/align_pcap_to_today.sh) script before YAF performs the conversion.
 
 However, this alignment can't be performed when replaying raw
-Netflow v5/ v9/ IPFix data as recorded in a PCAP.
+Netflow v5/v9/IPFix data as recorded in a PCAP.
 
 Restarting IPFix-RITA with the following commands prevents this problem from
 occurring by disabling the database rotation.
