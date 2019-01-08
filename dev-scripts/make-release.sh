@@ -82,7 +82,7 @@ done
 mkdir "$INSTALLER_BIN_DIR"
 # Construct the main script
 # Copy the shebang line in
-head -n 1 "$IN_DEV_MAIN_SCRIPT" >> "$INSTALLER_MAIN_SCRIPT"
+head  "$IN_DEV_MAIN_SCRIPT" >> "$INSTALLER_MAIN_SCRIPT"
 
 # Ensure the right versions of the images are ran
 echo "export IPFIX_RITA_VERSION=$IPFIX_RITA_VERSION" >> "$INSTALLER_MAIN_SCRIPT"
