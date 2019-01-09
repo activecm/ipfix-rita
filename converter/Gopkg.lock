@@ -11,14 +11,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5325ae9e8e827a7d15551733540bf9191bc253947674e2562769612e599f215d"
+  digest = "1:88e827efb8899cf42a7f58967b1ac995699e76dbc085402f7c8b1350c1dede77"
   name = "github.com/activecm/dbtest"
   packages = [
     ".",
     "docker",
   ]
   pruneopts = ""
-  revision = "8708113dbf4d3a403c7995dc0a17d05e693ccc4c"
+  revision = "fa9893aa881a846ff5f2e1946c82342deb2acdae"
 
 [[projects]]
   digest = "1:df541133b5b4919a9f1a215283caeaaa24cb4b58bc7358c97b970e7baf930391"
