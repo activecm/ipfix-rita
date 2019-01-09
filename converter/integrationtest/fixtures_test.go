@@ -25,7 +25,7 @@ func TestEnvironmentFixture(t *testing.T) {
 	envIface := fixtures.Get(integrationtest.EnvironmentFixture.Key)
 	env, ok := envIface.(environment.Environment)
 	require.True(t, ok)
-	require.NotNil(t, env.GetIPFIXConfig())
+	require.NotNil(t, env.GetFilteringConfig())
 }
 
 //TODO: Ensure each piece of the lifecycle works as expected

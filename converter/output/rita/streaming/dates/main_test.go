@@ -55,7 +55,7 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 
 		ritaWriter, err := dates.NewStreamingRITATimeIntervalWriter(
 			env.GetOutputConfig().GetRITAConfig(),
-			env.GetIPFIXConfig(),
+			env.GetFilteringConfig(),
 			bufferSize, autoFlushTime,
 			intervalLengthMillis, gracePeriodCutoffMillis,
 			clock, timezone, timeFormatString,

@@ -26,8 +26,8 @@ import (
 //Config holds IPFIX-RITA (converter) configuration details
 type Config interface {
 	GetInputConfig() Input
+	GetFilteringConfig() Filtering
 	GetOutputConfig() Output
-	GetIPFIXConfig() IPFIX
 }
 
 //Serializable represents application configuration data
@@ -71,7 +71,7 @@ type Output interface {
 	GetRITAConfig() RITA
 }
 
-//RITA2 contains configuration for writing out the
+//RITA contains configuration for writing out the
 //stitched IPFIX/ Netflow records RITA compatible MongoDB databases
 type RITA interface {
 	GetConnectionConfig() MongoDBConnection
@@ -79,8 +79,10 @@ type RITA interface {
 	GetMetaDB() string
 }
 
-//IPFIX provides information for accessing IPFIX data
-//and information regarding the individual records
-type IPFIX interface {
-	GetLocalNetworks() ([]net.IPNet, []error)
+//Filtering contains information on local subnets and other networks/hosts
+//that should be filtered out of the result set
+type Filtering interface {
+	GetAlwaysIncludeSubnets() ([]net.IPNet, []error)
+	GetNeverIncludeSubnets() ([]net.IPNet, []error)
+	GetInternalSubnets() ([]net.IPNet, []error)
 }

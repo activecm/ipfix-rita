@@ -43,13 +43,41 @@ Output:
     # This database holds information about RITA managed databases.
     MetaDB: MetaDatabase
 
-IPFIX:
-  # CIDR ranges of networks to mark local
-  LocalNetworks:
-    - 192.168.0.0/16
-    - 172.16.0.0/12
-    - 10.0.0.0/8
-    - 195.154.15.32`
+Filtering:
+    # These are filters that affect which flows are processed and which
+    # are dropped.
+    # A good reference for networks you may wish to consider is RFC 5735.
+    # https://tools.ietf.org/html/rfc5735#section-4
+
+    # Example: AlwaysInclude: ["192.168.1.2/32"]
+    # This functionality overrides the NeverInclude and InternalSubnets
+    # section, making sure that any connection records containing addresses from
+    # this range are kept and not filtered.
+    AlwaysInclude: []
+
+    # Example: NeverInclude: ["255.255.255.255/32"]
+    # This functions as a whitelisting setting, and connections involving
+    # ranges entered into this section are filtered out.
+    NeverInclude:
+     - 0.0.0.0/32          # "This" Host           RFC 1122, Section 3.2.1.3
+     - 127.0.0.0/8         # Loopback              RFC 1122, Section 3.2.1.3
+     - 169.254.0.0/16      # Link Local            RFC 3927
+     - 224.0.0.0/4         # Multicast             RFC 3171
+     - 255.255.255.255/32  # Limited Broadcast     RFC 919, Section 7
+     - ::1/128             # Loopback              RFC 4291, Section 2.5.3
+     - fe80::/10           # Link local            RFC 4291, Section 2.5.6
+     - ff00::/8            # Multicast             RFC 4291, Section 2.7
+
+    # Example: InternalSubnets: ["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]
+    # This allows a user to identify their internal network, which will result
+    # in any internal to internal and external to external connections being
+    # filtered out at import time. Reasonable defaults are provided below
+    # but need to be manually verified against each installation.
+    InternalSubnets:
+      - 10.0.0.0/8          # Private-Use Networks  RFC 1918
+      - 172.16.0.0/12       # Private-Use Networks  RFC 1918
+      - 192.168.0.0/16      # Private-Use Networks  RFC 1918
+      - 195.154.15.32`
 
 	testConfig, err := NewYAMLConfig([]byte(testData))
 	require.Nil(t, err)
@@ -60,8 +88,8 @@ IPFIX:
 	ritaConf := testConfig.GetOutputConfig().GetRITAConfig()
 	testRITAConfig(t, ritaConf)
 
-	ipfixConf := testConfig.GetIPFIXConfig()
-	testIPFIXConfig(t, ipfixConf)
+	filteringConf := testConfig.GetFilteringConfig()
+	testFilteringConfig(t, filteringConf)
 }
 
 func testLogstashConfig(t *testing.T, logstashConf config.LogstashMongoDB) {
@@ -92,19 +120,27 @@ func testRITAConfig(t *testing.T, ritaConf config.RITA) {
 	})
 }
 
-func testIPFIXConfig(t *testing.T, ipfixConf config.IPFIX) {
-	t.Run("IPFIX Config", func(t *testing.T) {
-		networks, errors := ipfixConf.GetLocalNetworks()
+func testFilteringConfig(t *testing.T, filteringConf config.Filtering) {
+	t.Run("Filtering Config", func(t *testing.T) {
+		internalNets, errors := filteringConf.GetInternalSubnets()
+		require.Len(t, internalNets, 3)
 		require.Len(t, errors, 1)
-		require.Len(t, networks, 3)
-		netStrings := make([]string, 0, len(networks))
-		for i := range networks {
-			netStrings = append(netStrings, networks[i].String())
+		internalNetStrings := make([]string, 0, len(internalNets))
+		for i := range internalNets {
+			internalNetStrings = append(internalNetStrings, internalNets[i].String())
 		}
 		require.ElementsMatch(t, []string{
-			"192.168.0.0/16",
-			"172.16.0.0/12",
 			"10.0.0.0/8",
-		}, netStrings)
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+		}, internalNetStrings)
+
+		alwaysIncludeNets, errors2 := filteringConf.GetAlwaysIncludeSubnets()
+		require.Len(t, alwaysIncludeNets, 0)
+		require.Len(t, errors2, 0)
+
+		neverIncludeNets, errors3 := filteringConf.GetNeverIncludeSubnets()
+		require.Len(t, neverIncludeNets, 8)
+		require.Len(t, errors3, 0)
 	})
 }
