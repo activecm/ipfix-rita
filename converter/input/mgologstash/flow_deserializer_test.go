@@ -10,6 +10,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//TestIFaceToInt64 will test sending three interfaces to the iFaceToInt64
+//  function. The first value is an int64, the second is an int32 and the last
+//  is a string (to test error handling)
+)
+func TestIFaceToInt64 (t *testing.T) {
+	tests := map[string]struct {
+		faceVal     interface{}
+		expectedVal int64
+		err         error
+	}{
+		"int64IFace": {
+			faceVal:     interface{}(int64(2147483648)),
+			expectedVal: 2147483648,
+			err:         nil,
+		},
+		"int32IFace": {
+			faceVal:     interface{}(int32(10)),
+			expectedVal: 10,
+			err:         nil,
+		},
+		"strIFace": {
+			faceVal:     interface{}("Hello, World"),
+			expectedVal: 0,
+			err:         errors.Errorf("could not convert %+v to int", iFaceInt),
+		},
+	}
+
+	for name, test := range tests {
+		t.Logf("Running test case: %s", name)
+
+		testVal, err := iFaceToInt64(test.FaceVal)
+
+		assert.Equal(t, test.expectedVal, testVal, "iFaceToInt64 returned %d, should
+			be %d", testVal, test.expectedVal)
+		assert.Equal(t, test.err, err, "iFaceToInt64 returned %s, should be %s", err,
+		  test.err)
+	}
+}
+
 func TestFillFromIPFIXBSONMap(t *testing.T) {
 	var flow1 = new(Flow)
 	var flowDeserializer = newFlowDeserializer()
