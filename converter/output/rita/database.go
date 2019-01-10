@@ -19,6 +19,8 @@ const MetaDBDatabasesCollection = "databases"
 //which houses input connection data
 const RitaConnInputCollection = "conn"
 
+var Version = "v2.0.0+ActiveCM-IPFIX"
+
 //TODO: Use version in RITA as dep
 // DBMetaInfo defines some information about the database
 type DBMetaInfo struct {
@@ -120,7 +122,7 @@ func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
 		Name:           dbName,
 		ImportFinished: false,
 		Analyzed:       false,
-		ImportVersion:  "v2.0.0+ActiveCM-IPFIX",
+		ImportVersion:  Version,
 		AnalyzeVersion: "",
 	})
 	if err != nil {
