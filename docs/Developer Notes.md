@@ -73,3 +73,51 @@ The `make-release` script will then exit. Now, you must go to the Github page
 for the project and make a new release. Set the referenced tag for the release
 to the version you entered into the VERSION file. Add a small write up for
 the new version and attach the resulting tarball to the release.
+
+### Replaying a PCAP with Netflow Data
+
+While any PCAP can be converted into IPFIX records using YAF (see [Generating Data.md](./Generating%20Data.md)), PCAPs which contain raw Netflow v5/v9/IPFix
+data may be replayed directly using the [replay-pcap.py script](../dev-scripts/replay-pcap.py).
+
+The script requires **python3** and **scapy**. **scapy** can be installed by running `pip3 install scapy`.
+
+```
+./replay-pcap.py --help
+
+This script reads in a [pcap-file], extracts the UDP packets sent to
+[old-dest-ip] on [old-dest-port], and sends the data in the packets to
+[new-dest-ip] on [new-dest-port].
+
+Usage:
+./replay-pcap.py pcap-file old-dest-ip old-dest-port new-dest-ip new-dest-port
+```
+
+If the PCAP was not captured on the same day as it was replayed, database rotation
+must be disabled in the converter.
+
+### Disabling Database Rotation
+
+The converter automatically rotates the resulting RITA databases on a day by day basis.
+In order to carry this out, the converter rejects any flows which are not timestamped
+within the current day (Note: there is a small grace period in which flows from the
+previous day are not rejected).
+
+This presents a problem when processing data stored in a PCAP file.
+
+Records stored in PCAP files can be converted into IPFIX flows using YAF. In this case, the timestamps
+in the PCAP can be aligned to the current date using the [align_pcap_to_today.sh](../dev-scripts/align_pcap_to_today.sh) script before YAF performs the conversion.
+
+However, this alignment can't be performed when replaying raw
+Netflow v5/v9/IPFix data as recorded in a PCAP.
+
+Restarting IPFix-RITA with the following commands prevents this problem from
+occurring by disabling the database rotation.
+```
+sudo ipfix-rita rm -fs converter
+sudo ipfix-rita -f /opt/ipfix-rita/lib/docker-compose/no-rotate.yaml up -d converter
+```
+
+IPFix-RITA will then place each stitched session into a database matching its
+closing timestamp. These databases will not be ready for analysis until IPFix-RITA
+is stopped i.e. the `ImportFinished` flag is not set on the created MetaDatabase
+records until the program exits.
