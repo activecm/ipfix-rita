@@ -11,7 +11,7 @@ if [ ! -x "$(command -v docker-compose)" ]; then
 fi
 
 MIN_VERSION_MAJOR=1
-MIN_VERSION_MINOR=16
+MIN_VERSION_MINOR=17
 MAX_VERSION_MAJOR=1
 MAX_VERSION_MINOR=22
 
