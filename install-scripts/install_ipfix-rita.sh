@@ -27,6 +27,8 @@ check_remote_mongo() {
 	fi
 } #End of check_remote_mongo
 
+
+
 can_ssh () {
 	#Test that we can reach the target system over ssh.
 	success_code=1
@@ -48,6 +50,21 @@ can_ssh () {
 
 	return $success_code
 } #End of can_ssh
+
+
+
+fail () {
+	echo "$* ." >&2
+	echo "This is normally an unrecoverable problem, and we recommend fixing the problem and restarting the script.  Please contact technical support for help in resolving the issue.  If you feel the script should continue, enter   Y   and the script will attempt to finish.  Entering   N    will cause this script to exit." >&2
+	if askYN ; then
+		echo "Script will continue at user request.  This may not result in a working configuration." >&2
+		sleep 5
+	else
+		exit 1
+	fi
+} #end of fail
+
+
 
 do_system_tests () {
 	while [ -n "$1" ]; do
@@ -91,8 +108,7 @@ do_system_tests () {
 	require_util awk cat cp curl date egrep gdb getent git grep ip lsb_release make mkdir mv printf rm rsync sed sleep tar tr wc wget		|| fail "A needed tool is missing"
 
 	if [ -s /etc/redhat-release ] && grep -iq 'release 7' /etc/redhat-release ; then
-		#echo "Centos or Redhat 7 installation detected, good."
-		fail "This system does not appear to be a Centos/RHEL 7 or Ubuntu Linux system"
+		echo "Centos or Redhat 7 installation detected, good."
 	elif grep -iq '^DISTRIB_ID *= *Ubuntu' /etc/lsb-release ; then
 		echo "Ubuntu Linux installation detected, good."
 	else
