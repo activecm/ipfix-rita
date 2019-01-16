@@ -26,12 +26,34 @@ func (f *filtering) parseSubnetList(netList []string) ([]net.IPNet, []error) {
 	var errorList []error
 	var nets []net.IPNet
 	for j := range netList {
-		_, net, err := net.ParseCIDR(netList[j])
+		//parse as network
+		_, network, err := net.ParseCIDR(netList[j])
 		if err != nil {
-			errorList = append(errorList, errors.WithStack(err))
-		} else {
-			nets = append(nets, *net)
+			//parse as IP
+			ipAddr := net.ParseIP(netList[j])
+
+			if ipAddr == nil {
+				errorList = append(errorList, errors.WithStack(err))
+				continue
+			}
+
+			network = f.ipToIPNet(ipAddr)
 		}
+
+		nets = append(nets, *network)
 	}
 	return nets, errorList
+}
+
+func (f *filtering) ipToIPNet(ipAddr net.IP) *net.IPNet {
+	var netmask net.IPMask
+	if ipAddr.To4() == nil {
+		netmask = net.CIDRMask(32, 32)
+	} else {
+		netmask = net.CIDRMask(128, 128)
+	}
+	return &net.IPNet{
+		IP:   ipAddr,
+		Mask: netmask,
+	}
 }

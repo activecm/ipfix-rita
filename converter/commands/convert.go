@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
+	"github.com/activecm/ipfix-rita/converter/filter"
 	input "github.com/activecm/ipfix-rita/converter/input/mgologstash"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
@@ -54,6 +56,8 @@ func convert(env environment.Environment, noRotate bool) error {
 	//TODO: Decide on how to scale these options depending on the specs
 	//of the computer
 
+	//-------------------------------Input setup-------------------------------
+
 	//pollWait is how long to wait before checking if the input buffer has
 	//more data
 	pollWait := 30 * time.Second
@@ -80,6 +84,40 @@ func convert(env environment.Environment, noRotate bool) error {
 		pollWait,
 		env.Logger,
 	)
+
+	//-------------------------------Filter setup-------------------------------
+
+	//Create the filter which will filter out flows as specified by the
+	//Filter config section
+	internalNets, errs := env.GetFilteringConfig().GetInternalSubnets()
+	if len(errs) != 0 {
+		for _, err := range errs {
+			env.Logger.Error(err, nil)
+		}
+		return errors.New("unable to parse filtering config")
+	}
+	neverIncludeNets, errs := env.GetFilteringConfig().GetNeverIncludeSubnets()
+	if len(errs) != 0 {
+		for _, err := range errs {
+			env.Logger.Error(err, nil)
+		}
+		return errors.New("unable to parse filtering config")
+	}
+	alwaysIncludeNets, errs := env.GetFilteringConfig().GetAlwaysIncludeSubnets()
+	if len(errs) != 0 {
+		for _, err := range errs {
+			env.Logger.Error(err, nil)
+		}
+		return errors.New("unable to parse filtering config")
+	}
+
+	flowFilter := filter.NewFlowBlacklist(
+		internalNets,
+		neverIncludeNets,
+		alwaysIncludeNets,
+	)
+
+	//------------------------------Stitching setup------------------------------
 
 	//sameSessionThreshold determines is used in the process of determining
 	//whether two flows should be stitched together or not.
@@ -132,8 +170,11 @@ func convert(env environment.Environment, noRotate bool) error {
 		outputBufferSize,
 		matcherSize,
 		matcherFlushToPercent,
+		flowFilter,
 		env.Logger,
 	)
+
+	//-------------------------------Output setup-------------------------------
 
 	//flushDeadline determines how long data may sit in a buffer
 	//before it is exported to MongoDB
@@ -173,6 +214,8 @@ func convert(env environment.Environment, noRotate bool) error {
 		}
 		env.Info("Database rotation has been disabled", nil)
 	}
+
+	//-------------------------------Execution-------------------------------
 
 	//input channels
 	inputData, inputErrors := reader.Drain(ctx)

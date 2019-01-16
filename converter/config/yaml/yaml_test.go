@@ -59,12 +59,12 @@ Filtering:
     # This functions as a whitelisting setting, and connections involving
     # ranges entered into this section are filtered out.
     NeverInclude:
-     - 0.0.0.0/32          # "This" Host           RFC 1122, Section 3.2.1.3
+     - 0.0.0.0             # "This" Host           RFC 1122, Section 3.2.1.3 	(Test no /32)
      - 127.0.0.0/8         # Loopback              RFC 1122, Section 3.2.1.3
      - 169.254.0.0/16      # Link Local            RFC 3927
      - 224.0.0.0/4         # Multicast             RFC 3171
-     - 255.255.255.255/32  # Limited Broadcast     RFC 919, Section 7
-     - ::1/128             # Loopback              RFC 4291, Section 2.5.3
+     - 255.255.255.255/32  # Limited Broadcast     RFC 919,  Section 7
+     - ::1                 # Loopback              RFC 4291, Section 2.5.3 		(Test no /128)
      - fe80::/10           # Link local            RFC 4291, Section 2.5.6
      - ff00::/8            # Multicast             RFC 4291, Section 2.7
 
@@ -77,7 +77,7 @@ Filtering:
       - 10.0.0.0/8          # Private-Use Networks  RFC 1918
       - 172.16.0.0/12       # Private-Use Networks  RFC 1918
       - 192.168.0.0/16      # Private-Use Networks  RFC 1918
-      - 195.154.15.32`
+      - 195.154.15:a0`
 
 	testConfig, err := NewYAMLConfig([]byte(testData))
 	require.Nil(t, err)
