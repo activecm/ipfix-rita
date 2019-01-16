@@ -50,7 +50,7 @@ type streamingRITATimeIntervalWriter struct {
 //Metadatabase records for each collection. A database is marked as
 //ImportFinished in the Metadatabase when the database is the previous
 //database and the grace period expires.
-func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, filterConf config.Filtering,
+func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, localNets []net.IPNet,
 	bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
 	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
@@ -58,14 +58,6 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, filterConf config.
 	db, err := rita.NewOutputDB(ritaConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
-	}
-
-	//parse local networks
-	localNets, localNetsErrs := filterConf.GetInternalSubnets()
-	if len(localNetsErrs) != 0 {
-		for i := range localNetsErrs {
-			log.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
-		}
 	}
 
 	return &streamingRITATimeIntervalWriter{

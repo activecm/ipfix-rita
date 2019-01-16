@@ -193,7 +193,7 @@ func convert(env environment.Environment, noRotate bool) error {
 		//which splits output records up based on the time the connection finished
 		writer, err = streamingRITAOutput.NewStreamingRITATimeIntervalWriter(
 			env.GetOutputConfig().GetRITAConfig(),
-			env.GetIPFIXConfig(),
+			internalNets,
 			bulkBatchSize, flushDeadline,
 			dayRotationPeriodMillis, gracePeriodMillis,
 			clock.New(), time.Local, dateFormatString,
@@ -205,7 +205,7 @@ func convert(env environment.Environment, noRotate bool) error {
 	} else {
 		writer, err = batchRITAOutput.NewBatchRITAConnDateWriter(
 			env.GetOutputConfig().GetRITAConfig(),
-			env.GetIPFIXConfig(),
+			internalNets,
 			bulkBatchSize, flushDeadline,
 			env.Logger,
 		)

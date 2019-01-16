@@ -53,9 +53,15 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 		testOutputConfig := env.GetOutputConfig().GetRITAConfig().GetConnectionConfig().(*integrationtest.MongoDBConfig)
 		testOutputConfig.SetConnectionString(mongoContainer.GetMongoDBURI())
 
+		internalNets, errs := env.GetFilteringConfig().GetInternalSubnets()
+
+		if len(errs) != 0 {
+			return nil, false
+		}
+
 		ritaWriter, err := dates.NewStreamingRITATimeIntervalWriter(
 			env.GetOutputConfig().GetRITAConfig(),
-			env.GetFilteringConfig(),
+			internalNets,
 			bufferSize, autoFlushTime,
 			intervalLengthMillis, gracePeriodCutoffMillis,
 			clock, timezone, timeFormatString,
