@@ -3,17 +3,18 @@ package mgologstash
 import (
 	"math"
 	"testing"
+	"errors"
 
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 //TestIFaceToInt64 will test sending three interfaces to the iFaceToInt64
 //  function. The first value is an int64, the second is an int32 and the last
 //  is a string (to test error handling)
-)
 func TestIFaceToInt64 (t *testing.T) {
 	tests := map[string]struct {
 		faceVal     interface{}
@@ -26,26 +27,26 @@ func TestIFaceToInt64 (t *testing.T) {
 			err:         nil,
 		},
 		"int32IFace": {
-			faceVal:     interface{}(int32(10)),
+			faceVal:     interface{}(int(10)),
 			expectedVal: 10,
 			err:         nil,
 		},
 		"strIFace": {
 			faceVal:     interface{}("Hello, World"),
 			expectedVal: 0,
-			err:         errors.Errorf("could not convert %+v to int", iFaceInt),
+			err:         errors.New("could not convert Hello, World to int"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Logf("Running test case: %s", name)
 
-		testVal, err := iFaceToInt64(test.FaceVal)
+		testVal, err := iFaceToInt64(test.faceVal)
 
-		assert.Equal(t, test.expectedVal, testVal, "iFaceToInt64 returned %d, should
-			be %d", testVal, test.expectedVal)
-		assert.Equal(t, test.err, err, "iFaceToInt64 returned %s, should be %s", err,
-		  test.err)
+		assert.Equal(t, test.expectedVal, testVal, "iFaceToInt64 returned %d, should be %d", testVal, test.expectedVal)
+		if err != nil {
+			assert.NotEqual(t, test.err, nil, "iFaceToInt64 returned %s", test.err)
+		}
 	}
 }
 
@@ -169,7 +170,7 @@ func TestUptimeRelativeTimestamps(t *testing.T) {
 	//an error will be returned as flow should not have been filled.
 	require.NotNil(t, error1)
 
-	initTime, initTimeOk := flowDeserializer.ipfixExporterUptimes["172.22.0.1"]
+	initTime, initTimeOk := flowDeserializer.ipfixExporterAbsUptimes["172.22.0.1"]
 	require.True(t, initTimeOk)
 	require.Equal(t, int64(1539907077250), initTime)
 
