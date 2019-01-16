@@ -64,6 +64,9 @@ fi
 # Insert the install scripts
 # Start by adding the base install command
 cp "$INSTALLER_SCRIPTS_DIR/install_ipfix-rita.sh" "$INSTALLER_DIR"
+sed -i "s|INSTALLATION_DIR=\"REPLACE_WITH_INSTALL_DIR\"|INSTALLATION_DIR=\"$INSTALLATION_DIR\"|g" $INSTALLER_DIR/install_ipfix-rita.sh
+sed -i "s|INSTALLATION_ETC_DIR=\"REPLACE_WITH_ETC_DIR\"|INSTALLATION_ETC_DIR=\"$INSTALLATION_ETC_DIR\"|g" $INSTALLER_DIR/install_ipfix-rita.sh
+sed -i "s|DOCKER_IMAGES=\"./REPLACE_WITH_TARBALL\"|DOCKER_IMAGES=\"$DOCKER_IMAGE_OUT\"|g" $INSTALLER_DIR/install_ipfix-rita.sh
 #Then add all the helper scirpts to the tarball and remove install-ipfix-rita.sh
 cp -r "$INSTALLER_SCRIPTS_DIR" "$INSTALLER_DIR"
 rm "$INSTALLER_DIR/install-scripts/install_ipfix-rita.sh"

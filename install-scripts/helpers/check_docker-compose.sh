@@ -13,7 +13,7 @@ fi
 MIN_VERSION_MAJOR=1
 MIN_VERSION_MINOR=17
 MAX_VERSION_MAJOR=1
-MAX_VERSION_MINOR=22
+MAX_VERSION_MINOR=23
 
 VERSION="$(docker-compose -v | sed 's/^.* \([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*$/\1 \2 \3/')"
 VERSION_MAJOR="$(echo $VERSION | cut -d' ' -f1)"
