@@ -103,7 +103,7 @@ do_system_tests () {
 	#	#FIXME - put in place a similar loop like above for apt-get
 	#	sudo yum -y install gdb git wget curl make coreutils coreutils redhat-lsb-core rsync tar
 	else
-		fail "(apt-get and dpkg-query) is installed on this system"#nor (yum, rpm, and yum-config-manager) is installed on the system"
+		fail "(apt-get and dpkg-query) is installed on this system"
 	fi
 	require_util awk cat cp curl date egrep gdb getent git grep ip lsb_release make mkdir mv printf rm rsync sed sleep tar tr wc wget		|| fail "A needed tool is missing"
 
@@ -127,7 +127,7 @@ validated_ssh_target () {
 	echo 'About to execute commands on '"$potential_target"' .  You may be prompted one or more times for the password for this system.' >&2
 	echo 'Note: if you are using an ssh client other than openssh and have not set up ssh key access to this system, you may be prompted for your password multiple times.' >&2
 	while [ -n "$potential_target" ] && ! can_ssh "$potential_target" ; do
-		echo "What is the hostname or IP address where you would like to send IPFIX logs to?  Enter 127.0.0.1 if you want to install on this system.  Just press enter if you do not wish to set up IPFIX logging.  Press Ctrl-C to exit." >&2
+		echo "What is the hostname or IP address where you would like to send IPFIX logs to?  Enter 127.0.0.1 if you want to run on this system.  Press Ctrl-C to exit." >&2
 		read potential_target <&2
 		if [ -n "$potential_target" -a "$potential_target" != '127.0.0.1' ]; then
 			echo "Do you access that system with a username different than ${USER}?  If so, enter that username now, otherwise just press enter if your account is ${USER} on the remote system too." >&2
@@ -151,8 +151,8 @@ get_line() {
 } #End of get line
 
 get_rita_data_interactive() {
-	IPFIX_RITA_NETWORK_GATEWAY=\$(docker inspect ipfix_rita_default --format "{{with (index .IPAM.Config 0)}}{{.Gateway}}{{end}}")
-	RITA_MONGO_URI="mongodb://\$IPFIX_RITA_NETWORK_GATEWAY:27017"
+	IPFIX_RITA_NETWORK_GATEWAY=$(docker inspect ipfix_rita_default --format "{{with (index .IPAM.Config 0)}}{{.Gateway}}{{end}}")
+	RITA_MONGO_URI="mongodb://$IPFIX_RITA_NETWORK_GATEWAY:27017"
 
 	echo ""
 	echo "IPFIX-RITA needs to write to a MongoDB database controlled by RITA."
@@ -164,7 +164,7 @@ get_rita_data_interactive() {
 	echo "Note: the default configuration is not recommended. IPFIX-RITA will likely perform"
 	echo "better if it is installed on a machine separate from RITA/ MongoDB."
 	echo ""
-	read -p "What MongoDB URI should IPFIX-RITA use to contact the RITA database [\$RITA_MONGO_URI]: " -r
+	read -p "What MongoDB URI should IPFIX-RITA use to contact the RITA database [$RITA_MONGO_URI]: " -r
 	read RITA_MONGO_URI <&2
 	if [ -n "$RITA_MONGO_URI" -a  "$RITA_MONGO_URI" != '127.0.0.1' ]; then
 	        echo -n "Do you access that system with a username different than ${USER} (Y/N)" >&2
@@ -180,6 +180,8 @@ get_rita_data_interactive() {
 	        rita_system="127.0.0.1"
 	fi
 
+	#TODO check if the mongo server is available
+	
 	RITA_MONGO_AUTH="null"
 	#instead of prompting get the RITA address and split from there to fill in our
 	#  config file
@@ -189,16 +191,16 @@ get_rita_data_interactive() {
 	echo "2) SCRAM-SHA-1"
 	echo "3) MONGODB-CR"
 
-	while read && [[ ! ( "\$REPLY" =~ ^[123]\$ || -z "\$REPLY" ) ]]; do
+	while read && [[ ! ( "$REPLY" =~ ^[123]$ || -z "$REPLY" ) ]]; do
 		echo "Which authentication scheme should be used to contact the database if any? [None]"
 		echo "1) None"
 		echo "2) SCRAM-SHA-1"
 		echo "3) MONGODB-CR"
 	done
 
-	if [ "\$REPLY" = "2" ]; then
+	if [ "$REPLY" = "2" ]; then
 		RITA_MONGO_AUTH="SCRAM-SHA-1"
-	elif [ "\$REPLY" = "3" ]; then
+	elif [ "$REPLY" = "3" ]; then
 		RITA_MONGO_AUTH="MONGODB-CR"
 	fi
 
@@ -207,19 +209,19 @@ get_rita_data_interactive() {
 	RITA_MONGO_TLS_CERT_PATH="null"
 	echo ""
 	read -p "Does the MongoDB server accept TLS connections? (y/n) [n] "  -r
-	if [[ "\$REPLY" =~ ^[Yy]\$ ]]; then
+	if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 		RITA_MONGO_TLS="true"
 		RITA_MONGO_TLS_CHECK_CERT="true"
 		RITA_MONGO_TLS_CERT_PATH="null"
 		read -p "Would you like to provide a certificate authority? (y/n) [n] "  -r
-		if [[ "\$REPLY" =~ ^[Yy]\$ ]]; then
+		if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 			read -p "CA Path: "
-			RITA_MONGO_TLS_CERT_PATH="\$REPLY"
+			RITA_MONGO_TLS_CERT_PATH="$REPLY"
 		fi
 
-		if [ "\$RITA_MONGO_TLS_CERT_PATH" = "null" ]; then
+		if [ "$RITA_MONGO_TLS_CERT_PATH" = "null" ]; then
 			read -p "Would you like to disable certificate checks? [n] "  -r
-			if [[ "\$REPLY" =~ ^[Yy]\$ ]]; then
+			if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 				RITA_MONGO_TLS_CHECK_CERT="false"
 			fi
 		fi
@@ -230,8 +232,8 @@ get_rita_data_interactive() {
 	echo "where DBROOT consists of alphanumerics, underscores, and hyphens."
 	RITA_DATASET_DBROOT="IPFIX"
 	read -p "What would you like to set DBROOT to for this IPFIX collector? [IPFIX] " -r
-	if [ -n "\$REPLY" ]; then
-		RITA_DATASET_DBROOT="\$REPLY"
+	if [ -n "$REPLY" ]; then
+		RITA_DATASET_DBROOT="$REPLY"
 	fi
 
 	write_converter_conf $RITA_DATASET_DBROOT $RITA_MONGO_URI $RITA_MONGO_AUTH $RITA_MONGO_TLS $RITA_MONGO_TLS_CHECK_CERT $RITA_MONGO_TLS_CERT_PATH
@@ -291,12 +293,12 @@ write_converter_conf() {
 	RITA_MONGO_TLS_CHECK_CERT=$5
 	RITA_MONGO_TLS_CERT_PATH=$6
 
-awk -v db_root="\$RITA_DATASET_DBROOT" \\
--v mongo_uri="\$RITA_MONGO_URI" \\
--v mongo_auth="\$RITA_MONGO_AUTH" \\
--v mongo_tls_enable="\$RITA_MONGO_TLS" \\
--v mongo_tls_cert_check="\$RITA_MONGO_TLS_CHECK_CERT" \\
--v mongo_tls_ca_path="\$RITA_MONGO_TLS_CERT_PATH" '
+awk -v db_root="$RITA_DATASET_DBROOT" \
+-v mongo_uri="$RITA_MONGO_URI" \
+-v mongo_auth="$RITA_MONGO_AUTH" \
+-v mongo_tls_enable="$RITA_MONGO_TLS" \
+-v mongo_tls_cert_check="$RITA_MONGO_TLS_CHECK_CERT" \
+-v mongo_tls_ca_path="$RITA_MONGO_TLS_CERT_PATH" '
 # flag is used to determine if we are in the right scope
 
 # Unset the flag if we see "abc:" or "  abc:" on a line
@@ -359,16 +361,16 @@ flag && NF && /DBRoot:/{
 }
 
 1
-' \$INSTALLATION_ETC_DIR/converter/converter.yaml > \$INSTALLATION_ETC_DIR/converter/converter-new.yaml && \\
-mv \$INSTALLATION_ETC_DIR/converter/converter-new.yaml \$INSTALLATION_ETC_DIR/converter/converter.yaml
+' $INSTALLATION_ETC_DIR/converter/converter.yaml > $INSTALLATION_ETC_DIR/converter/converter-new.yaml && \\
+mv $INSTALLATION_ETC_DIR/converter/converter-new.yaml $INSTALLATION_ETC_DIR/converter/converter.yaml
 } #End of write_converter_conf
 
 # Stop if there are any errors
 set -e
 # Change dir to script dir
-_OLD_DIR=\$(pwd); cd "\$(dirname "\$BASH_SOURCE[0]")";
+_OLD_DIR=$(pwd); cd "$(dirname "$BASH_SOURCE[0]")";
 
-if [[ \$EUID -ne 0 ]]; then
+if [[ $EUID -ne 0 ]]; then
    echo "This script must be run with administrator privileges."
    exit 1
 fi
@@ -402,54 +404,54 @@ done
 #TODO check system requirements
 
 # Install docker if needed
-chmod +x "scripts/install_docker.sh"
-sudo scripts/install_docker.sh
+chmod +x "install-scripts/install_docker.sh"
+sudo install-scripts/install_docker.sh
 
 # Set by make-release
-INSTALLATION_DIR="$INSTALLATION_DIR"
+INSTALLATION_DIR="REPLACE_WITH_INSTALL_DIR"
 INSTALLATION_BIN_DIR="$INSTALLATION_DIR/bin"
 INSTALLATION_LIB_DIR="$INSTALLATION_DIR/lib"
-INSTALLATION_ETC_DIR="$INSTALLATION_ETC_DIR"
-DOCKER_IMAGES="./$DOCKER_IMAGE_OUT"
+INSTALLATION_ETC_DIR="REPLACE_WITH_ETC_DIR"
+DOCKER_IMAGES="./REPLACE_WITH_TARBALL"
 
 echo "Loading IPFIX-RITA Docker images... This may take a few minutes."
-gzip -d -c \${DOCKER_IMAGES} | docker load
+gzip -d -c ${DOCKER_IMAGES} | docker load
 
-echo "Installing configuration files to \$INSTALLATION_ETC_DIR"
+echo "Installing configuration files to $INSTALLATION_ETC_DIR"
 
 SETUP_CONFIG="true"
-if [ ! -d "\$INSTALLATION_ETC_DIR" ]; then
-  cp -r pkg/etc "\$INSTALLATION_ETC_DIR"
+if [ ! -d "$INSTALLATION_ETC_DIR" ]; then
+  cp -r pkg/etc "$INSTALLATION_ETC_DIR"
 else
   # TODO: set up migration
   echo "Existing configuration found. Skipping..."
   SETUP_CONFIG="false"
 fi
 
-echo "Installing ipfix-rita in \$INSTALLATION_DIR"
+echo "Installing ipfix-rita in $INSTALLATION_DIR"
 
-if [ -d "\$INSTALLATION_DIR" ]; then
-  rm -rf "\$INSTALLATION_DIR"
+if [ -d "$INSTALLATION_DIR" ]; then
+  rm -rf "$INSTALLATION_DIR"
 fi
 
-mkdir -p "\$INSTALLATION_DIR"
+mkdir -p "$INSTALLATION_DIR"
 
-cp -r ./pkg/bin "\$INSTALLATION_BIN_DIR"
-chmod +x "\$INSTALLATION_BIN_DIR/ipfix-rita"
+cp -r ./pkg/bin "$INSTALLATION_BIN_DIR"
+chmod +x "$INSTALLATION_BIN_DIR/ipfix-rita"
 
-cp -r ./pkg/lib "\$INSTALLATION_LIB_DIR"
+cp -r ./pkg/lib "$INSTALLATION_LIB_DIR"
 
 # set receive buffer size for logstash collector
-RECV_BUFF_SIZE=\$(sysctl -n net.core.rmem_max)
-RECV_BUFF_OPT_SIZE="\$((1024*1024*64))"
-if [ "\$RECV_BUFF_SIZE" -lt "\$RECV_BUFF_OPT_SIZE" ]; then
-  sysctl -w net.core.rmem_max=\$RECV_BUFF_OPT_SIZE
-  echo "net.core.rmem_max=\$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf
+RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
+RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
+if [ "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
+  sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE
+  echo "net.core.rmem_max=$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf
 fi
 
-"\$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
+"$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
 
-if [ "\$SETUP_CONFIG" = "true" ]; then
+if [ "$SETUP_CONFIG" = "true" ]; then
 	#From here out we want to move to a interactive/active install command
 	if [ -n "$rita_system" ]; then
 		get_rita_data_noninteractive $rita_system
@@ -459,10 +461,10 @@ if [ "\$SETUP_CONFIG" = "true" ]; then
 
 #We have written to config
 	echo ""
-	echo "Your settings have been saved to \$INSTALLATION_ETC_DIR/converter/converter.yaml"
+	echo "Your settings have been saved to $INSTALLATION_ETC_DIR/converter/converter.yaml"
 	echo "Note: By default IPFIX-RITA, considers all Class A, B, and C IPv4 networks"
 	echo "as local networks. If this is not the case, please edit the list 'LocalNetworks'"
-	echo "in \$INSTALLATION_ETC_DIR/converter/converter.yaml."
+	echo "in $INSTALLATION_ETC_DIR/converter/converter.yaml."
 fi
 
 echo ""
@@ -472,16 +474,16 @@ echo "To restart IPFIX-RITA, run 'ipfix-rita up -d'."
 echo "To view the system logs, run 'ipfix-rita logs -f'."
 echo ""
 
-echo "Adding a symbolic link from /usr/local/bin/ipfix-rita to \$INSTALLATION_BIN_DIR/ipfix-rita."
+echo "Adding a symbolic link from /usr/local/bin/ipfix-rita to $INSTALLATION_BIN_DIR/ipfix-rita."
 
-ln -fs "\$INSTALLATION_BIN_DIR/ipfix-rita" /usr/local/bin/ipfix-rita
+ln -fs "$INSTALLATION_BIN_DIR/ipfix-rita" /usr/local/bin/ipfix-rita
 
 echo ""
 echo "Starting IPFIX-RITA..."
 
-"\$INSTALLATION_BIN_DIR/ipfix-rita" up -d
+"$INSTALLATION_BIN_DIR/ipfix-rita" up -d
 
 echo "The IPFIX-RITA installer has finished."
 
 # Change back to the old directory at the end
-cd \$_OLD_DIR; unset _OLD_DIR
+cd $_OLD_DIR; unset _OLD_DIR
