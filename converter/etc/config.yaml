@@ -2,7 +2,7 @@ Output:
   RITA-MongoDB:
     MongoDB-Connection:
       # See https://docs.mongodb.com/manual/reference/connection-string/
-      ConnectionString: mongodb://mongodb:27017
+      ConnectionString: mongodb://localhost:27017
       # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
       AuthenticationMechanism: null
       TLS:
@@ -56,7 +56,7 @@ Input:
   Logstash-MongoDB:
     MongoDB-Connection:
       # See https://docs.mongodb.com/manual/reference/connection-string/
-      ConnectionString: mongodb://mongodb:27017
+      ConnectionString: mongodb://localhost:27017
       # Accepted Values: null, "SCRAM-SHA-1", "MONGODB-CR"
       AuthenticationMechanism: null
       TLS:
