@@ -1,10 +1,11 @@
-package mgologstash_test
+package mongodb_test
 
 import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
-	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/mongodb"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/stretchr/testify/require"
 )
@@ -13,12 +14,12 @@ func TestIDBulkBuffer(t *testing.T) {
 	fixtures := fixturesManager.BeginTest(t)
 	defer fixturesManager.EndTest(t)
 	env := fixtures.GetWithSkip(t, integrationtest.EnvironmentFixture.Key).(environment.Environment)
-	inputDB := fixtures.GetWithSkip(t, inputDBTestFixture.Key).(mgologstash.LogstashMongoInputDB)
-	buffer := mgologstash.NewIDBulkBuffer(inputDB.NewInputConnection(), 1000, env.Logger)
+	inputDB := fixtures.GetWithSkip(t, inputDBTestFixture.Key).(mongodb.LogstashMongoInputDB)
+	buffer := mongodb.NewIDBulkBuffer(inputDB.NewInputConnection(), 1000, env.Logger)
 	testBufferOrder(buffer, inputDB, t)
 }
 
-func testBufferOrder(buffer mgologstash.Buffer, inputDB mgologstash.LogstashMongoInputDB, t *testing.T) {
+func testBufferOrder(buffer mongodb.Buffer, inputDB mongodb.LogstashMongoInputDB, t *testing.T) {
 	testFlow1 := getTestFlow1()
 	testFlow2 := getTestFlow2()
 
@@ -32,7 +33,7 @@ func testBufferOrder(buffer mgologstash.Buffer, inputDB mgologstash.LogstashMong
 	require.Equal(t, 2, count)
 	c.Database.Session.Close()
 
-	var flow mgologstash.Flow
+	var flow data.Flow
 
 	more := buffer.Next(&flow)
 	require.True(t, more)

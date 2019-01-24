@@ -1,10 +1,11 @@
-package mgologstash
+package mongodb
 
 import (
 	"context"
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/input"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/pkg/errors"
 )
@@ -57,7 +58,7 @@ func (r Reader) Drain(ctx context.Context) (<-chan input.Flow, <-chan error) {
 func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- input.Flow, errs chan<- error) {
 	r.log.Info("checking input buffer for more data", nil)
 	dataFound := false
-	flow := &Flow{}
+	flow := &data.Flow{}
 	for buffer.Next(flow) {
 		if !dataFound {
 			r.log.Info("reading new data from input buffer", nil)
@@ -69,7 +70,7 @@ func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- input.
 		if ctx.Err() != nil {
 			break
 		}
-		flow = &Flow{}
+		flow = &data.Flow{}
 	}
 	if !dataFound {
 		r.log.Info("no data available in input buffer", nil)

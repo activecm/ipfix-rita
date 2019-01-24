@@ -1,4 +1,4 @@
-package mgologstash_test
+package mongodb_test
 
 import (
 	"os"

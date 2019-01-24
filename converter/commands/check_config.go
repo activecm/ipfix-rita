@@ -5,7 +5,7 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/config/yaml"
-	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/mongodb"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/urfave/cli"
 )
@@ -35,7 +35,7 @@ func init() {
 			}
 			fmt.Printf("Loaded Configuration:\n%s\n", confStr)
 
-			db, err := mgologstash.NewLogstashMongoInputDB(conf.GetInputConfig().GetLogstashMongoDBConfig())
+			db, err := mongodb.NewLogstashMongoInputDB(conf.GetInputConfig().GetLogstashMongoDBConfig())
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}

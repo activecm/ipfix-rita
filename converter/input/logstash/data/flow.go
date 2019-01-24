@@ -1,4 +1,4 @@
-package mgologstash
+package data
 
 import (
 	"time"
