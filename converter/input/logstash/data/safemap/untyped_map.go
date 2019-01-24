@@ -43,7 +43,7 @@ func (u SafeMap) get(field string) (interface{}, error) {
 func (u SafeMap) GetSafeMap(field string) (SafeMap, error) {
 	dataIface, err := u.get(field)
 	if err != nil {
-		return SafeMap{}, err
+		return SafeMap{}, errors.Wrap(err, "Field: "+field)
 	}
 
 	//Right now we only support bson.M and map[string]interface{}
@@ -70,7 +70,7 @@ func (u SafeMap) GetSafeMap(field string) (SafeMap, error) {
 func (u SafeMap) GetInt(field string) (int, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return 0, errors.Wrap(ErrDoesNotExist, "Field: "+field)
+		return 0, errors.Wrap(err, "Field: "+field)
 	}
 
 	intVal, ok := val.(int)
@@ -90,7 +90,7 @@ func (u SafeMap) GetInt(field string) (int, error) {
 func (u SafeMap) GetIntAsInt64(field string) (int64, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return 0, errors.Wrap(ErrDoesNotExist, "Field: "+field)
+		return 0, errors.Wrap(err, "Field: "+field)
 	}
 
 	int64Val, ok := val.(int64)
@@ -114,7 +114,7 @@ func (u SafeMap) GetIntAsInt64(field string) (int64, error) {
 func (u SafeMap) GetString(field string) (string, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return "", errors.Wrap(ErrDoesNotExist, "Field: "+field)
+		return "", errors.Wrap(err, "Field: "+field)
 	}
 
 	strVal, ok := val.(string)
@@ -124,5 +124,24 @@ func (u SafeMap) GetString(field string) (string, error) {
 	return "", errors.Wrap(
 		ErrTypeMismatch,
 		"Field: "+field+"; Type: string",
+	)
+}
+
+//GetObjectID returns the bson.ObjectId value for a given field.
+//If the field does not exist or the data matching the field is not the
+//appropriate type, an error is returned.
+func (u SafeMap) GetObjectID(field string) (bson.ObjectId, error) {
+	val, err := u.get(field)
+	if err != nil {
+		return "", errors.Wrap(err, "Field: "+field)
+	}
+
+	idVal, ok := val.(bson.ObjectId)
+	if ok {
+		return idVal, nil
+	}
+	return "", errors.Wrap(
+		ErrTypeMismatch,
+		"Field: "+field+"; Type: bson.ObjectId",
 	)
 }
