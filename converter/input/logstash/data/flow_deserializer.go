@@ -767,7 +767,7 @@ func (f *FlowDeserializer) DeserializeNextBSONMap(inputMap bson.M, outputFlow *F
 	outputFlow.Host = host
 	outputFlow.Netflow.Version = uint8(version)
 
-	//Version must be 10 or 9
+	//Version must be 10 or 9 or 5
 	if outputFlow.Netflow.Version == 10 {
 		//handle recording systemInitTimeMilliseconds
 		f.updateExporterAbsUptimes(netflowMap, host)
