@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/activecm/ipfix-rita/converter/environment"
-	input "github.com/activecm/ipfix-rita/converter/input/mgologstash"
+	input "github.com/activecm/ipfix-rita/converter/input/logstash/mongodb"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	batchRITAOutput "github.com/activecm/ipfix-rita/converter/output/rita/batch/dates"

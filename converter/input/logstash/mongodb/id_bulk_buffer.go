@@ -1,8 +1,9 @@
-package mgologstash
+package mongodb
 
 import (
 	"sync"
 
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
@@ -21,7 +22,7 @@ type idBulkBuffer struct {
 	readIndex int
 	err       error
 	log       logging.Logger
-	*flowDeserializer
+	*data.FlowDeserializer
 }
 
 //NewIDBulkBuffer returns an ipfix.Buffer backed by MongoDB and fed by Logstash
@@ -31,7 +32,7 @@ func NewIDBulkBuffer(input *mgo.Collection, bufferSize int64, log logging.Logger
 		buffer:           make([]bson.M, 0, bufferSize),
 		removeWG:         new(sync.WaitGroup),
 		log:              log,
-		flowDeserializer: newFlowDeserializer(),
+		FlowDeserializer: data.NewFlowDeserializer(),
 		//Note: we may want to IFace + Inject + Mock flowDeserializer here
 		//Arguably the buffer has to be integration tested anyways
 		//as it's main function is to control MongoDB (in a nontrivial manner)
@@ -41,7 +42,7 @@ func NewIDBulkBuffer(input *mgo.Collection, bufferSize int64, log logging.Logger
 //Next returns the next record that was inserted into the input collection.
 //Next returns false if there is no more data. Next may set an error when
 //it returns false. This error can be read with Err()
-func (b *idBulkBuffer) Next(out *Flow) bool {
+func (b *idBulkBuffer) Next(out *data.Flow) bool {
 
 	//loop until we have a good record stored in out
 	getNextRecord := true
@@ -98,7 +99,7 @@ func (b *idBulkBuffer) Next(out *Flow) bool {
 
 		inputMap := b.buffer[b.readIndex]
 		b.readIndex++
-		err := b.flowDeserializer.deserializeNextBSONMap(inputMap, out)
+		err := b.FlowDeserializer.DeserializeNextBSONMap(inputMap, out)
 		if err == nil {
 			getNextRecord = false
 		} else {

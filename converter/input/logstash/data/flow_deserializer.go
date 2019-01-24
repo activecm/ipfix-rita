@@ -1,4 +1,4 @@
-package mgologstash
+package data
 
 import (
 	"time"
@@ -15,7 +15,7 @@ type ipfixRelTime struct {
 	firstFlowTime  time.Time
 }
 
-//flowDeserializer converts a sequence of IPFIX/Netflow v5/v9 ,
+//FlowDeserializer converts a sequence of IPFIX/Netflow v5/v9 ,
 //Logstash created, BSON maps into mgologstash.Flow objects.
 //The deserializer encapsulates the deserialization methods
 //for IPFIX. Netflow v9, and Netflow v5.
@@ -29,14 +29,14 @@ type ipfixRelTime struct {
 //IPFIX record other than the record to be processed. As such,
 //the system boot time for each exporting host must be held as state
 //while sequences of IPFIX records are deserialized.
-
-type flowDeserializer struct {
-	ipfixExporterAbsUptimes map[string]int64 //map from exporting host to systemInitTimeMilliseconds values
-	ipfixExporterRelUptimes   map[string]ipfixRelTime //map from exporting host to relative system uptime values
+type FlowDeserializer struct {
+	ipfixExporterAbsUptimes map[string]int64        //map from exporting host to systemInitTimeMilliseconds values
+	ipfixExporterRelUptimes map[string]ipfixRelTime //map from exporting host to relative system uptime values
 }
 
-func newFlowDeserializer() *flowDeserializer {
-	return &flowDeserializer{
+//NewFlowDeserializer creates a new FlowDeserializer
+func NewFlowDeserializer() *FlowDeserializer {
+	return &FlowDeserializer{
 		ipfixExporterAbsUptimes: make(map[string]int64),
 		ipfixExporterRelUptimes: make(map[string]ipfixRelTime),
 	}
@@ -46,7 +46,7 @@ func newFlowDeserializer() *flowDeserializer {
 //if the ipfixMap contains a systemInitTimeMilliseconds field.
 //If the update is successful, the function returns true. Otherwise
 //the function returns false.
-func (f *flowDeserializer) updateExporterAbsUptimes(ipfixMap bson.M, host string) bool {
+func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap bson.M, host string) bool {
 	//update the ipfixExporterAbsUptimes map if the data is available
 	exporterUptimeIface, exporterUptimeOk := ipfixMap["systemInitTimeMilliseconds"]
 	if exporterUptimeOk {
@@ -74,7 +74,7 @@ func (f *flowDeserializer) updateExporterAbsUptimes(ipfixMap bson.M, host string
 //updateExporterRelUptimes will update the relative timestamps for each host
 //relative to the daily first flow, so if we don't have an instance of the
 //system init time we can still get results from RITA
-func (f *flowDeserializer) updateExporterRelUptimes(ipfixMap bson.M, host string) (bool, error) {
+func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap bson.M, host string) (bool, error) {
 	//if we have a inital set value see if we need to update the value
 	relUptime, ok := f.ipfixExporterRelUptimes[host]
 	if ok {
@@ -182,7 +182,7 @@ func iFaceToInt64(iFaceInt interface{}) (int64, error) {
 //returning nil if the conversion was successful.
 //The exporting host must be provided in order to resolve flowStartSysUpTime and
 //flowEndSysUpTime timestamps.
-func (f *flowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flow, host string) error {
+func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flow, host string) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
@@ -342,7 +342,7 @@ func (f *flowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 		//  start and end we can calculate the time since the first flow and add that
 		//  difference to the time of the first flow
 		//Note: since the time.Add function takes a time.Duration (which is a int64
-	  //  nanoseconds count) we need to convert time to nanoseconds from ms
+		//  nanoseconds count) we need to convert time to nanoseconds from ms
 		//  this is done by miltiplying by 1000000
 		flowStartOffsetNanos := (flowStartUptimeMillis64 - firstFlowMillis) * 1000000
 		flowEndOffsetNanos := (flowEndUptimeMillis64 - firstFlowMillis) * 1000000
@@ -442,7 +442,7 @@ func (f *flowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 //fillFromNetflowv9BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *flowDeserializer) fillFromNetflowv9BSONMap(netflowMap bson.M, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap bson.M, outputFlow *Flow) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
@@ -608,7 +608,7 @@ func (f *flowDeserializer) fillFromNetflowv9BSONMap(netflowMap bson.M, outputFlo
 //fillFromNetflowv5BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *flowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlow *Flow) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
@@ -718,14 +718,14 @@ func (f *flowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlo
 	return nil
 }
 
-//deserializeNextBSONMap reads the data from a bson map and inserts
+//DeserializeNextBSONMap reads the data from a bson map and inserts
 //it into the output flow, returning nil if the conversion was successful.
 //This method is used for filtering input data and adapting
 //multiple versions of netflow records to the same data type.
 //If the inputMap contains data that must be maintained as state,
 //for example, IPFIX's systemInitTimeMilliseconds, the state will be retained
 //even if the flow is only partially filled and an error is returned.
-func (f *flowDeserializer) deserializeNextBSONMap(inputMap bson.M, outputFlow *Flow) error {
+func (f *FlowDeserializer) DeserializeNextBSONMap(inputMap bson.M, outputFlow *Flow) error {
 	idIface, ok := inputMap["_id"]
 	if !ok {
 		return errors.New("input map must contain key '_id'")

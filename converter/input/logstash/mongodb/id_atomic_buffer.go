@@ -1,6 +1,7 @@
-package mgologstash
+package mongodb
 
 import (
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
@@ -17,7 +18,7 @@ type idAtomicBuffer struct {
 	input *mgo.Collection
 	err   error
 	log   logging.Logger
-	*flowDeserializer
+	*data.FlowDeserializer
 }
 
 //NewIDAtomicBuffer returns an mgologstash.Buffer which pulls
@@ -26,7 +27,7 @@ func NewIDAtomicBuffer(input *mgo.Collection, log logging.Logger) Buffer {
 	return &idAtomicBuffer{
 		input:            input,
 		log:              log,
-		flowDeserializer: newFlowDeserializer(),
+		FlowDeserializer: data.NewFlowDeserializer(),
 		//Note: we may want to IFace + Inject + Mock flowDeserializer here
 		//Arguably the buffer has to be integration tested anyways
 		//as it's main function is to control MongoDB (in a nontrivial manner)
@@ -36,7 +37,7 @@ func NewIDAtomicBuffer(input *mgo.Collection, log logging.Logger) Buffer {
 //Next returns the next record that was inserted into the input collection.
 //Next returns false if there is no more data. Next may set an error when
 //it returns false. This error can be read with Err()
-func (b *idAtomicBuffer) Next(out *Flow) bool {
+func (b *idAtomicBuffer) Next(out *data.Flow) bool {
 
 	getNextRecord := true
 	for getNextRecord {
@@ -55,7 +56,7 @@ func (b *idAtomicBuffer) Next(out *Flow) bool {
 			return false
 		}
 
-		err = b.flowDeserializer.deserializeNextBSONMap(input, out)
+		err = b.FlowDeserializer.DeserializeNextBSONMap(input, out)
 		if err == nil {
 			getNextRecord = false
 		} else {
