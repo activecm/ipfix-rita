@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/activecm/ipfix-rita/converter/input"
-	"github.com/activecm/ipfix-rita/converter/input/logstash/data/safemap"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data/flowmap"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/require"
@@ -76,7 +76,7 @@ func TestFillFromIPFIXBSONMap(t *testing.T) {
 		},
 	}
 
-	var error1 = flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(testData1), flow1)
+	var error1 = flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(testData1), flow1)
 	require.Nil(t, error1)
 
 	require.Equal(t, testData1["_id"], flow1.ID)
@@ -116,7 +116,7 @@ func TestFillFromIPFIXBSONMap(t *testing.T) {
 		},
 	}
 
-	var error2 = flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(testData2), flow2)
+	var error2 = flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(testData2), flow2)
 	require.Nil(t, error2)
 	require.Equal(t, "2001:db8:85a3:8d3:1319:8a2e:370:7348", flow2.DestinationIPAddress())
 	require.Equal(t, uint16(57), flow2.DestinationPort())
@@ -166,7 +166,7 @@ func TestUptimeRelativeTimestamps(t *testing.T) {
 	flow := Flow{}
 	flowDeserializer := NewFlowDeserializer()
 
-	var error1 = flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(initTimeMap), &flow)
+	var error1 = flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(initTimeMap), &flow)
 
 	//an error will be returned as flow should not have been filled.
 	require.NotNil(t, error1)
@@ -175,7 +175,7 @@ func TestUptimeRelativeTimestamps(t *testing.T) {
 	require.True(t, initTimeOk)
 	require.Equal(t, int64(1539907077250), initTime)
 
-	var error2 = flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(relativeTsFlow), &flow)
+	var error2 = flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(relativeTsFlow), &flow)
 	require.Nil(t, error2)
 	flowStart, timeErr := flow.FlowStartMilliseconds()
 	require.Nil(t, timeErr)
@@ -216,7 +216,7 @@ func TestFillFromNetflowv9BSONMap(t *testing.T) {
 	flow := &Flow{}
 	flowDeserializer := NewFlowDeserializer()
 
-	err := flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(inputMap), flow)
+	err := flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(inputMap), flow)
 	require.Nil(t, err)
 	require.Equal(t, inputMap["_id"], flow.ID)
 	require.Equal(t, inputMap["host"], flow.Exporter())
@@ -264,7 +264,7 @@ func TestFillFromNetflowv9BSONMap(t *testing.T) {
 		"@version": "1",
 	}
 
-	var error2 = flowDeserializer.DeserializeNextMap(safemap.NewSafeMapFromBSON(inputMap2), flow2)
+	var error2 = flowDeserializer.DeserializeNextMap(flowmap.NewFlowMapFromBSON(inputMap2), flow2)
 	require.Nil(t, error2)
 	require.Equal(t, "2001:db8:85a3:8d3:1319:8a2e:370:7348", flow2.DestinationIPAddress())
 	require.Equal(t, uint16(444), flow2.DestinationPort())

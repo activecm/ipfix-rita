@@ -3,9 +3,8 @@ package data
 import (
 	"time"
 	// "fmt"
-
 	"github.com/activecm/ipfix-rita/converter/input"
-	"github.com/activecm/ipfix-rita/converter/input/logstash/data/safemap"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data/flowmap"
 	"github.com/activecm/ipfix-rita/converter/protocols"
 	"github.com/pkg/errors"
 )
@@ -46,8 +45,8 @@ func NewFlowDeserializer() *FlowDeserializer {
 //if the ipfixMap contains a systemInitTimeMilliseconds field.
 //If the update is successful, the function returns true. Otherwise
 //the function returns false.
-func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap safemap.SafeMap, host string) error {
-	exporterUptime, err := ipfixMap.GetIntAsInt64("systemInitTimeMilliseconds")
+func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap flowmap.FlowMap, host string) error {
+	exporterUptime, err := ipfixMap.GetAsInt64("systemInitTimeMilliseconds")
 	//update the ipfixExporterAbsUptimes map if the data is available
 	if err == nil {
 		f.ipfixExporterAbsUptimes[host] = exporterUptime
@@ -59,14 +58,14 @@ func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap safemap.SafeMap, ho
 //updateExporterRelUptimes will update the relative timestamps for each host
 //relative to the daily first flow, so if we don't have an instance of the
 //system init time we can still get results from RITA
-func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap safemap.SafeMap, host string) error {
+func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap flowmap.FlowMap, host string) error {
 	//if we have a inital set value see if we need to update the value
 	relUptime, ok := f.ipfixExporterRelUptimes[host]
 	if ok {
 		//if the system has reinitialized then the relative timestamps will be off
 		//as a result check if there is a change and update it if needed
 		//get the timestamp value so we have the full picture
-		endMillis, err := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
+		endMillis, err := ipfixMap.GetAsInt64("flowEndSysUpTime")
 		if err != nil {
 			return errors.Wrap(err, "input map should contain an int value for 'netflow.flowEndSysUpTime'")
 		}
@@ -101,10 +100,10 @@ func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap safemap.SafeMap, ho
 //relative system uptime are similar make a function so we don't repeat code
 //It returns a structure defined as ipfixRelTime (relative uptime) and any error
 // this code experiences
-func getNewExporterUptime(ipfixMap safemap.SafeMap) (ipfixRelTime, error) {
+func getNewExporterUptime(ipfixMap flowmap.FlowMap) (ipfixRelTime, error) {
 	emptyRelTime := ipfixRelTime{0.0, time.Now()}
 
-	endMillis, err := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
+	endMillis, err := ipfixMap.GetAsInt64("flowEndSysUpTime")
 	if err != nil {
 		return emptyRelTime, errors.Wrap(err, "input map should contain an int value for 'netflow.flowEndSysUpTime'")
 	}
@@ -131,7 +130,7 @@ func getNewExporterUptime(ipfixMap safemap.SafeMap) (ipfixRelTime, error) {
 //returning nil if the conversion was successful.
 //The exporting host must be provided in order to resolve flowStartSysUpTime and
 //flowEndSysUpTime timestamps.
-func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, outputFlow *Flow, host string) error {
+func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap flowmap.FlowMap, outputFlow *Flow, host string) error {
 	sourceIPv4, srcIPv4err := ipfixMap.GetString("sourceIPv4Address")
 	sourceIPv6, srcIPv6err := ipfixMap.GetString("sourceIPv6Address")
 	if srcIPv4err != nil && srcIPv6err != nil {
@@ -142,7 +141,7 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 		)
 	}
 
-	sourcePort, err := ipfixMap.GetInt("sourceTransportPort")
+	sourcePort, err := ipfixMap.GetAsInt("sourceTransportPort")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.sourceTransportPort'")
 	}
@@ -161,27 +160,27 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 		postNatDestIPv4, natErr := ipfixMap.GetString("postNATDestinationIPv4Address")
 		if natErr == nil {
 			destIPv4 = postNatDestIPv4
-		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+		} else if errors.Cause(natErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.postNATDestinationIPv4Address'")
 		}
 	} else if destIPv6err == nil {
 		postNatDestIPv6, natErr := ipfixMap.GetString("postNATDestinationIPv6Address")
 		if natErr == nil {
 			destIPv6 = postNatDestIPv6
-		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+		} else if errors.Cause(natErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.postNATDestinationIPv6Address'")
 		}
 	}
 
-	destPort, err := ipfixMap.GetInt("destinationTransportPort")
+	destPort, err := ipfixMap.GetAsInt("destinationTransportPort")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.sourceTransportPort'")
 	}
 
-	postNATDestPort, err := ipfixMap.GetInt("postNAPTDestinationTransportPort")
+	postNATDestPort, err := ipfixMap.GetAsInt("postNAPTDestinationTransportPort")
 	if err == nil {
 		destPort = postNATDestPort
-	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+	} else if errors.Cause(err) == flowmap.ErrTypeMismatch {
 		return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNAPTDestinationTransportPort'")
 	}
 
@@ -192,8 +191,8 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 	flowEndMillis, flowEndMillisErr := ipfixMap.GetString("flowEndMilliseconds")
 
 	//Also attempt to get the start and end times relative to system init
-	flowStartUptimeMillis, flowStartUptimeMillisErr := ipfixMap.GetIntAsInt64("flowStartSysUpTime")
-	flowEndUptimeMillis, flowEndUptimeMillisErr := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
+	flowStartUptimeMillis, flowStartUptimeMillisErr := ipfixMap.GetAsInt64("flowStartSysUpTime")
+	flowEndUptimeMillis, flowEndUptimeMillisErr := ipfixMap.GetAsInt64("flowEndSysUpTime")
 
 	//get the system init time if possible
 	systemInitTimeMillis, systemInitTimeMillisecondsOk := f.ipfixExporterAbsUptimes[host]
@@ -201,7 +200,7 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 	systemRelativeMillis, systemRelativeOk := f.ipfixExporterRelUptimes[host]
 
 	for _, timeTypeErr := range []error{flowStartMillisErr, flowEndMillisErr, flowStartUptimeMillisErr, flowEndMillisErr} {
-		if errors.Cause(timeTypeErr) == safemap.ErrTypeMismatch {
+		if errors.Cause(timeTypeErr) == flowmap.ErrTypeMismatch {
 			return err
 		}
 	}
@@ -259,13 +258,13 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 		)
 	}
 
-	octetTotal, totalErr := ipfixMap.GetIntAsInt64("octetTotalCount")
+	octetTotal, totalErr := ipfixMap.GetAsInt64("octetTotalCount")
 	if totalErr != nil {
-		if errors.Cause(totalErr) == safemap.ErrTypeMismatch {
+		if errors.Cause(totalErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(totalErr, "input map contains non-int value for 'netflow.octetTotalCount'")
 		}
 		//delta counts CAN be total counts by RFC definition >.<"
-		octetDelta, deltaErr := ipfixMap.GetIntAsInt64("octetDeltaCount")
+		octetDelta, deltaErr := ipfixMap.GetAsInt64("octetDeltaCount")
 		if deltaErr != nil {
 			return errors.Wrapf(
 				totalErr, "input map must contain an int value for "+
@@ -276,13 +275,13 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 		octetTotal = octetDelta
 	}
 
-	packetTotal, totalErr := ipfixMap.GetIntAsInt64("packetTotalCount")
+	packetTotal, totalErr := ipfixMap.GetAsInt64("packetTotalCount")
 	if totalErr != nil {
-		if errors.Cause(totalErr) == safemap.ErrTypeMismatch {
+		if errors.Cause(totalErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(totalErr, "input map contains non-int value for 'netflow.packetTotalCount'")
 		}
 		//delta counts CAN be total counts by RFC definition >.<"
-		packetDelta, deltaErr := ipfixMap.GetIntAsInt64("packetDeltaCount")
+		packetDelta, deltaErr := ipfixMap.GetAsInt64("packetDeltaCount")
 		if deltaErr != nil {
 			return errors.Wrapf(
 				totalErr, "input map must contain an int value for "+
@@ -293,17 +292,17 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 		packetTotal = packetDelta
 	}
 
-	protocolID, err := ipfixMap.GetInt("protocolIdentifier")
+	protocolID, err := ipfixMap.GetAsInt("protocolIdentifier")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain int value for 'netflow.protocolIdentifier'")
 	}
 
 	//assume EndOfFlow if flowEndReason is not present
 	flowEndReason := input.EndOfFlow
-	flowEndReasonInt, err := ipfixMap.GetInt("flowEndReason")
+	flowEndReasonInt, err := ipfixMap.GetAsInt("flowEndReason")
 	if err == nil {
 		flowEndReason = input.FlowEndReason(flowEndReasonInt)
-	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+	} else if errors.Cause(err) == flowmap.ErrTypeMismatch {
 		return errors.Wrap(err, "input map contains non-int value for 'netflow.flowEndReason'")
 	}
 
@@ -338,7 +337,7 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 //fillFromNetflowv9BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap flowmap.FlowMap, outputFlow *Flow) error {
 	sourceIPv4, srcIPv4err := netflowMap.GetString("ipv4_src_addr")
 	sourceIPv6, srcIPv6err := netflowMap.GetString("ipv6_src_addr")
 	if srcIPv4err != nil && srcIPv6err != nil {
@@ -349,7 +348,7 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, 
 		)
 	}
 
-	sourcePort, err := netflowMap.GetInt("l4_src_port")
+	sourcePort, err := netflowMap.GetAsInt("l4_src_port")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_src_port'")
 	}
@@ -368,27 +367,27 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, 
 		postNatDestIPv4, natErr := netflowMap.GetString("xlate_dst_addr_ipv4")
 		if natErr == nil {
 			destIPv4 = postNatDestIPv4
-		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+		} else if errors.Cause(natErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.xlate_dst_addr_ipv4'")
 		}
 	} else if destIPv6err == nil {
 		postNatDestIPv6, natErr := netflowMap.GetString("xlate_dst_addr_ipv6")
 		if natErr == nil {
 			destIPv6 = postNatDestIPv6
-		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+		} else if errors.Cause(natErr) == flowmap.ErrTypeMismatch {
 			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.xlate_dst_addr_ipv6'")
 		}
 	}
 
-	destPort, err := netflowMap.GetInt("l4_dst_port")
+	destPort, err := netflowMap.GetAsInt("l4_dst_port")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_dst_port'")
 	}
 
-	postNATDestPort, err := netflowMap.GetInt("xlate_dst_port")
+	postNATDestPort, err := netflowMap.GetAsInt("xlate_dst_port")
 	if err == nil {
 		destPort = postNATDestPort
-	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+	} else if errors.Cause(err) == flowmap.ErrTypeMismatch {
 		return errors.Wrap(err, "input map contains a non-string value for 'netflow.xlate_dst_port'")
 	}
 
@@ -402,17 +401,17 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, 
 		return errors.Wrap(err, "input map must contain a string value for last_switched")
 	}
 
-	octetTotal, err := netflowMap.GetIntAsInt64("in_bytes")
+	octetTotal, err := netflowMap.GetAsInt64("in_bytes")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_bytes'")
 	}
 
-	packetTotal, err := netflowMap.GetIntAsInt64("in_pkts")
+	packetTotal, err := netflowMap.GetAsInt64("in_pkts")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_pkts'")
 	}
 
-	protocolID, err := netflowMap.GetInt("protocol")
+	protocolID, err := netflowMap.GetAsInt("protocol")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain int value for 'netflow.protocol'")
 	}
@@ -449,14 +448,14 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, 
 //fillFromNetflowv5BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap flowmap.FlowMap, outputFlow *Flow) error {
 
 	sourceIP, err := netflowMap.GetString("ipv4_src_addr")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain a string value for 'ipv4_src_addr'")
 	}
 
-	sourcePort, err := netflowMap.GetInt("l4_src_port")
+	sourcePort, err := netflowMap.GetAsInt("l4_src_port")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_src_port'")
 	}
@@ -466,7 +465,7 @@ func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, 
 		return errors.Wrap(err, "input map must contain a string value for 'ipv4_dst_addr'")
 	}
 
-	destPort, err := netflowMap.GetInt("l4_dst_port")
+	destPort, err := netflowMap.GetAsInt("l4_dst_port")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_dst_port'")
 	}
@@ -481,17 +480,17 @@ func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, 
 		return errors.Wrap(err, "input map must contain a string value for last_switched")
 	}
 
-	octetTotal, err := netflowMap.GetIntAsInt64("in_bytes")
+	octetTotal, err := netflowMap.GetAsInt64("in_bytes")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_bytes'")
 	}
 
-	packetTotal, err := netflowMap.GetIntAsInt64("in_pkts")
+	packetTotal, err := netflowMap.GetAsInt64("in_pkts")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_pkts'")
 	}
 
-	protocolID, err := netflowMap.GetInt("protocol")
+	protocolID, err := netflowMap.GetAsInt("protocol")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain int value for 'netflow.protocol'")
 	}
@@ -520,7 +519,7 @@ func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, 
 //If the inputMap contains data that must be maintained as state,
 //for example, IPFIX's systemInitTimeMilliseconds, the state will be retained
 //even if the flow is only partially filled and an error is returned.
-func (f *FlowDeserializer) DeserializeNextMap(inputMap safemap.SafeMap, outputFlow *Flow) error {
+func (f *FlowDeserializer) DeserializeNextMap(inputMap flowmap.FlowMap, outputFlow *Flow) error {
 	id, err := inputMap.GetObjectID("_id")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an ObjectId value for '_id'")
@@ -529,11 +528,11 @@ func (f *FlowDeserializer) DeserializeNextMap(inputMap safemap.SafeMap, outputFl
 	if err != nil {
 		return errors.Wrap(err, "input map must contain a string value for 'host'")
 	}
-	netflowMap, err := inputMap.GetSafeMap("netflow")
+	netflowMap, err := inputMap.GetFlowMap("netflow")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain a map value for 'netflow'")
 	}
-	version, err := netflowMap.GetInt("version")
+	version, err := netflowMap.GetAsInt("version")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.version'")
 	}

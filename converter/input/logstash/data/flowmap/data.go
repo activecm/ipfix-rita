@@ -1,4 +1,4 @@
-package safemap
+package flowmap
 
 import (
 	"github.com/globalsign/mgo/bson"
