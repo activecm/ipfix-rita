@@ -33,7 +33,7 @@ func NewSafeMap(data map[string]interface{}) SafeMap {
 func (u SafeMap) get(field string) (interface{}, error) {
 	val, ok := u.innerMap.Get(field)
 	if !ok {
-		return nil, ErrDoesNotExist
+		return nil, errors.Wrapf(ErrDoesNotExist, "Field: %s", field)
 	}
 	return val, nil
 }
@@ -43,7 +43,7 @@ func (u SafeMap) get(field string) (interface{}, error) {
 func (u SafeMap) GetSafeMap(field string) (SafeMap, error) {
 	dataIface, err := u.get(field)
 	if err != nil {
-		return SafeMap{}, errors.Wrap(err, "Field: "+field)
+		return SafeMap{}, err
 	}
 
 	//Right now we only support bson.M and map[string]interface{}
@@ -58,9 +58,12 @@ func (u SafeMap) GetSafeMap(field string) (SafeMap, error) {
 		return NewSafeMapFromBSON(bsonMap), nil
 	}
 
-	return SafeMap{}, errors.Wrap(
+	return SafeMap{}, errors.Wrapf(
 		ErrTypeMismatch,
-		"Field: "+field+"; Type: map[string]interface{}/ bson.M",
+		"Field: %s; Type: %s; Value: %+v",
+		field,
+		"map[string]interface{}|bson.M",
+		dataIface,
 	)
 }
 
@@ -70,16 +73,19 @@ func (u SafeMap) GetSafeMap(field string) (SafeMap, error) {
 func (u SafeMap) GetInt(field string) (int, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return 0, errors.Wrap(err, "Field: "+field)
+		return 0, err
 	}
 
 	intVal, ok := val.(int)
 	if ok {
 		return intVal, nil
 	}
-	return 0, errors.Wrap(
+	return 0, errors.Wrapf(
 		ErrTypeMismatch,
-		"Field: "+field+"; Type: int",
+		"Field: %s; Type: %s; Value: %+v",
+		field,
+		"int",
+		val,
 	)
 }
 
@@ -90,7 +96,7 @@ func (u SafeMap) GetInt(field string) (int, error) {
 func (u SafeMap) GetIntAsInt64(field string) (int64, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return 0, errors.Wrap(err, "Field: "+field)
+		return 0, err
 	}
 
 	int64Val, ok := val.(int64)
@@ -102,9 +108,12 @@ func (u SafeMap) GetIntAsInt64(field string) (int64, error) {
 	if ok {
 		return int64(intVal), nil
 	}
-	return 0, errors.Wrap(
+	return 0, errors.Wrapf(
 		ErrTypeMismatch,
-		"Field: "+field+"; Type: int64/ int",
+		"Field: %s; Type: %s; Value: %+v",
+		field,
+		"int64|int",
+		val,
 	)
 }
 
@@ -114,16 +123,19 @@ func (u SafeMap) GetIntAsInt64(field string) (int64, error) {
 func (u SafeMap) GetString(field string) (string, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return "", errors.Wrap(err, "Field: "+field)
+		return "", err
 	}
 
 	strVal, ok := val.(string)
 	if ok {
 		return strVal, nil
 	}
-	return "", errors.Wrap(
+	return "", errors.Wrapf(
 		ErrTypeMismatch,
-		"Field: "+field+"; Type: string",
+		"Field: %s; Type: %s; Value: %+v",
+		field,
+		"string",
+		val,
 	)
 }
 
@@ -133,15 +145,18 @@ func (u SafeMap) GetString(field string) (string, error) {
 func (u SafeMap) GetObjectID(field string) (bson.ObjectId, error) {
 	val, err := u.get(field)
 	if err != nil {
-		return "", errors.Wrap(err, "Field: "+field)
+		return "", err
 	}
 
 	idVal, ok := val.(bson.ObjectId)
 	if ok {
 		return idVal, nil
 	}
-	return "", errors.Wrap(
+	return "", errors.Wrapf(
 		ErrTypeMismatch,
-		"Field: "+field+"; Type: bson.ObjectId",
+		"Field: %s; Type: %s; Value: %+v",
+		field,
+		"bson.ObjectId",
+		val,
 	)
 }
