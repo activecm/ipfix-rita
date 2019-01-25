@@ -5,8 +5,8 @@ import (
 	// "fmt"
 
 	"github.com/activecm/ipfix-rita/converter/input"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/data/safemap"
 	"github.com/activecm/ipfix-rita/converter/protocols"
-	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
 )
 
@@ -46,111 +46,76 @@ func NewFlowDeserializer() *FlowDeserializer {
 //if the ipfixMap contains a systemInitTimeMilliseconds field.
 //If the update is successful, the function returns true. Otherwise
 //the function returns false.
-func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap bson.M, host string) bool {
+func (f *FlowDeserializer) updateExporterAbsUptimes(ipfixMap safemap.SafeMap, host string) error {
+	exporterUptime, err := ipfixMap.GetIntAsInt64("systemInitTimeMilliseconds")
 	//update the ipfixExporterAbsUptimes map if the data is available
-	exporterUptimeIface, exporterUptimeOk := ipfixMap["systemInitTimeMilliseconds"]
-	if exporterUptimeOk {
-		var exporterUptime int64
-		exporterUptime, exporterUptimeOk = exporterUptimeIface.(int64)
-		if !exporterUptimeOk {
-			//Logstash creates these fields as 32 bit ints,
-			//Go handles them as 64 bit ints, provide both casts
-			var exporterUptime32 int
-			exporterUptime32, exporterUptimeOk = exporterUptimeIface.(int)
-			if exporterUptimeOk {
-				exporterUptime = int64(exporterUptime32)
-			}
-		}
-
-		if exporterUptimeOk {
-			//update the map
-			f.ipfixExporterAbsUptimes[host] = exporterUptime
-			return true
-		}
+	if err == nil {
+		f.ipfixExporterAbsUptimes[host] = exporterUptime
+		return nil
 	}
-	return false
+	return errors.Wrap(err, "input map should contain an int value for netflow.systemInitTimeMilliseconds")
 }
 
 //updateExporterRelUptimes will update the relative timestamps for each host
 //relative to the daily first flow, so if we don't have an instance of the
 //system init time we can still get results from RITA
-func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap bson.M, host string) (bool, error) {
+func (f *FlowDeserializer) updateExporterRelUptimes(ipfixMap safemap.SafeMap, host string) error {
 	//if we have a inital set value see if we need to update the value
 	relUptime, ok := f.ipfixExporterRelUptimes[host]
 	if ok {
 		//if the system has reinitialized then the relative timestamps will be off
-		//  as a result check if there is a change and update it if needed
+		//as a result check if there is a change and update it if needed
 		//get the timestamp value so we have the full picture
-		var endMills int64
-		endMillsIface, endMillsOk := ipfixMap["flowEndSysUpTime"]
-		if !endMillsOk {
-			return false, errors.New("Couldn't find flowEndSysUpTime")
-		}
-		//try converting to an int64 first, handle any errors that come up
-		endMills, convErr := iFaceToInt64(endMillsIface)
-		if convErr != nil {
-			return false, convErr
+		endMillis, err := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
+		if err != nil {
+			return errors.Wrap(err, "input map should contain an int value for 'netflow.flowEndSysUpTime'")
 		}
 
 		//if the host's first flow milliseconds is greater than the new flow's
 		//  start milliseconds it implies that the system was reinitialized and it
 		//  is imparitive to update the information currently saved
-		if relUptime.firstFlowMills > endMills {
+		if relUptime.firstFlowMills > endMillis {
 			newExporter, err := getNewExporterUptime(ipfixMap)
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			f.ipfixExporterRelUptimes[host] = newExporter
-			return true, nil
+			return nil
 		}
 	}
 
 	// If we haven't found the host in the Relative uptime map, create it
 	newExporter, err := getNewExporterUptime(ipfixMap)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	//assign a new rel uptime for the host
 	f.ipfixExporterRelUptimes[host] = newExporter
 
-	return true, nil
+	return nil
 }
 
 //Since the code for updating the relative system uptime and creating a new
 //relative system uptime are similar make a function so we don't repeat code
 //It returns a structure defined as ipfixRelTime (relative uptime) and any error
 // this code experiences
-func getNewExporterUptime(ipfixMap bson.M) (ipfixRelTime, error) {
+func getNewExporterUptime(ipfixMap safemap.SafeMap) (ipfixRelTime, error) {
 	emptyRelTime := ipfixRelTime{0.0, time.Now()}
 
-	//set the inital value if it hasn't been set
-	var endMills int64
-	endMillsIface, endMillsOk := ipfixMap["flowEndSysUpTime"]
-	//if the milliseconds since the init isn't present return false
-	if !endMillsOk {
-		return emptyRelTime, errors.Errorf("Couldn't find flowEndSysUpTime")
-	}
-	//try converting to an int64 first, handle any errors that come up
-	endMills, convErr := iFaceToInt64(endMillsIface)
-	if convErr != nil {
-		return emptyRelTime, convErr
+	endMillis, err := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
+	if err != nil {
+		return emptyRelTime, errors.Wrap(err, "input map should contain an int value for 'netflow.flowEndSysUpTime'")
 	}
 
 	//get the timestamp value, if we can, then convert it to a time value
 	var flowDate time.Time
-	flowDateIface, flowDateOk := ipfixMap["timestamp"]
-	if flowDateOk {
-		//convert the time to a string, so we can parse the string to a date/time vlaue
-		flowDateStr, ok := flowDateIface.(string)
-		if !ok {
-			return emptyRelTime, errors.Errorf("Couldn't convert timestamp to string")
-		}
-		var err error
+	flowDateStr, err := ipfixMap.GetString("timestamp")
+	if err == nil {
 		flowDate, err = time.Parse(time.RFC3339, flowDateStr)
 		if err != nil {
-			return emptyRelTime, err
+			return emptyRelTime, errors.Wrap(err, "input map timestamp should be RFC3339")
 		}
 	} else {
 		//if we can't find the timestamp value assume the flow came now and use
@@ -158,23 +123,7 @@ func getNewExporterUptime(ipfixMap bson.M) (ipfixRelTime, error) {
 		flowDate = time.Now()
 	}
 
-	return ipfixRelTime{endMills, flowDate}, nil
-}
-
-//iFaceToInt64 will take a interface value and attempt to convert to an int64
-func iFaceToInt64(iFaceInt interface{}) (int64, error) {
-	convertedInt64, convertedInt64Ok := (iFaceInt).(int64)
-	if !convertedInt64Ok {
-		//Logstash creates these fields as 32 bit ints,
-		//Go handles them as 64 bit ints, provide both casts
-		convertedInt32, convertedInt32Ok := (iFaceInt).(int)
-		if !convertedInt32Ok {
-			return 0, errors.Errorf("could not convert %+v to int", iFaceInt)
-		}
-		convertedInt64 = int64(convertedInt32)
-	}
-
-	return convertedInt64, nil
+	return ipfixRelTime{endMillis, flowDate}, nil
 }
 
 //fillFromIPFIXBSONMap reads the data from a bson map representing
@@ -182,159 +131,109 @@ func iFaceToInt64(iFaceInt interface{}) (int64, error) {
 //returning nil if the conversion was successful.
 //The exporting host must be provided in order to resolve flowStartSysUpTime and
 //flowEndSysUpTime timestamps.
-func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flow, host string) error {
+func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, outputFlow *Flow, host string) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
 	//fmt.Println("0")
 	var ok bool
-	var sourceIPv4 string
-	var sourceIPv6 string
-	sourceIPv4Iface, sourceIPv4Ok := ipfixMap["sourceIPv4Address"]
-	sourceIPv6Iface, sourceIPv6Ok := ipfixMap["sourceIPv6Address"]
-	if sourceIPv4Ok {
-		sourceIPv4, ok = sourceIPv4Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", sourceIPv4Iface)
-		}
-	} else if sourceIPv6Ok {
-		sourceIPv6, ok = sourceIPv6Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", sourceIPv6Iface)
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.sourceIPv4Address' or 'netflow.sourceIPv6Address'")
+	sourceIPv4, srcIPv4err := ipfixMap.GetString("sourceIPv4Address")
+	sourceIPv6, srcIPv6err := ipfixMap.GetString("sourceIPv6Address")
+	if srcIPv4err != nil && srcIPv6err != nil {
+		return errors.Wrapf(
+			srcIPv4err, "input map must contain a string value for "+
+				"'netflow.sourceIPv4Address' or 'netflow.sourceIPv6Address'\n"+
+				"Additional Cause:\n %+v", srcIPv6err,
+		)
 	}
 
-	sourcePortIface, ok := ipfixMap["sourceTransportPort"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.sourceTransportPort'")
-	}
-	sourcePort, ok := sourcePortIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", sourcePortIface)
+	sourcePort, err := ipfixMap.GetInt("sourceTransportPort")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.sourceTransportPort'")
 	}
 
-	var destIPv4 string
-	var destIPv6 string
-	destIPv4Iface, destIPv4Ok := ipfixMap["destinationIPv4Address"]
-	destIPv6Iface, destIPv6Ok := ipfixMap["destinationIPv6Address"]
-	if destIPv4Ok {
-		destIPv4, ok = destIPv4Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", destIPv4Iface)
-		}
-
-		postNatDestIPv4Iface, postNatDestIPv4Ok := ipfixMap["postNATDestinationIPv4Address"]
-
-		if postNatDestIPv4Ok {
-			destIPv4, ok = postNatDestIPv4Iface.(string)
-			if !ok {
-				return errors.Errorf("could not convert %+v to string", postNatDestIPv4Iface)
-			}
-		}
-	} else if destIPv6Ok {
-		destIPv6, ok = destIPv6Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
-		}
-
-		postNatDestIPv6Iface, postNatDestIPv6Ok := ipfixMap["postNATDestinationIPv6Address"]
-
-		if postNatDestIPv6Ok {
-			destIPv6, ok = postNatDestIPv6Iface.(string)
-			if !ok {
-				return errors.Errorf("could not convert %+v to string", postNatDestIPv6Iface)
-			}
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'")
+	destIPv4, destIPv4err := ipfixMap.GetString("destinationIPv4Address")
+	destIPv6, destIPv6err := ipfixMap.GetString("destinationIPv6Address")
+	if destIPv4err != nil && destIPv6err != nil {
+		return errors.Wrapf(
+			destIPv4err, "input map must contain a string value for "+
+				"'netflow.destinationIPv4Address' or 'netflow.destinationIPv6Address'\n"+
+				"Additional Cause:\n %+v", destIPv6err,
+		)
 	}
 
-	var destPort int
-	destPortIface, ok := ipfixMap["destinationTransportPort"]
-	if ok {
-		destPort, ok = destPortIface.(int)
-
-		if !ok {
-			return errors.Errorf("could not convert %+v to int", destPortIface)
+	if destIPv4err == nil {
+		postNatDestIPv4, err := ipfixMap.GetString("postNATDestinationIPv4Address")
+		if err == nil {
+			destIPv4 = postNatDestIPv4
+		} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+			return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNATDestinationIPv4Address'")
 		}
-
-		postNaptDestPortIface, postNaptDestPortIfaceOk := ipfixMap["postNAPTDestinationTransportPort"]
-		if postNaptDestPortIfaceOk {
-			destPort, ok = postNaptDestPortIface.(int)
-			if !ok {
-				return errors.Errorf("could not convert %+v to int", postNaptDestPortIface)
-			}
+	} else if destIPv6err == nil {
+		postNatDestIPv6, err := ipfixMap.GetString("postNATDestinationIPv6Address")
+		if err == nil {
+			destIPv6 = postNatDestIPv6
+		} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+			return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNATDestinationIPv6Address'")
 		}
-	} else {
-		return errors.New("input map must contain key 'netflow.destinationTransportPort'")
+	}
+
+	destPort, err := ipfixMap.GetInt("destinationTransportPort")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.sourceTransportPort'")
+	}
+
+	postNATDestPort, err := ipfixMap.GetInt("postNAPTDestinationTransportPort")
+	if err == nil {
+		destPort = postNATDestPort
+	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+		return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNAPTDestinationTransportPort'")
 	}
 
 	var flowStart, flowEnd string // RFC3339Nano timestamps
 
 	//Get the Start, and the end times of the flow
-	flowStartMillisIface, flowStartMillisOk := ipfixMap["flowStartMilliseconds"]
-	flowEndMillisIface, flowEndMillisOk := ipfixMap["flowEndMilliseconds"]
+	flowStartMillis, flowStartMillisErr := ipfixMap.GetString("flowStartMilliseconds")
+	flowEndMillis, flowEndMillisErr := ipfixMap.GetString("flowEndMilliseconds")
 
 	//Also attempt to get the start and end times relative to system init
-	flowStartUptimeMillisIface, flowStartUptimeMillisOk := ipfixMap["flowStartSysUpTime"]
-	flowEndUptimeMillisIface, flowEndUptimeMillisOk := ipfixMap["flowEndSysUpTime"]
+	flowStartUptimeMillis, flowStartUptimeMillisErr := ipfixMap.GetIntAsInt64("flowStartSysUpTime")
+	flowEndUptimeMillis, flowEndUptimeMillisErr := ipfixMap.GetIntAsInt64("flowEndSysUpTime")
 
 	//get the system init time if possible
 	systemInitTimeMillis, systemInitTimeMillisecondsOk := f.ipfixExporterAbsUptimes[host]
 	//If the system init time isn't present or stored use a relative uptime approach
 	systemRelativeMillis, systemRelativeOk := f.ipfixExporterRelUptimes[host]
 
-	if flowStartMillisOk && flowEndMillisOk {
+	for _, timeTypeErr := range []error{flowStartMillisErr, flowEndMillisErr, flowStartUptimeMillisErr, flowEndMillisErr} {
+		if errors.Cause(timeTypeErr) == safemap.ErrTypeMismatch {
+			return err
+		}
+	}
+
+	if flowStartMillisErr == nil && flowEndMillisErr == nil {
 		//Case 1: We have an absolute start and end time (this is ideal)
-		flowStart, flowStartMillisOk = flowStartMillisIface.(string)
-		if !flowStartMillisOk {
-			return errors.Errorf("could not convert %+v to string", flowStartMillisIface)
-		}
-		flowEnd, flowEndMillisOk = flowEndMillisIface.(string)
-		if !flowEndMillisOk {
-			return errors.Errorf("could not convert %+v to string", flowEndMillisIface)
-		}
-	} else if flowStartUptimeMillisOk && flowEndUptimeMillisOk && systemInitTimeMillisecondsOk {
+		flowStart = flowStartMillis
+		flowEnd = flowEndMillis
+	} else if flowStartUptimeMillisErr == nil && flowEndUptimeMillisErr == nil && systemInitTimeMillisecondsOk {
 		//Case 2: We have an start and end time in milliseconds from system init and
 		//  we have the absolute system init time, we can find the absolute start
 		//  and end time of each flow, less ideal because of computation time
-		flowStartUptimeMillis64, convErr := iFaceToInt64(flowStartUptimeMillisIface)
-		if convErr != nil {
-			return convErr
-		}
-
-		flowEndUptimeMillis64, convErr := iFaceToInt64(flowEndUptimeMillisIface)
-		if convErr != nil {
-			return convErr
-		}
-
-		flowStartUnixMillis := systemInitTimeMillis + flowStartUptimeMillis64
+		flowStartUnixMillis := systemInitTimeMillis + flowStartUptimeMillis
 		flowStartUnixSeconds := flowStartUnixMillis / 1000
 		flowStartUnixNanos := (flowStartUnixMillis % 1000) * 1000000
 
-		flowEndUnixMillis := systemInitTimeMillis + flowEndUptimeMillis64
+		flowEndUnixMillis := systemInitTimeMillis + flowEndUptimeMillis
 		flowEndUnixSeconds := flowEndUnixMillis / 1000
 		flowEndUnixNanos := (flowEndUnixMillis % 1000) * 1000000
 
 		flowStart = time.Unix(flowStartUnixSeconds, flowStartUnixNanos).Format(time.RFC3339Nano)
 		flowEnd = time.Unix(flowEndUnixSeconds, flowEndUnixNanos).Format(time.RFC3339Nano)
-	} else if flowStartUptimeMillisOk && flowEndUptimeMillisOk && systemRelativeOk {
+	} else if flowStartUptimeMillisErr == nil && flowEndUptimeMillisErr == nil && systemRelativeOk {
 		//Case 3: We have an start and end time in milliseconds from system init and
 		//  we have a timestamp from when the first flow was made available, less
 		//  ideal yet as the time of flow will be off but the beaconing algorithm
 		//  still works
-		flowStartUptimeMillis64, convErr := iFaceToInt64(flowStartUptimeMillisIface)
-		if convErr != nil {
-			return convErr
-		}
-
-		flowEndUptimeMillis64, convErr := iFaceToInt64(flowEndUptimeMillisIface)
-		if convErr != nil {
-			return convErr
-		}
-
 		firstFlowTime := systemRelativeMillis.firstFlowTime
 		firstFlowMillis := systemRelativeMillis.firstFlowMills
 
@@ -344,8 +243,8 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 		//Note: since the time.Add function takes a time.Duration (which is a int64
 		//  nanoseconds count) we need to convert time to nanoseconds from ms
 		//  this is done by miltiplying by 1000000
-		flowStartOffsetNanos := (flowStartUptimeMillis64 - firstFlowMillis) * 1000000
-		flowEndOffsetNanos := (flowEndUptimeMillis64 - firstFlowMillis) * 1000000
+		flowStartOffsetNanos := (flowStartUptimeMillis - firstFlowMillis) * 1000000
+		flowEndOffsetNanos := (flowEndUptimeMillis - firstFlowMillis) * 1000000
 
 		flowStartTime := firstFlowTime.Add(time.Duration(flowStartOffsetNanos))
 		flowEndTime := firstFlowTime.Add(time.Duration(flowEndOffsetNanos))
@@ -365,66 +264,68 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 		)
 	}
 
-	octetTotalIface, ok := ipfixMap["octetTotalCount"]
-	if !ok {
-		//delta counts CAN be total counts by RFC definition >.<"
-		octetTotalIface, ok = ipfixMap["octetDeltaCount"]
-		if !ok {
-			return errors.New("input map must contain key 'netflow.octetTotalCount' or 'netflow.octetDeltaCount'")
+	octetTotal, totalErr := ipfixMap.GetIntAsInt64("octetTotalCount")
+	if totalErr != nil {
+		if errors.Cause(totalErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(totalErr, "input map contains non-int value for 'netflow.octetTotalCount'")
 		}
-	}
-	octetTotal, err := iFaceToInt64(octetTotalIface)
-	if err != nil {
-		return err
+		//delta counts CAN be total counts by RFC definition >.<"
+		octetDelta, deltaErr := ipfixMap.GetIntAsInt64("octetDeltaCount")
+		if deltaErr != nil {
+			return errors.Wrapf(
+				totalErr, "input map must contain an int value for "+
+					"'netflow.octetTotalCount' or 'netflow.octetDeltaCount'\n"+
+					"Additional Cause:\n %+v", deltaErr,
+			)
+		}
+		octetTotal = octetDelta
 	}
 
-	packetTotalIface, ok := ipfixMap["packetTotalCount"]
-	if !ok {
-		//delta counts CAN be total counts by RFC definition >.<"
-		packetTotalIface, ok = ipfixMap["packetDeltaCount"]
-		if !ok {
-			return errors.New("input map must contain key 'netflow.packetTotalCount' or 'netflow.packetDeltaCount'")
+	packetTotal, totalErr := ipfixMap.GetIntAsInt64("packetTotalCount")
+	if totalErr != nil {
+		if errors.Cause(totalErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(totalErr, "input map contains non-int value for 'netflow.packetTotalCount'")
 		}
-	}
-	packetTotal, err := iFaceToInt64(packetTotalIface)
-	if err != nil {
-		return err
+		//delta counts CAN be total counts by RFC definition >.<"
+		packetDelta, deltaErr := ipfixMap.GetIntAsInt64("packetDeltaCount")
+		if deltaErr != nil {
+			return errors.Wrapf(
+				totalErr, "input map must contain an int value for "+
+					"'netflow.packetTotalCount' or 'netflow.packetDeltaCount'\n"+
+					"Additional Cause:\n %+v", deltaErr,
+			)
+		}
+		packetTotal = packetDelta
 	}
 
-	protocolIDIface, ok := ipfixMap["protocolIdentifier"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.protocolIdentifier'")
-	}
-	protocolID, ok := protocolIDIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", protocolIDIface)
+	protocolID, err := ipfixMap.GetInt("protocolIdentifier")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain int value for 'netflow.protocolIdentifier'")
 	}
 
 	//assume EndOfFlow if flowEndReason is not present
 	flowEndReason := input.EndOfFlow
-	flowEndReasonIface, ok := ipfixMap["flowEndReason"]
-	if ok {
-		flowEndReasonInt, flowEndReasonIntOk := flowEndReasonIface.(int)
-		if !flowEndReasonIntOk {
-			return errors.Errorf("could not convert %+v to int", flowEndReasonIface)
-		}
+	flowEndReasonInt, err := ipfixMap.GetInt("flowEndReason")
+	if err == nil {
 		flowEndReason = input.FlowEndReason(flowEndReasonInt)
+	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+		return errors.Wrap(err, "input map contains non-int value for 'netflow.flowEndReason'")
 	}
 
 	//Fill in the flow now that we know we have all the data
-	if sourceIPv4Ok {
+	if srcIPv4err != nil {
 		outputFlow.Netflow.SourceIPv4 = sourceIPv4
 	}
-	if sourceIPv6Ok {
+	if srcIPv6err != nil {
 		outputFlow.Netflow.SourceIPv6 = sourceIPv6
 	}
 
 	outputFlow.Netflow.SourcePort = uint16(sourcePort)
 
-	if destIPv4Ok {
+	if destIPv4err != nil {
 		outputFlow.Netflow.DestinationIPv4 = destIPv4
 	}
-	if destIPv6Ok {
+	if destIPv6err != nil {
 		outputFlow.Netflow.DestinationIPv6 = destIPv6
 	}
 
@@ -442,7 +343,7 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap bson.M, outputFlow *Flo
 //fillFromNetflowv9BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap bson.M, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
@@ -608,7 +509,7 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap bson.M, outputFlo
 //fillFromNetflowv5BSONMap reads the data from a bson map representing
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
-func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlow *Flow) error {
+func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
 	//First grab all the data making sure it exists in the map
 	//All of these pieces of data come out as interface{}, we have
 	//to recast the data back into a typed form :(
@@ -718,48 +619,29 @@ func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap bson.M, outputFlo
 	return nil
 }
 
-//DeserializeNextBSONMap reads the data from a bson map and inserts
+//DeserializeNextMap reads the data from a bson map and inserts
 //it into the output flow, returning nil if the conversion was successful.
 //This method is used for filtering input data and adapting
 //multiple versions of netflow records to the same data type.
 //If the inputMap contains data that must be maintained as state,
 //for example, IPFIX's systemInitTimeMilliseconds, the state will be retained
 //even if the flow is only partially filled and an error is returned.
-func (f *FlowDeserializer) DeserializeNextBSONMap(inputMap bson.M, outputFlow *Flow) error {
-	idIface, ok := inputMap["_id"]
-	if !ok {
-		return errors.New("input map must contain key '_id'")
+func (f *FlowDeserializer) DeserializeNextMap(inputMap safemap.SafeMap, outputFlow *Flow) error {
+	id, err := inputMap.GetObjectID("_id")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an ObjectId value for '_id'")
 	}
-	id, ok := idIface.(bson.ObjectId)
-	if !ok {
-		return errors.Errorf("could not convert %+v to bson.ObjectID", idIface)
+	host, err := inputMap.GetString("host")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for 'host'")
 	}
-
-	hostIface, ok := inputMap["host"]
-	if !ok {
-		return errors.New("input map must contain key 'host'")
+	netflow, err := inputMap.GetSafeMap("netflow")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a map value for 'netflow'")
 	}
-	host, ok := hostIface.(string)
-	if !ok {
-		return errors.Errorf("could not convert %+v to string", hostIface)
-	}
-
-	netflowMapIface, ok := inputMap["netflow"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow'")
-	}
-	netflowMap, ok := netflowMapIface.(bson.M)
-	if !ok {
-		return errors.Errorf("could not convert %+v to bson.M", netflowMapIface)
-	}
-
-	versionIface, ok := netflowMap["version"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.version'")
-	}
-	version, ok := versionIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", versionIface)
+	version, err := netflow.GetInt("version")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.version'")
 	}
 
 	//set the loaded contents
