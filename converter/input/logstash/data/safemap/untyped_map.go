@@ -1,6 +1,6 @@
 package safemap
 
-import "gopkg.in/mgo.v2/bson"
+import "github.com/globalsign/mgo/bson"
 import "github.com/pkg/errors"
 
 var (
