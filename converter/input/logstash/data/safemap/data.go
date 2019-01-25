@@ -1,6 +1,8 @@
 package safemap
 
-import "github.com/globalsign/mgo/bson"
+import (
+	"github.com/globalsign/mgo/bson"
+)
 
 //stringMap returns arbitrary data given a field name.
 //stringMap is used to abstract over map[string]interface{}

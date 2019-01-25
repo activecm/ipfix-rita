@@ -132,11 +132,6 @@ func getNewExporterUptime(ipfixMap safemap.SafeMap) (ipfixRelTime, error) {
 //The exporting host must be provided in order to resolve flowStartSysUpTime and
 //flowEndSysUpTime timestamps.
 func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, outputFlow *Flow, host string) error {
-	//First grab all the data making sure it exists in the map
-	//All of these pieces of data come out as interface{}, we have
-	//to recast the data back into a typed form :(
-	//fmt.Println("0")
-	var ok bool
 	sourceIPv4, srcIPv4err := ipfixMap.GetString("sourceIPv4Address")
 	sourceIPv6, srcIPv6err := ipfixMap.GetString("sourceIPv6Address")
 	if srcIPv4err != nil && srcIPv6err != nil {
@@ -163,18 +158,18 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 	}
 
 	if destIPv4err == nil {
-		postNatDestIPv4, err := ipfixMap.GetString("postNATDestinationIPv4Address")
-		if err == nil {
+		postNatDestIPv4, natErr := ipfixMap.GetString("postNATDestinationIPv4Address")
+		if natErr == nil {
 			destIPv4 = postNatDestIPv4
-		} else if errors.Cause(err) == safemap.ErrTypeMismatch {
-			return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNATDestinationIPv4Address'")
+		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.postNATDestinationIPv4Address'")
 		}
 	} else if destIPv6err == nil {
-		postNatDestIPv6, err := ipfixMap.GetString("postNATDestinationIPv6Address")
-		if err == nil {
+		postNatDestIPv6, natErr := ipfixMap.GetString("postNATDestinationIPv6Address")
+		if natErr == nil {
 			destIPv6 = postNatDestIPv6
-		} else if errors.Cause(err) == safemap.ErrTypeMismatch {
-			return errors.Wrap(err, "input map contains a non-string value for 'netflow.postNATDestinationIPv6Address'")
+		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.postNATDestinationIPv6Address'")
 		}
 	}
 
@@ -313,19 +308,19 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 	}
 
 	//Fill in the flow now that we know we have all the data
-	if srcIPv4err != nil {
+	if srcIPv4err == nil {
 		outputFlow.Netflow.SourceIPv4 = sourceIPv4
 	}
-	if srcIPv6err != nil {
+	if srcIPv6err == nil {
 		outputFlow.Netflow.SourceIPv6 = sourceIPv6
 	}
 
 	outputFlow.Netflow.SourcePort = uint16(sourcePort)
 
-	if destIPv4err != nil {
+	if destIPv4err == nil {
 		outputFlow.Netflow.DestinationIPv4 = destIPv4
 	}
-	if destIPv6err != nil {
+	if destIPv6err == nil {
 		outputFlow.Netflow.DestinationIPv6 = destIPv6
 	}
 
@@ -344,153 +339,98 @@ func (f *FlowDeserializer) fillFromIPFIXBSONMap(ipfixMap safemap.SafeMap, output
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
 func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
-	//First grab all the data making sure it exists in the map
-	//All of these pieces of data come out as interface{}, we have
-	//to recast the data back into a typed form :(
-	//fmt.Println("0")
-	var ok bool
-	var sourceIPv4 string
-	var sourceIPv6 string
-	sourceIPv4Iface, sourceIPv4Ok := netflowMap["ipv4_src_addr"]
-	sourceIPv6Iface, sourceIPv6Ok := netflowMap["ipv6_src_addr"]
-	if sourceIPv4Ok {
-		sourceIPv4, ok = sourceIPv4Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", sourceIPv4Iface)
-		}
-	} else if sourceIPv6Ok {
-		sourceIPv6, ok = sourceIPv6Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", sourceIPv6Iface)
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.ipv4_src_addr' or 'netflow.ipv6_src_addr'")
+	sourceIPv4, srcIPv4err := netflowMap.GetString("ipv4_src_addr")
+	sourceIPv6, srcIPv6err := netflowMap.GetString("ipv6_src_addr")
+	if srcIPv4err != nil && srcIPv6err != nil {
+		return errors.Wrapf(
+			srcIPv4err, "input map must contain a string value for "+
+				"'netflow.ipv4_src_addr' or 'netflow.ipv6_src_addr'\n"+
+				"Additional Cause:\n %+v", srcIPv6err,
+		)
 	}
 
-	sourcePortIface, ok := netflowMap["l4_src_port"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.l4_src_port'")
-	}
-	sourcePort, ok := sourcePortIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", sourcePortIface)
-	}
-
-	var destIPv4 string
-	var destIPv6 string
-	destIPv4Iface, destIPv4Ok := netflowMap["ipv4_dst_addr"]
-	destIPv6Iface, destIPv6Ok := netflowMap["ipv6_dst_addr"]
-	if destIPv4Ok {
-		destIPv4, ok = destIPv4Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", destIPv4Iface)
-		}
-
-		postNatDestIPv4Iface, postNatDestIPv4Ok := netflowMap["xlate_dst_addr_ipv4"]
-		if postNatDestIPv4Ok {
-			destIPv4, ok = postNatDestIPv4Iface.(string)
-			if !ok {
-				return errors.Errorf("could not convert %+v to string", postNatDestIPv4Iface)
-			}
-		}
-
-	} else if destIPv6Ok {
-		destIPv6, ok = destIPv6Iface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", destIPv6Iface)
-		}
-
-		postNatDestIPv6Iface, postNatDestIPv6Ok := netflowMap["xlate_dst_addr_ipv6"]
-		if postNatDestIPv6Ok {
-			destIPv6, ok = postNatDestIPv6Iface.(string)
-			if !ok {
-				return errors.Errorf("could not convert %+v to string", postNatDestIPv6Iface)
-			}
-		}
-
-	} else {
-		return errors.New("input map must contain key 'netflow.ipv4_dst_addr' or 'netflow.ipv6_dst_addr'")
-	}
-
-	var destPort int
-	destPortIface, ok := netflowMap["l4_dst_port"]
-	if ok {
-		destPort, ok = destPortIface.(int)
-		if !ok {
-			return errors.Errorf("could not convert %+v to int", destPortIface)
-		}
-
-		postNaptDestPortIface, postNatptDestPortOk := netflowMap["xlate_dst_port"]
-		if postNatptDestPortOk {
-			destPort, ok = postNaptDestPortIface.(int)
-			if !ok {
-				return errors.Errorf("could not convert %+v to int", postNaptDestPortIface)
-			}
-		}
-
-	} else {
-		return errors.New("input map must contain key 'netflow.l4_dst_port'")
-	}
-
-	flowStartIface, ok := netflowMap["first_switched"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.first_switched'")
-	}
-	flowStart, ok := flowStartIface.(string)
-	if !ok {
-		return errors.Errorf("could not convert %+v to string", flowStartIface)
-	}
-
-	flowEndIface, ok := netflowMap["last_switched"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.last_switched'")
-	}
-	flowEnd, ok := flowEndIface.(string)
-	if !ok {
-		return errors.Errorf("could not convert %+v to string", flowEndIface)
-	}
-
-	octetTotalIface, ok := netflowMap["in_bytes"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.in_bytes'")
-	}
-	octetTotal, err := iFaceToInt64(octetTotalIface)
+	sourcePort, err := netflowMap.GetInt("l4_src_port")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_src_port'")
 	}
 
-	packetTotalIface, ok := netflowMap["in_pkts"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.in_pkts'")
+	destIPv4, destIPv4err := netflowMap.GetString("ipv4_dst_addr")
+	destIPv6, destIPv6err := netflowMap.GetString("ipv6_dst_addr")
+	if destIPv4err != nil && destIPv6err != nil {
+		return errors.Wrapf(
+			destIPv4err, "input map must contain a string value for "+
+				"'netflow.ipv4_dst_addr' or 'netflow.ipv6_dst_addr'\n"+
+				"Additional Cause:\n %+v", destIPv6err,
+		)
 	}
-	packetTotal, err := iFaceToInt64(packetTotalIface)
+
+	if destIPv4err == nil {
+		postNatDestIPv4, natErr := netflowMap.GetString("xlate_dst_addr_ipv4")
+		if natErr == nil {
+			destIPv4 = postNatDestIPv4
+		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.xlate_dst_addr_ipv4'")
+		}
+	} else if destIPv6err == nil {
+		postNatDestIPv6, natErr := netflowMap.GetString("xlate_dst_addr_ipv6")
+		if natErr == nil {
+			destIPv6 = postNatDestIPv6
+		} else if errors.Cause(natErr) == safemap.ErrTypeMismatch {
+			return errors.Wrap(natErr, "input map contains a non-string value for 'netflow.xlate_dst_addr_ipv6'")
+		}
+	}
+
+	destPort, err := netflowMap.GetInt("l4_dst_port")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_dst_port'")
 	}
 
-	protocolIDIface, ok := netflowMap["protocol"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.protocol'")
+	postNATDestPort, err := netflowMap.GetInt("xlate_dst_port")
+	if err == nil {
+		destPort = postNATDestPort
+	} else if errors.Cause(err) == safemap.ErrTypeMismatch {
+		return errors.Wrap(err, "input map contains a non-string value for 'netflow.xlate_dst_port'")
 	}
-	protocolID, ok := protocolIDIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", protocolIDIface)
+
+	flowStart, err := netflowMap.GetString("first_switched")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for first_switched")
+	}
+
+	flowEnd, err := netflowMap.GetString("last_switched")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for last_switched")
+	}
+
+	octetTotal, err := netflowMap.GetIntAsInt64("in_bytes")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_bytes'")
+	}
+
+	packetTotal, err := netflowMap.GetIntAsInt64("in_pkts")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_pkts'")
+	}
+
+	protocolID, err := netflowMap.GetInt("protocol")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain int value for 'netflow.protocol'")
 	}
 
 	//Fill in the flow now that we know we have all the data
-	if sourceIPv4Ok {
+	if srcIPv4err == nil {
 		outputFlow.Netflow.SourceIPv4 = sourceIPv4
 	}
-	if sourceIPv6Ok {
+	if srcIPv6err == nil {
 		outputFlow.Netflow.SourceIPv6 = sourceIPv6
 	}
 
 	outputFlow.Netflow.SourcePort = uint16(sourcePort)
 
-	if destIPv4Ok {
+	if destIPv4err == nil {
 		outputFlow.Netflow.DestinationIPv4 = destIPv4
 	}
-	if destIPv6Ok {
+	if destIPv6err == nil {
 		outputFlow.Netflow.DestinationIPv6 = destIPv6
 	}
 
@@ -510,96 +450,50 @@ func (f *FlowDeserializer) fillFromNetflowv9BSONMap(netflowMap safemap.SafeMap, 
 //the Netflow field of Flow and inserts it into this flow,
 //returning nil if the conversion was successful.
 func (f *FlowDeserializer) fillFromNetflowv5BSONMap(netflowMap safemap.SafeMap, outputFlow *Flow) error {
-	//First grab all the data making sure it exists in the map
-	//All of these pieces of data come out as interface{}, we have
-	//to recast the data back into a typed form :(
-	//fmt.Println("0")
-	var ok bool
-	var sourceIP string
-	sourceIPIface, sourceIPOk := netflowMap["ipv4_src_addr"]
-	if sourceIPOk {
-		sourceIP, ok = sourceIPIface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", sourceIPIface)
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.ipv4_src_addr'")
-	}
 
-	sourcePortIface, ok := netflowMap["l4_src_port"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.l4_src_port'")
-	}
-	sourcePort, ok := sourcePortIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", sourcePortIface)
-	}
-
-	var destIP string
-	destIPIface, destIPOk := netflowMap["ipv4_dst_addr"]
-	if destIPOk {
-		destIP, ok = destIPIface.(string)
-		if !ok {
-			return errors.Errorf("could not convert %+v to string", destIPIface)
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.ipv4_dst_addr'")
-	}
-
-	var destPort int
-	destPortIface, ok := netflowMap["l4_dst_port"]
-	if ok {
-		destPort, ok = destPortIface.(int)
-		if !ok {
-			return errors.Errorf("could not convert %+v to int", destPortIface)
-		}
-	} else {
-		return errors.New("input map must contain key 'netflow.l4_dst_port'")
-	}
-
-	flowStartIface, ok := netflowMap["first_switched"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.first_switched'")
-	}
-	flowStart, ok := flowStartIface.(string)
-	if !ok {
-		return errors.Errorf("could not convert %+v to string", flowStartIface)
-	}
-
-	flowEndIface, ok := netflowMap["last_switched"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.last_switched'")
-	}
-	flowEnd, ok := flowEndIface.(string)
-	if !ok {
-		return errors.Errorf("could not convert %+v to string", flowEndIface)
-	}
-
-	octetTotalIface, ok := netflowMap["in_bytes"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.in_bytes'")
-	}
-	octetTotal, err := iFaceToInt64(octetTotalIface)
+	sourceIP, err := netflowMap.GetString("ipv4_src_addr")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "input map must contain a string value for 'ipv4_src_addr'")
 	}
 
-	packetTotalIface, ok := netflowMap["in_pkts"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.in_pkts'")
-	}
-	packetTotal, err := iFaceToInt64(packetTotalIface)
+	sourcePort, err := netflowMap.GetInt("l4_src_port")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_src_port'")
 	}
 
-	protocolIDIface, ok := netflowMap["protocol"]
-	if !ok {
-		return errors.New("input map must contain key 'netflow.protocol'")
+	destIP, err := netflowMap.GetString("ipv4_dst_addr")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for 'ipv4_dst_addr'")
 	}
-	protocolID, ok := protocolIDIface.(int)
-	if !ok {
-		return errors.Errorf("could not convert %+v to int", protocolIDIface)
+
+	destPort, err := netflowMap.GetInt("l4_dst_port")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.l4_dst_port'")
+	}
+
+	flowStart, err := netflowMap.GetString("first_switched")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for first_switched")
+	}
+
+	flowEnd, err := netflowMap.GetString("last_switched")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain a string value for last_switched")
+	}
+
+	octetTotal, err := netflowMap.GetIntAsInt64("in_bytes")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_bytes'")
+	}
+
+	packetTotal, err := netflowMap.GetIntAsInt64("in_pkts")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain an int value for 'netflow.in_pkts'")
+	}
+
+	protocolID, err := netflowMap.GetInt("protocol")
+	if err != nil {
+		return errors.Wrap(err, "input map must contain int value for 'netflow.protocol'")
 	}
 
 	//Fill in the flow now that we know we have all the data
@@ -635,11 +529,11 @@ func (f *FlowDeserializer) DeserializeNextMap(inputMap safemap.SafeMap, outputFl
 	if err != nil {
 		return errors.Wrap(err, "input map must contain a string value for 'host'")
 	}
-	netflow, err := inputMap.GetSafeMap("netflow")
+	netflowMap, err := inputMap.GetSafeMap("netflow")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain a map value for 'netflow'")
 	}
-	version, err := netflow.GetInt("version")
+	version, err := netflowMap.GetInt("version")
 	if err != nil {
 		return errors.Wrap(err, "input map must contain an int value for 'netflow.version'")
 	}
