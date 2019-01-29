@@ -24,6 +24,8 @@ ensure_udp_buffer_large() {
 
 config_num_input_workers() {
   # Use 3/4 of the cores for Logstash
+  # Logstash expects $INPUT_WORKERS to be set to the number
+  # of Logstash worker threads
   export INPUT_WORKERS="$(expr 3 \* $(nproc) / 4)"
   if [ "$INPUT_WORKERS" -lt 1 ]; then
     export INPUT_WORKERS=1
@@ -43,6 +45,67 @@ ensure_tz() {
   fi
 }
 
+
+run_compose_with_args() {
+  docker-compose -f "$_COMPOSE_FILE" "$@"
+}
+
+check_admin() {
+  if ! [ $(id -u) = 0 ]; then
+    echo "You must be an admin to run this command"
+    exit 1
+  fi
+}
+
+uninstall() {
+  check_admin
+  docker-compose -f "$_COMPOSE_FILE" down -v
+  rm /usr/local/bin/ipfix-rita
+  rm -rf /opt/ipfix-rita /etc/ipfix-rita
+}
+
+help() {
+  echo "IPFix-RITA. Collect Netflow Records and Ship them to RITA for Analysis."
+  echo "Usage: ipfix-rita command [args]"
+  echo "Commands:"
+  printf "\tstart:\t\t\tStart one or more IPFix-RITA services\n"
+  printf "\tstop:\t\t\tStops one or more IPFix-RITA services\n"
+  printf "\tps:\t\t\tList the status of each IPFix-RITA service\n"
+  printf "\tlogs:\t\t\tView IPFix-RITA logs\n"
+  printf "\tuninstall:\t\tRemove IPFix-RITA from the system\n"
+  printf "\tversion:\t\tList the current IPFix-RITA version\n"
+  printf "\thelp:\t\t\tPrint this message\n"
+}
+
+handle_arguments() {
+  if [ $# -eq 0 ]; then
+    help
+    exit 1
+  fi
+
+  case "$1" in
+    ps|start|stop|logs)
+    run_compose_with_args "$@"
+    ;;
+    uninstall)
+    uninstall
+    ;;
+    version)
+    echo "IPFix-RITA version: $IPFIX_RITA_VERSION"
+    ;;
+    help|-h)
+    help
+    ;;
+    *)
+    echo "Unknown command: $1."
+    help
+    exit 1
+    ;;
+  esac
+
+}
+
+
 main() {
   # Change dir to script dir
   pushd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" > /dev/null
@@ -53,7 +116,8 @@ main() {
 
   ensure_tz
 
-  docker-compose -f "$_COMPOSE_FILE" "$@"
+  handle_arguments "$@"
+
 
   # Change back to original directory
   popd > /dev/null
