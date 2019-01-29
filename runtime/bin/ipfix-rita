@@ -2,46 +2,61 @@
 
 set -e
 
-# Change dir to script dir
-pushd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" > /dev/null
-
+# Set up docker compose vars
 export COMPOSE_PROJECT_NAME=IPFIX_RITA
-
 # Use _COMPOSE_FILE to allow the use of "-f"
 _COMPOSE_FILE="../lib/docker-compose/main.yaml"
-
 # Let users/ the install script override the version to run
 export IPFIX_RITA_VERSION="${IPFIX_RITA_VERSION:-latest}"
-DOCKER_IMAGE_IN="images-${IPFIX_RITA_VERSION}.tgz"
 LOGSTASH_IMG="quay.io/activecm/ipfix-rita-logstash:$IPFIX_RITA_VERSION"
 CONVERTER_IMG="quay.io/activecm/ipfix-rita-converter:$IPFIX_RITA_VERSION"
 
-# The installer should take care of this
-RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
-RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
-if [ "$1" == "up" -a "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
-  echo "Please enlarge the UDP receive buffer to at least $RECV_BUFF_OPT_SIZE."
-  echo "This can be done by running 'sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE' from a root console."
-  exit 1
-fi
+ensure_udp_buffer_large() {
+  # The installer should take care of this, but its best to double check
+  RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
+  RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
+  if [ "$1" == "up" -a "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
+    echo "Please enlarge the UDP receive buffer to at least $RECV_BUFF_OPT_SIZE."
+    echo "This can be done by running 'sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE' from a root console."
+    exit 1
+  fi
+}
 
-# Use 3/4 of the cores for Logstash
-export INPUT_WORKERS="$(expr 3 \* $(nproc) / 4)"
-if [ "$INPUT_WORKERS" -lt 1 ]; then
-  export INPUT_WORKERS=1
-fi
+config_num_input_workers() {
+  # Use 3/4 of the cores for Logstash
+  export INPUT_WORKERS="$(expr 3 \* $(nproc) / 4)"
+  if [ "$INPUT_WORKERS" -lt 1 ]; then
+    export INPUT_WORKERS=1
+  fi
+}
 
-# Ensure the timezone is set inside the docker containers
-# We use the TZ variable rather than bind mount /etc/localtime
-# into our containers since /etc/localtime is a symlink.
-# If the container's timezone data directory has the same
-# layout as the host's then the bind mounted symlink would work.
-# However, this cannot be guaranteed.
-if [ -z "$TZ" ]; then
-  export TZ="$(basename $(dirname $(readlink /etc/localtime)))/$(basename $(readlink /etc/localtime))"
-fi
 
-docker-compose -f "$_COMPOSE_FILE" "$@"
+ensure_tz() {
+  # Ensure the timezone is set inside the docker containers
+  # We use the TZ variable rather than bind mount /etc/localtime
+  # into our containers since /etc/localtime is a symlink.
+  # If the container's timezone data directory has the same
+  # layout as the host's then the bind mounted symlink would work.
+  # However, this cannot be guaranteed.
+  if [ -z "$TZ" ]; then
+    export TZ="$(basename $(dirname $(readlink /etc/localtime)))/$(basename $(readlink /etc/localtime))"
+  fi
+}
 
-# Change back to original directory
-popd > /dev/null
+main() {
+  # Change dir to script dir
+  pushd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" > /dev/null
+
+  ensure_udp_buffer_large
+
+  config_num_input_workers
+
+  ensure_tz
+
+  docker-compose -f "$_COMPOSE_FILE" "$@"
+
+  # Change back to original directory
+  popd > /dev/null
+}
+
+main "$@"
