@@ -306,17 +306,17 @@ write_converter_conf() {
 	RITA_MONGO_TLS_CHECK_CERT=$5
 	RITA_MONGO_TLS_CERT_PATH=$6
 
-	awk -v db_root="$RITA_DATASET_DBROOT" \
-	-v mongo_uri="$RITA_MONGO_URI" \
-	-v mongo_auth="$RITA_MONGO_AUTH" \
-	-v mongo_tls_enable="$RITA_MONGO_TLS" \
-	-v mongo_tls_cert_check="$RITA_MONGO_TLS_CHECK_CERT" \
-	-v mongo_tls_ca_path="$RITA_MONGO_TLS_CERT_PATH" '
+awk -v db_root="$RITA_DATASET_DBROOT" \
+-v mongo_uri="$RITA_MONGO_URI" \
+-v mongo_auth="$RITA_MONGO_AUTH" \
+-v mongo_tls_enable="$RITA_MONGO_TLS" \
+-v mongo_tls_cert_check="$RITA_MONGO_TLS_CHECK_CERT" \
+-v mongo_tls_ca_path="$RITA_MONGO_TLS_CERT_PATH" '
 # flag is used to determine if we are in the right scope
 
 # Unset the flag if we see "abc:" or "  abc:" on a line
 # by itself if there are 2 or less preceding spaces
-/^(  )?[^ ]+:\$/{
+/^(  )?[^ ]+:$/{
   flag=""
 }
 
@@ -375,7 +375,7 @@ flag && NF && /DBRoot:/{
 
 1
 ' $INSTALLATION_ETC_DIR/converter/converter.yaml > $INSTALLATION_ETC_DIR/converter/converter-new.yaml && \
-mv $INSTALLATION_ETC_DIR/converter/converter-new.yaml $INSTALLATION_ETC_DIR/converter/converter.yaml
+	mv $INSTALLATION_ETC_DIR/converter/converter-new.yaml $INSTALLATION_ETC_DIR/converter/converter.yaml
 } #End of write_converter_conf
 
 # Stop if there are any errors
