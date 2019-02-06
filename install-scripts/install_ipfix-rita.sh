@@ -118,6 +118,16 @@ do_system_tests () {
 	return 0
 } #End of do_system_tests
 
+usage_text () {
+	cat >&2 <<EOHELP
+This script will install ipfix-rita.
+On the command line, enter one of the following:
+$0 rita ip.address.for.rita
+The IP address can be 127.0.0.1 to indicate a local RITA installation.
+EOHELP
+	exit 1
+}
+
 validated_ssh_target () {
 	#Return an ssh target that we've confirmed we can reach.  "$2" is the initial target to try, and may be replaced.
 	#The potential target - both as supplied as parameter 2 and as returned at the end - may be blank, indicating "do not install this"
@@ -146,8 +156,10 @@ get_line() {
 	search_key=$2
 
 	#get the line that matches the search key that isn't commented out
-	line=`cat $rita_file | grep $search_key | grep -v "#"`
+	line=`cat $rita_file | grep $search_key`
+	line=`echo $line | cut -d ' ' -f 2`
 
+	echo $line
 } #End of get line
 
 get_rita_data_interactive() {
@@ -181,7 +193,7 @@ get_rita_data_interactive() {
 	fi
 
 	#TODO check if the mongo server is available
-	
+
 	RITA_MONGO_AUTH="null"
 	#instead of prompting get the RITA address and split from there to fill in our
 	#  config file
@@ -264,20 +276,21 @@ get_rita_data_noninteractive() {
 	        rita_conf="/etc/rita/config.yaml"
 	fi
 
-	db_root=${rita_system#*@}
-	mongo_uri="mongodb://$db_root:$MONGO_PORT"
+	db_root="IPFIX"
+	mongo_uri="mongodb://${rita_system#*@}:27017"
 	mongo_auth=`get_line $rita_conf "AuthenticationMechanism: "`
 	mongo_tls_enable=`get_line $rita_conf "Enable: "`
 	mongo_tls_cert_check=`get_line $rita_conf "VerifyCertificate: "`
 	mongo_tls_ca_path=`get_line $rita_conf "CAFile: "`
 
 	#If the config file was copied from a remote server, delete that file
-	if [ "$delete_conf" != "true" ]; then
+	if [ "$delete_conf" == "true" ]; then
 	        rm "./config.yaml"
 	fi
 
 	#If the config specified a CA file, let's copy that
 	if [[ $mongo_tls_ca_path != *"null" ]]; then
+		echo $mongo_tls_ca_path
 		ca_file=${mongo_tls_ca_path#"CAFile: "}
 		scp $rita_system:$ca_file $ca_file
 	fi
@@ -293,12 +306,12 @@ write_converter_conf() {
 	RITA_MONGO_TLS_CHECK_CERT=$5
 	RITA_MONGO_TLS_CERT_PATH=$6
 
-awk -v db_root="$RITA_DATASET_DBROOT" \
--v mongo_uri="$RITA_MONGO_URI" \
--v mongo_auth="$RITA_MONGO_AUTH" \
--v mongo_tls_enable="$RITA_MONGO_TLS" \
--v mongo_tls_cert_check="$RITA_MONGO_TLS_CHECK_CERT" \
--v mongo_tls_ca_path="$RITA_MONGO_TLS_CERT_PATH" '
+	awk -v db_root="$RITA_DATASET_DBROOT" \
+	-v mongo_uri="$RITA_MONGO_URI" \
+	-v mongo_auth="$RITA_MONGO_AUTH" \
+	-v mongo_tls_enable="$RITA_MONGO_TLS" \
+	-v mongo_tls_cert_check="$RITA_MONGO_TLS_CHECK_CERT" \
+	-v mongo_tls_ca_path="$RITA_MONGO_TLS_CERT_PATH" '
 # flag is used to determine if we are in the right scope
 
 # Unset the flag if we see "abc:" or "  abc:" on a line
@@ -313,61 +326,62 @@ awk -v db_root="$RITA_DATASET_DBROOT" \
 }
 
 flag && NF && /ConnectionString:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=mongo_uri;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=mongo_uri;
+  print val $0;
   next
 }
 
 flag && NF && /AuthenticationMechanism:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=mongo_auth;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=mongo_auth;
+  print val $0;
   next
 }
 
 flag && NF && /Enable:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=mongo_tls_enable;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=mongo_tls_enable;
+  print val $0;
   next
 }
 
 flag && NF && /VerifyCertificate:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=mongo_tls_cert_check;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=mongo_tls_cert_check;
+  print val $0;
   next
 }
 
 flag && NF && /CAFile:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=mongo_tls_ca_path;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=mongo_tls_ca_path;
+  print val $0;
   next
 }
 
 flag && NF && /DBRoot:/{
-  match(\$0,/^ +/);
-  val=substr(\$0,RSTART,RLENGTH);
-  \$NF=db_root;
-  print val \$0;
+  match($0,/^ +/);
+  val=substr($0,RSTART,RLENGTH);
+  $NF=db_root;
+  print val $0;
   next
 }
 
 1
-' $INSTALLATION_ETC_DIR/converter/converter.yaml > $INSTALLATION_ETC_DIR/converter/converter-new.yaml && \\
+' $INSTALLATION_ETC_DIR/converter/converter.yaml > $INSTALLATION_ETC_DIR/converter/converter-new.yaml && \
 mv $INSTALLATION_ETC_DIR/converter/converter-new.yaml $INSTALLATION_ETC_DIR/converter/converter.yaml
 } #End of write_converter_conf
 
 # Stop if there are any errors
 set -e
 # Change dir to script dir
+echo "tyring to cd to $(dirname "$BASH_SOURCE[0]")"
 _OLD_DIR=$(pwd); cd "$(dirname "$BASH_SOURCE[0]")";
 
 if [[ $EUID -ne 0 ]]; then
