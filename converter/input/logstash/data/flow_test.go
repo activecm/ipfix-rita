@@ -20,13 +20,16 @@ func TestParseLogstashTime(t *testing.T) {
 	require.Equal(t, int64(1525473400*1000)+960, flowEnd)
 }
 
-func TestV4V6Address(t *testing.T) {
+func TestV4Address(t *testing.T) {
 	flow := data.Flow{}
 	flow.Netflow.SourceIPv4 = "A"
 	flow.Netflow.DestinationIPv4 = "B"
 	require.Equal(t, flow.SourceIPAddress(), "A")
 	require.Equal(t, flow.DestinationIPAddress(), "B")
-	flow = data.Flow{}
+}
+
+func TestV6Address(t *testing.T) {
+	flow := data.Flow{}
 	flow.Netflow.SourceIPv6 = "C"
 	flow.Netflow.DestinationIPv6 = "D"
 	require.Equal(t, flow.SourceIPAddress(), "C")
