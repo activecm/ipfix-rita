@@ -19,7 +19,7 @@ often practical to install everything in one place.
 **You must ensure the RITA database can be contacted on an IP address other
 than localhost**. This can be done by editing the `bindIP` setting in
 `/etc/mongod.conf`. The installer will prompt you to ensure this change is made
-before continuing on. If you intend to install IPFIX-RITA on the same machine 
+before continuing on. If you intend to install IPFIX-RITA on the same machine
 as RITA and MongoDB, please add the IP address suggested by the installer.
 \
 NOTE: if you want multiple bind IP addresses in your MongoDB config file you
@@ -31,7 +31,7 @@ for IPFIX-RITA to access) your bind IP line should look like the following.
 Also if your RITA config file (`/etc/rita/config.yaml`) connects to MongoDB on
 localhost you will need to change that to the same value as MongoDB is listening
 on. For example if you change the bindIP in your MongoDB config file to 10.0.0.5
-and you check your RITA config file and the connection string is 
+and you check your RITA config file and the connection string is
 `mongodb://localhost:27017` you'll need to change it to ` mongodb://10.0.0.5:27017`.
 
 #### How to [Install RITA](https://github.com/activecm/rita#automatic-installation)
@@ -53,7 +53,7 @@ $ wget $(curl --silent "https://api.github.com/repos/activecm/ipfix-rita/release
 | grep '"browser_download_url":' | cut -d \" -f 4 ) -O ipfix-rita.tgz
 ```
 
-#### Upack the installer
+#### Unpack the installer
 ```
 $ tar -zxf ipfix-rita.tgz
 ```
@@ -67,7 +67,7 @@ You will be prompted for configuration details regarding the RITA database
 connection and the names of the resulting datasets. Further configuration
 options can be set in `/etc/ipfix-rita/converter/converter.yaml`.
 
-By default, **IPFIX-RITA will run at start up unless it is stopped**. For more 
+By default, **IPFIX-RITA will run at start up unless it is stopped**. For more
 information see [Additional Info](docs/Additional%20Info.md). Full
 documentation for IPFIX-RITA can be found in the [docs](docs/) folder.
 
@@ -85,7 +85,7 @@ setting up your router for use with IPFIX-RITA.
 |   Cisco ASA  |       |     ✔      |            |                  |
 | Cisco ASR 9k |       |     ✔      |            |                  |
 |   SonicWall  |       |     ✔      |            |                  |
-|   MikroTik   |       |     ✔      |     ✔      |                  | 
+|   MikroTik   |       |     ✔      |     ✔      |                  |
 |     YAF      |   ✔   |            |            | Use `--uniflow`  |
 
 ## What Do I Do If My Router Isn't On the List?
@@ -164,7 +164,7 @@ Output:
         CAFile: null
 ...
 ```
-try connecting to mongo using 
+try connecting to mongo using
 ```
 mongo [ipaddress]:[port]
 mongo 10.0.0.5:27017
@@ -199,15 +199,20 @@ IPFix).
 The following bugs have been documented by Active Countermeasures and solutions
 are in development
 
-### IPFix Time Error
-A common error that might occur is something like
+### IPFix-RITA Fails on Reboot
+If IPFix-RITA is configured to write to a MongoDB database running on the
+Docker host (as in the default configuration), IPFix-RITA may encounter
+an error after a system reboot.
+The following error may arise:
 ```
-converter_1_a86985062afe | ERRO[1082] input map must contain key 'netflow.flowStartMilliseconds'  ...
+converter_1_eeb48d380f26 | ERRO[0038] could not connect to RITA MongoDB: could not connect to MongoDB (no TLS): could not connect to MongoDB: no reachable servers  stacktrace="[rita_dates.go:60 convert.go:194 convert.go:40 app.go:490 command.go:210 app.go:255 boot.go:18 proc.go:198 asm_amd64.s:2361]"
 ```
-If you are using IPFix this is likely caused by the router using an IPFix version
-that uses timestamps relative to the system initilization time and not Unix timestamps.
-This is a known issue and we are working on a solution to support more IPFix versions.
-If this error persists, Active Countermeasures recommends switching to Netflow v9 or v5.
+This is due to an error in which the MongoDB server starts before the Docker engine.
+Until a fix is implemented, Active Countermeasures recommends running the following command
+to resolve the issue
+```
+sudo systemctl restart mongod.service
+```
 
 ### Log Rotation Error
 It has been discovered that some flow logs will report flow start and end
