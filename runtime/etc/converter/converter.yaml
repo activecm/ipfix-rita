@@ -26,7 +26,8 @@ Filtering:
     # This functionality overrides the NeverInclude and InternalSubnets
     # section, making sure that any connection records containing addresses from
     # this range are kept and not filtered.
-    AlwaysInclude: []
+    AlwaysInclude:
+    # - 127.0.0.1/32
 
     # Example: NeverInclude: ["255.255.255.255/32"]
     # This functions as a whitelisting setting, and connections involving
