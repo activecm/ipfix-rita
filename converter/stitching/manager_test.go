@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/activecm/ipfix-rita/converter/filter"
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/protocols"
@@ -36,6 +37,7 @@ func newTestingStitchingManager(logger logging.Logger) Manager {
 		outputBufferSize,
 		matcherMaxSize,
 		matcherFlushToPercent,
+		filter.NewNullFilter(),
 		logger,
 	)
 }
