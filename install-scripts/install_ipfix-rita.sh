@@ -28,6 +28,33 @@ check_remote_mongo() {
 } #End of check_remote_mongo
 
 
+strip_mongo() {
+	MONGO_URI_STR=$1
+
+	if [ `echo $MONGO_URI_STR | grep mongo` ] ; then
+		RITA_STR=${MONGO_URI_STR##m*/}
+		RITA_STR=${RITA_STR%:*}
+	else
+		RITA_STR=$MONGO_URI_STR
+	fi
+
+	echo $RITA_STR
+}
+
+
+add_mongo() {
+	URI_STR=$1
+
+	if [ `echo $URI_STR | grep mongo` ] ; then
+		MONGO_URI=$URI_STR
+	else
+		MONGO_URI="mongodb://$URI_STR:27017"
+	fi
+
+	echo $MONGO_URI
+}
+
+
 
 can_ssh () {
 	#Test that we can reach the target system over ssh.
@@ -45,7 +72,7 @@ can_ssh () {
 			#echo "cannot connect to $@"
 		fi
 	else
-		echo "Please supply an ssh target as a command line parameter to can_ssh"
+		echo "Please supply an ssh target as a command line parameter to can_ssh" >&2
 	fi
 
 	return $success_code
@@ -65,7 +92,7 @@ fail () {
 } #end of fail
 
 
-
+#TODO update this and makes sure it's called before running the full install script
 do_system_tests () {
 	while [ -n "$1" ]; do
 		if [ "$1" = "check_sse4_2" ]; then
@@ -83,34 +110,34 @@ do_system_tests () {
 	status "Installed software tests"
 	if [ -x /usr/bin/apt-get -a -x /usr/bin/dpkg-query ]; then
 		#We have apt-get , good.
-		sudo apt-get -qq update > /dev/null 2>&1
+		apt-get -qq update > /dev/null 2>&1
 		inst_retcode=100000
 		while [ "$inst_retcode" -gt 0 ]; do
-			sudo apt-get -y install gdb git wget curl make realpath lsb-release rsync tar
+			apt-get -y install gdb git wget curl make realpath lsb-release rsync tar
 			inst_retcode=$?
 			if [ "$inst_retcode" -gt 0 ]; then
-				echo "Error installing packages, perhaps because a system update is running; will wait 60 seconds and try again"
+				echo "Error installing packages, perhaps because a system update is running; will wait 60 seconds and try again" >&2
 				sleep 60
 			fi
 		done
 		#TODO test IPFIX-RITA on Contos/Red Hat System
 	#elif [ -x /usr/bin/yum -a -x /bin/rpm ]; then
 	#	if [ ! -x /bin/yum-config-manager ]; then
-	#		sudo yum -y install yum-utils
+	#		yum -y install yum-utils
 	#	fi
 		#We have yum, good.
-	#	sudo yum -q makecache > /dev/null 2>&1
+	#	yum -q makecache > /dev/null 2>&1
 	#	#FIXME - put in place a similar loop like above for apt-get
-	#	sudo yum -y install gdb git wget curl make coreutils coreutils redhat-lsb-core rsync tar
+	#	yum -y install gdb git wget curl make coreutils coreutils redhat-lsb-core rsync tar
 	else
 		fail "(apt-get and dpkg-query) is installed on this system"
 	fi
 	require_util awk cat cp curl date egrep gdb getent git grep ip lsb_release make mkdir mv printf rm rsync sed sleep tar tr wc wget		|| fail "A needed tool is missing"
 
 	if [ -s /etc/redhat-release ] && grep -iq 'release 7' /etc/redhat-release ; then
-		echo "Centos or Redhat 7 installation detected, good."
+		echo "Centos or Redhat 7 installation detected, good." >&2
 	elif grep -iq '^DISTRIB_ID *= *Ubuntu' /etc/lsb-release ; then
-		echo "Ubuntu Linux installation detected, good."
+		echo "Ubuntu Linux installation detected, good." >&2
 	else
 		fail "This system does not appear to be a Centos/RHEL 7 or Ubuntu Linux system"
 	fi
@@ -122,6 +149,7 @@ usage_text () {
 	cat >&2 <<EOHELP
 This script will install ipfix-rita.
 On the command line, enter one of the following:
+$0
 $0 rita ip.address.for.rita
 The IP address can be 127.0.0.1 to indicate a local RITA installation.
 EOHELP
@@ -166,27 +194,34 @@ get_rita_data_interactive() {
 	IPFIX_RITA_NETWORK_GATEWAY=$(docker inspect ipfix_rita_default --format "{{with (index .IPAM.Config 0)}}{{.Gateway}}{{end}}")
 	RITA_MONGO_URI="mongodb://$IPFIX_RITA_NETWORK_GATEWAY:27017"
 
-	echo ""
-	echo "IPFIX-RITA needs to write to a MongoDB database controlled by RITA."
-	echo "By default, this installer assumes RITA and MongoDB are installed on the Docker host."
-	echo "In order to support this type of installation, you will need to"
-	echo "add the suggested Docker interface below to the list of bindIP's in /etc/mongod.conf."
-	echo "If needed, please do so, and restart MongoDB before continuing."
-	echo "Restart MongoDB with \$ sudo systemctl restart mongod.service"
-	echo "Note: the default configuration is not recommended. IPFIX-RITA will likely perform"
-	echo "better if it is installed on a machine separate from RITA/ MongoDB."
-	echo ""
-	read -p "What MongoDB URI should IPFIX-RITA use to contact the RITA database [$RITA_MONGO_URI]: " -r
+	echo "" >&2
+	echo "IPFIX-RITA needs to write to a MongoDB database controlled by RITA." >&2
+	echo "By default, this installer assumes RITA and MongoDB are installed on the Docker host." >&2
+	echo "In order to support this type of installation, you will need to" >&2
+	echo "add the suggested Docker interface below to the list of bindIP's in /etc/mongod.conf." >&2
+	echo "If needed, please do so, and restart MongoDB before continuing." >&2
+	echo "Restart MongoDB with \$ sudo systemctl restart mongod.service" >&2
+	echo "Note: the default configuration is not recommended. IPFIX-RITA will likely perform" >&2
+	echo "better if it is installed on a machine separate from RITA/ MongoDB." >&2
+	echo "" >&2
+
+	echo "What MongoDB URI should IPFIX-RITA use to contact the RITA database [$RITA_MONGO_URI]: " >&2
 	read RITA_MONGO_URI <&2
-	if [ -n "$RITA_MONGO_URI" -a  "$RITA_MONGO_URI" != '127.0.0.1' ]; then
+	if [  -n "$RITA_MONGO_URI" -a  "$RITA_MONGO_URI" != '127.0.0.1' ]; then
+		rita_uri=`strip_mongo $RITA_MONGO_URI`
+		RITA_MONGO_URI=`add_mongo $RITA_MONGO_URI`
 	        echo -n "Do you access that system with a username different than ${USER} (Y/N)" >&2
 	        if askYN ; then
 	                echo "Enter that username now, otherwise just press enter if your account is ${USER} on the remote system too." >&2
-	                read rita_user <&2
+	                read rita_user
 	                if [ -n "$rita_user" ]; then
-	                        rita_system="${rita_user}@${rita_system}"
+	                        rita_system="${rita_user}@${rita_uri}"
 	                fi
 	        fi
+					#This will check if the Rita system is accessible to our installer
+					#TODO, this cases issues, we have mongodb://127.0.0.1:27017 then we
+					# have ritauser@mongodb://127.0.0.1:27017 need to detect if they have
+					# mongodb and the port before trying to validate
 	        rita_system=`validated_ssh_target rita "$rita_system"`
 	else
 	        rita_system="127.0.0.1"
@@ -197,17 +232,17 @@ get_rita_data_interactive() {
 	RITA_MONGO_AUTH="null"
 	#instead of prompting get the RITA address and split from there to fill in our
 	#  config file
-	echo ""
-	echo "Which authentication scheme should be used to contact the database if any? [None]"
-	echo "1) None"
-	echo "2) SCRAM-SHA-1"
-	echo "3) MONGODB-CR"
+	echo "" >&2
+	echo "Which authentication scheme should be used to contact the database if any? [None]" >&2
+	echo "1) None" >&2
+	echo "2) SCRAM-SHA-1" >&2
+	echo "3) MONGODB-CR" >&2
 
-	while read && [[ ! ( "$REPLY" =~ ^[123]$ || -z "$REPLY" ) ]]; do
-		echo "Which authentication scheme should be used to contact the database if any? [None]"
-		echo "1) None"
-		echo "2) SCRAM-SHA-1"
-		echo "3) MONGODB-CR"
+	while read  <&2 && [[ ! ( "$REPLY" =~ ^[123]$ || -z "$REPLY" ) ]]; do
+		echo "Which authentication scheme should be used to contact the database if any? [None]" >&2
+		echo "1) None" >&2
+		echo "2) SCRAM-SHA-1" >&2
+		echo "3) MONGODB-CR" >&2
 	done
 
 	if [ "$REPLY" = "2" ]; then
@@ -219,41 +254,43 @@ get_rita_data_interactive() {
 	RITA_MONGO_TLS="false"
 	RITA_MONGO_TLS_CHECK_CERT="false"
 	RITA_MONGO_TLS_CERT_PATH="null"
-	echo ""
-	read -p "Does the MongoDB server accept TLS connections? (y/n) [n] "  -r
+	echo "" >&2
+	read -p "Does the MongoDB server accept TLS connections? (y/n) [n] "  -r  <&2
 	if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 		RITA_MONGO_TLS="true"
 		RITA_MONGO_TLS_CHECK_CERT="true"
 		RITA_MONGO_TLS_CERT_PATH="null"
-		read -p "Would you like to provide a certificate authority? (y/n) [n] "  -r
+		read -p "Would you like to provide a certificate authority? (y/n) [n] "  -r  <&2
 		if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-			read -p "CA Path: "
+			read -p "CA Path: " <&2
 			RITA_MONGO_TLS_CERT_PATH="$REPLY"
 		fi
 
 		if [ "$RITA_MONGO_TLS_CERT_PATH" = "null" ]; then
-			read -p "Would you like to disable certificate checks? [n] "  -r
+			read -p "Would you like to disable certificate checks? [n] "  -r  <&2
 			if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 				RITA_MONGO_TLS_CHECK_CERT="false"
 			fi
 		fi
 	fi
 
-	echo ""
-	echo "Each dataset produced with IPFIX-RITA will be named DBROOT-DATE"
-	echo "where DBROOT consists of alphanumerics, underscores, and hyphens."
+	echo "" >&2
+	echo "Each dataset produced with IPFIX-RITA will be named DBROOT-DATE" >&2
+	echo "where DBROOT consists of alphanumerics, underscores, and hyphens." >&2
 	RITA_DATASET_DBROOT="IPFIX"
-	read -p "What would you like to set DBROOT to for this IPFIX collector? [IPFIX] " -r
+	read -p "What would you like to set DBROOT to for this IPFIX collector? [IPFIX] " -r  <&2
 	if [ -n "$REPLY" ]; then
 		RITA_DATASET_DBROOT="$REPLY"
 	fi
 
+	echo "Sending $RITA_MONGO_AUTH to the function"
 	write_converter_conf $RITA_DATASET_DBROOT $RITA_MONGO_URI $RITA_MONGO_AUTH $RITA_MONGO_TLS $RITA_MONGO_TLS_CHECK_CERT $RITA_MONGO_TLS_CERT_PATH
 } #End of get_rita_data_interactive
 
 get_rita_data_noninteractive() {
 	rita_system=$1
 	if [ -n "$rita_system" -a  "$rita_system" != '127.0.0.1' ]; then
+		rita_system=`strip_mongo $rita_system`
 	        echo -n "Do you access that system with a username different than ${USER} (Y/N)" >&2
 	        if askYN ; then
 	                echo "Enter that username now, otherwise just press enter if your account is ${USER} on the remote system too." >&2
@@ -290,7 +327,6 @@ get_rita_data_noninteractive() {
 
 	#If the config specified a CA file, let's copy that
 	if [[ $mongo_tls_ca_path != *"null" ]]; then
-		echo $mongo_tls_ca_path
 		ca_file=${mongo_tls_ca_path#"CAFile: "}
 		scp $rita_system:$ca_file $ca_file
 	fi
@@ -381,11 +417,10 @@ flag && NF && /DBRoot:/{
 # Stop if there are any errors
 set -e
 # Change dir to script dir
-echo "tyring to cd to $(dirname "$BASH_SOURCE[0]")"
 _OLD_DIR=$(pwd); cd "$(dirname "$BASH_SOURCE[0]")";
 
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run with administrator privileges."
+   echo "This script must be run with administrator privileges." >&2
    exit 1
 fi
 
@@ -396,11 +431,13 @@ if [ "$1" = 'help' -o "$1" = '--help' ]; then
 	exit 1
 fi
 
+#SEARCHFORTHIS
 while [ -n "$1" ]; do
 	case "$1" in
 	rita|Rita|RITA)
-		if [ -n "$2" ] && ! echo "$2" | egrep -iq '(^rita$|^aih$)' ; then
+		if [ -n "$2" ] && ! echo "$2" | egrep -iq '(^rita$)' ; then
 			rita_system="$2"
+			echo "Got the rita_system"
 			shift
 		else
 			rita_system='127.0.0.1'
@@ -419,30 +456,31 @@ done
 
 # Install docker if needed
 chmod +x "install-scripts/install_docker.sh"
-sudo install-scripts/install_docker.sh
+install-scripts/install_docker.sh
 
 # Set by make-release
-INSTALLATION_DIR="REPLACE_WITH_INSTALL_DIR"
+INSTALLATION_DIR="/opt/ipfix-rita"
 INSTALLATION_BIN_DIR="$INSTALLATION_DIR/bin"
 INSTALLATION_LIB_DIR="$INSTALLATION_DIR/lib"
-INSTALLATION_ETC_DIR="REPLACE_WITH_ETC_DIR"
-DOCKER_IMAGES="./REPLACE_WITH_TARBALL"
+INSTALLATION_ETC_DIR="/etc/ipfix-rita"
+DOCKER_IMAGES="docker-images.tgz"
 
-echo "Loading IPFIX-RITA Docker images... This may take a few minutes."
+#Should we open these at the end?
+echo "Loading IPFIX-RITA Docker images... This may take a few minutes."  >&2
 gzip -d -c ${DOCKER_IMAGES} | docker load
 
-echo "Installing configuration files to $INSTALLATION_ETC_DIR"
+echo "Installing configuration files to $INSTALLATION_ETC_DIR"  >&2
 
 SETUP_CONFIG="true"
 if [ ! -d "$INSTALLATION_ETC_DIR" ]; then
   cp -r pkg/etc "$INSTALLATION_ETC_DIR"
 else
   # TODO: set up migration
-  echo "Existing configuration found. Skipping..."
+  echo "Existing configuration found. Skipping..."  >&2
   SETUP_CONFIG="false"
 fi
 
-echo "Installing ipfix-rita in $INSTALLATION_DIR"
+echo "Installing ipfix-rita in $INSTALLATION_DIR"  >&2
 
 if [ -d "$INSTALLATION_DIR" ]; then
   rm -rf "$INSTALLATION_DIR"
@@ -460,7 +498,7 @@ RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
 RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
 if [ "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
   sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE
-  echo "net.core.rmem_max=$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf
+  echo "net.core.rmem_max=$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf  >&2
 fi
 
 "$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
@@ -474,26 +512,26 @@ if [ "$SETUP_CONFIG" = "true" ]; then
 	fi
 
 #We have written to config
-	echo ""
-	echo "Your settings have been saved to $INSTALLATION_ETC_DIR/converter/converter.yaml"
-	echo "Note: By default IPFIX-RITA, considers all Class A, B, and C IPv4 networks"
-	echo "as local networks. If this is not the case, please edit the list 'LocalNetworks'"
-	echo "in $INSTALLATION_ETC_DIR/converter/converter.yaml."
+	echo ""  >&2
+	echo "Your settings have been saved to $INSTALLATION_ETC_DIR/converter/converter.yaml" >&2
+	echo "Note: By default IPFIX-RITA, considers all Class A, B, and C IPv4 networks" >&2
+	echo "as local networks. If this is not the case, please edit the list 'LocalNetworks'" >&2
+	echo "in $INSTALLATION_ETC_DIR/converter/converter.yaml." >&2
 fi
 
-echo ""
-echo "IPFIX-RITA will run at start up unless the system has been stopped."
-echo "In order to stop IPFIX-RITA, run 'ipfix-rita stop'."
-echo "To restart IPFIX-RITA, run 'ipfix-rita up -d'."
-echo "To view the system logs, run 'ipfix-rita logs -f'."
+echo "" >&2
+echo "IPFIX-RITA will run at start up unless the system has been stopped." >&2
+echo "In order to stop IPFIX-RITA, run 'ipfix-rita stop'." >&2
+echo "To restart IPFIX-RITA, run 'ipfix-rita up -d'." >&2
+echo "To view the system logs, run 'ipfix-rita logs -f'." >&2
 echo ""
 
-echo "Adding a symbolic link from /usr/local/bin/ipfix-rita to $INSTALLATION_BIN_DIR/ipfix-rita."
+echo "Adding a symbolic link from /usr/local/bin/ipfix-rita to $INSTALLATION_BIN_DIR/ipfix-rita." >&2
 
 ln -fs "$INSTALLATION_BIN_DIR/ipfix-rita" /usr/local/bin/ipfix-rita
 
-echo ""
-echo "Starting IPFIX-RITA..."
+echo "" >&2
+echo "Starting IPFIX-RITA..." >&2
 
 "$INSTALLATION_BIN_DIR/ipfix-rita" up -d
 
@@ -501,3 +539,4 @@ echo "The IPFIX-RITA installer has finished."
 
 # Change back to the old directory at the end
 cd $_OLD_DIR; unset _OLD_DIR
+

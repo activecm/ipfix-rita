@@ -8,6 +8,12 @@ code. The main script will be located at `/opt/ipfix-rita/bin/ipfix-rita`.
 
 `/etc/ipfix-rita` contains the configuration files needed to run IPFIX-RITA.
 
+You can install IPFIX-RITA either interactively or non-interactively. To install
+non-interactively run `install_ipfix-rita.sh rita address.to.rita.system`, to
+install the software interactively just run `install_ipfix-rita.sh` and follow
+the on screen prompts (more details later). If you want to install RITA with
+a non-interactive prompt just run `install_ipfix-rita.sh rita 127.0.0.1`.
+
 As the installer runs, it will prompt for configuration details regarding the RITA database
 connection and the names of the resulting datasets. Further configuration options
 can be set in `/etc/ipfix-rita/converter/converter.yaml` such as the CIDR
