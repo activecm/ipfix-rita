@@ -6,7 +6,7 @@
 # like to analyze the results it has collected so far
 
 require_util () {
-	#Returns true if all binaries listed as parameters exist somewhere in the path, False if one or more missing.
+  #Returns true if all binaries listed as parameters exist somewhere in the path, False if one or more missing.
   while [ -n "$1" ]; do
     if ! type -path "$1" >/dev/null 2>/dev/null ; then
       echo Missing utility "$1". Please install it. >&2
