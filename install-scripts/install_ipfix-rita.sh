@@ -93,33 +93,33 @@ fail () {
 
 
 #TODO update this and makes sure it's called before running the full install script
-do_system_tests () {
-	while [ -n "$1" ]; do
-		if [ "$1" = "check_sse4_2" ]; then
-			status "Hardware tests"
-			require_file /proc/cpuinfo			|| fail "Missing /proc/cpuinfo - is this a Linux system?"
-		fi
-		shift
-	done
+# do_system_tests () {
+#	while [ -n "$1" ]; do
+#		if [ "$1" = "check_sse4_2" ]; then
+#			status "Hardware tests"
+#			require_file /proc/cpuinfo			|| fail "Missing /proc/cpuinfo - is this a Linux system?"
+#		fi
+#		shift
+#	done
 
-	for one_dir in $HOME / /usr ; do
+#	for one_dir in $HOME / /usr ; do
 		#"tr" in next command removes the linefeed at the end of the number of free megabytes (and any other whitespace)
-		[ `df -h $one_dir --output=avail --block-size=1048576 | grep -v '^Avail' | tr -dc '[0-9]'` -gt 5000 ]	|| fail "${one_dir} has less than 5GB free space"
-	done
+#		[ `df -h $one_dir --output=avail --block-size=1048576 | grep -v '^Avail' | tr -dc '[0-9]'` -gt 5000 ]	|| fail "${one_dir} has less than 5GB free space"
+#	done
 
-	status "Installed software tests"
-	if [ -x /usr/bin/apt-get -a -x /usr/bin/dpkg-query ]; then
+#	status "Installed software tests"
+#	if [ -x /usr/bin/apt-get -a -x /usr/bin/dpkg-query ]; then
 		#We have apt-get , good.
-		apt-get -qq update > /dev/null 2>&1
-		inst_retcode=100000
-		while [ "$inst_retcode" -gt 0 ]; do
-			apt-get -y install gdb git wget curl make realpath lsb-release rsync tar
-			inst_retcode=$?
-			if [ "$inst_retcode" -gt 0 ]; then
-				echo "Error installing packages, perhaps because a system update is running; will wait 60 seconds and try again" >&2
-				sleep 60
-			fi
-		done
+#		apt-get -qq update > /dev/null 2>&1
+#		inst_retcode=100000
+#		while [ "$inst_retcode" -gt 0 ]; do
+#			apt-get -y install gdb git wget curl make realpath lsb-release rsync tar
+#			inst_retcode=$?
+#			if [ "$inst_retcode" -gt 0 ]; then
+#				echo "Error installing packages, perhaps because a system update is running; will wait 60 seconds and try again" >&2
+#				sleep 60
+#			fi
+#		done
 		#TODO test IPFIX-RITA on Contos/Red Hat System
 	#elif [ -x /usr/bin/yum -a -x /bin/rpm ]; then
 	#	if [ ! -x /bin/yum-config-manager ]; then
@@ -129,21 +129,21 @@ do_system_tests () {
 	#	yum -q makecache > /dev/null 2>&1
 	#	#FIXME - put in place a similar loop like above for apt-get
 	#	yum -y install gdb git wget curl make coreutils coreutils redhat-lsb-core rsync tar
-	else
-		fail "(apt-get and dpkg-query) is installed on this system"
-	fi
-	require_util awk cat cp curl date egrep gdb getent git grep ip lsb_release make mkdir mv printf rm rsync sed sleep tar tr wc wget		|| fail "A needed tool is missing"
+#	else
+#		fail "(apt-get and dpkg-query) is installed on this system"
+#	fi
+#	require_util awk cat cp curl date egrep gdb getent git grep ip lsb_release make mkdir mv printf rm rsync sed sleep tar tr wc wget		|| fail "A needed tool is missing"
 
-	if [ -s /etc/redhat-release ] && grep -iq 'release 7' /etc/redhat-release ; then
-		echo "Centos or Redhat 7 installation detected, good." >&2
-	elif grep -iq '^DISTRIB_ID *= *Ubuntu' /etc/lsb-release ; then
-		echo "Ubuntu Linux installation detected, good." >&2
-	else
-		fail "This system does not appear to be a Centos/RHEL 7 or Ubuntu Linux system"
-	fi
+#	if [ -s /etc/redhat-release ] && grep -iq 'release 7' /etc/redhat-release ; then
+#		echo "Centos or Redhat 7 installation detected, good." >&2
+#	elif grep -iq '^DISTRIB_ID *= *Ubuntu' /etc/lsb-release ; then
+#		echo "Ubuntu Linux installation detected, good." >&2
+#	else
+#		fail "This system does not appear to be a Centos/RHEL 7 or Ubuntu Linux system"
+#	fi
 
-	return 0
-} #End of do_system_tests
+#	return 0
+# } #End of do_system_tests
 
 usage_text () {
 	cat >&2 <<EOHELP
@@ -539,4 +539,3 @@ echo "The IPFIX-RITA installer has finished."
 
 # Change back to the old directory at the end
 cd $_OLD_DIR; unset _OLD_DIR
-
