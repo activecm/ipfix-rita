@@ -38,7 +38,7 @@ fi
 # layout as the host's then the bind mounted symlink would work.
 # However, this cannot be guaranteed.
 if [ -z "$TZ" ]; then
-  export TZ="$(basename $(dirname $(readlink /etc/localtime)))/$(basename $(readlink /etc/localtime))"
+  export TZ="$(timedatectl status | grep zone | cut -d':' -f2 | cut -d' ' -f2)"
 fi
 
 docker-compose -f "$_COMPOSE_FILE" "$@"
