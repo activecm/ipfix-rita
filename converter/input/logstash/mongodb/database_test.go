@@ -1,11 +1,11 @@
-package mgologstash_test
+package mongodb_test
 
 import (
 	"testing"
 
 	"github.com/activecm/dbtest"
 	"github.com/activecm/ipfix-rita/converter/environment"
-	"github.com/activecm/ipfix-rita/converter/input/mgologstash"
+	"github.com/activecm/ipfix-rita/converter/input/logstash/mongodb"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 )
 
@@ -34,14 +34,14 @@ var inputDBTestFixture = integrationtest.TestFixture{
 		//Note: the env stored in the fixture will be changed as well
 		//since the config field on environment is a pointer
 
-		inputDB, err := mgologstash.NewLogstashMongoInputDB(testLogstashConfig)
+		inputDB, err := mongodb.NewLogstashMongoInputDB(testLogstashConfig)
 		if err != nil {
 			panic(err)
 		}
 		return inputDB, true
 	},
 	After: func(t *testing.T, fixtures integrationtest.FixtureData) (interface{}, bool) {
-		inputDB := fixtures.Get("inputDB").(mgologstash.LogstashMongoInputDB)
+		inputDB := fixtures.Get("inputDB").(mongodb.LogstashMongoInputDB)
 		inputDB.Close()
 		return nil, true
 	},

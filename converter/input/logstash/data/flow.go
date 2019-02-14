@@ -1,4 +1,4 @@
-package mgologstash
+package data
 
 import (
 	"time"
@@ -11,6 +11,7 @@ import (
 
 //Flow represents an IPFIX/ Netflowv9 flow record stored in MongoDB via Logstash.
 //The bson tags are given for an IPFIX flow.
+//These tags are necessary for code in id_bulk_buffer_test.go and reader_test.go.
 type Flow struct {
 	ID      bson.ObjectId `bson:"_id,omitempty"` //12 bytes
 	Host    string        `bson:"host"`          //Host is the metering process host (24 bytes)
@@ -23,7 +24,6 @@ type Flow struct {
 		DestinationIPv6 string `bson:"destinationIPv6Address,omitempty"`
 		DestinationPort uint16 `bson:"destinationTransportPort"`
 
-		// NOTE: We may need fields for other time units
 		FlowStartMilliseconds string `bson:"flowStartMilliseconds"`
 		FlowEndMilliseconds   string `bson:"flowEndMilliseconds"`
 
