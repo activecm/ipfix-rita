@@ -1,5 +1,33 @@
 #!/usr/bin/env bash
 
+#This script creates a tgz file with the following structure  and contents.
+#ipfix-rita
+#├── docker-images.tgz
+#├── docs
+#|   ├── Additional Info.md
+#│   ├── Developer Notes.md
+#│   ├── Generating Data.md
+#│   └── Router Support.md
+#├── install_ipfix-rita.sh
+#├── install-scripts
+#│   ├── helpers
+#│   │   ├── check_docker-compose.sh
+#│   │   └── check_docker.sh
+#│   └── install_docker.sh
+#├── pkg
+#│   ├── bin
+#│   │   └── ipfix-rita
+#│   ├── etc
+#│   │   └── converter
+#│   │       └── converter.yaml
+#│   └── lib
+#│       └── docker-compose
+#│           ├── main.yaml
+#│           ├── no-rotate.yaml
+#│           └── xpack.yaml
+#└── README.md
+#
+
 # Change dir to script dir
 pushd "$(dirname "$BASH_SOURCE[0]")" > /dev/null
 
