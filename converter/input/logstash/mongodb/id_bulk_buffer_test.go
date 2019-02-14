@@ -20,9 +20,6 @@ func TestIDBulkBuffer(t *testing.T) {
 }
 
 func testBufferOrder(buffer mongodb.Buffer, inputDB mongodb.LogstashMongoInputDB, t *testing.T) {
-	testFlow1 := getTestFlow1()
-	testFlow2 := getTestFlow2()
-
 	c := inputDB.NewInputConnection()
 	err := c.Insert(testFlow1)
 	require.Nil(t, err)

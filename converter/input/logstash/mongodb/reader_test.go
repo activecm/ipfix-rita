@@ -19,59 +19,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func getTestFlow1() *data.Flow {
+func newTestFlow(
+	host string, sourceIP string, sourcePort uint16, sourceV6 bool,
+	destinationIP string, destinationPort uint16, destinationV6 bool,
+	flowStart string, flowEnd string, octetCount int64, packetCount int64,
+	protocol protocols.Identifier, endReason input.FlowEndReason, version uint8,
+) *data.Flow {
+
 	flow := &data.Flow{
-		Host: "A",
+		Host: host,
 	}
-	flow.Netflow.SourceIPv4 = "1.1.1.1"
-	flow.Netflow.SourcePort = 24846
-	flow.Netflow.DestinationIPv4 = "2.2.2.2"
-	flow.Netflow.DestinationPort = 53
-	flow.Netflow.FlowStartMilliseconds = "2018-05-04T22:36:40.766Z"
-	flow.Netflow.FlowEndMilliseconds = "2018-05-04T22:36:40.960Z"
-	flow.Netflow.OctetTotalCount = int64(math.MaxUint32 + 1)
-	flow.Netflow.PacketTotalCount = int64(math.MaxUint32 + 1)
-	flow.Netflow.ProtocolIdentifier = protocols.UDP
-	flow.Netflow.FlowEndReason = input.ActiveTimeout
-	flow.Netflow.Version = 10
+	if sourceV6 {
+		flow.Netflow.SourceIPv6 = sourceIP
+	} else {
+		flow.Netflow.SourceIPv4 = sourceIP
+	}
+
+	if destinationV6 {
+		flow.Netflow.DestinationIPv6 = destinationIP
+	} else {
+		flow.Netflow.DestinationIPv4 = destinationIP
+	}
+	flow.Netflow.SourcePort = sourcePort
+	flow.Netflow.DestinationPort = destinationPort
+	flow.Netflow.FlowStartMilliseconds = flowStart
+	flow.Netflow.FlowEndMilliseconds = flowEnd
+	flow.Netflow.OctetTotalCount = octetCount
+	flow.Netflow.PacketTotalCount = packetCount
+	flow.Netflow.ProtocolIdentifier = protocol
+	flow.Netflow.FlowEndReason = endReason
+	flow.Netflow.Version = version
 	return flow
 }
 
-func getTestFlow2() *data.Flow {
-	flow := &data.Flow{
-		Host: "B",
-	}
-	flow.Netflow.SourceIPv4 = "2.2.2.2"
-	flow.Netflow.SourcePort = 53
-	flow.Netflow.DestinationIPv4 = "1.1.1.1"
-	flow.Netflow.DestinationPort = 24846
-	flow.Netflow.FlowStartMilliseconds = "2018-05-04T22:40:40.555Z"
-	flow.Netflow.FlowEndMilliseconds = "2018-05-04T22:40:40.555Z"
-	flow.Netflow.OctetTotalCount = int64(math.MaxUint32 - 1)
-	flow.Netflow.PacketTotalCount = int64(math.MaxUint32 - 1)
-	flow.Netflow.ProtocolIdentifier = protocols.TCP
-	flow.Netflow.FlowEndReason = input.IdleTimeout
-	flow.Netflow.Version = 10
-	return flow
-}
+var testFlow1 = newTestFlow(
+	"A", "1.1.1.1", 24846, false,
+	"2.2.2.2", 53, false,
+	"2018-05-04T22:36:40.766Z", "2018-05-04T22:36:40.960Z",
+	int64(math.MaxUint32+1), int64(math.MaxUint32+1),
+	protocols.UDP, input.ActiveTimeout, 10,
+)
 
-func getTestFlow3() *data.Flow {
-	flow := &data.Flow{
-		Host: "C",
-	}
-	flow.Netflow.SourceIPv4 = "3.3.3.3"
-	flow.Netflow.SourcePort = 28972
-	flow.Netflow.DestinationIPv4 = "4.4.4.4"
-	flow.Netflow.DestinationPort = 443
-	flow.Netflow.FlowStartMilliseconds = "2018-05-02T05:40:12.333Z"
-	flow.Netflow.FlowEndMilliseconds = "2018-05-02T05:40:12.444Z"
-	flow.Netflow.OctetTotalCount = math.MaxInt64
-	flow.Netflow.PacketTotalCount = math.MaxInt64
-	flow.Netflow.ProtocolIdentifier = protocols.TCP
-	flow.Netflow.FlowEndReason = input.ActiveTimeout
-	flow.Netflow.Version = 10
-	return flow
-}
+var testFlow2 = newTestFlow(
+	"B", "1.1.1.1", 24846, false,
+	"2.2.2.2", 53, false,
+	"2018-05-04T22:40:40.555Z", "2018-05-04T22:40:40.555Z",
+	int64(math.MaxUint32-1), int64(math.MaxUint32-1),
+	protocols.TCP, input.IdleTimeout, 10,
+)
+
+var testFlow3 = newTestFlow(
+	"C", "3.3.3.3", 28972, false,
+	"4.4.4.4", 443, false,
+	"2018-05-02T05:40:12.333Z", "2018-05-02T05:40:12.444Z",
+	math.MaxInt64, math.MaxInt64,
+	protocols.TCP, input.ActiveTimeout, 10,
+)
 
 func TestReader(t *testing.T) {
 	fixtures := fixturesManager.BeginTest(t)
@@ -83,9 +86,9 @@ func TestReader(t *testing.T) {
 	reader := mongodb.NewReader(buff, 2*time.Second, env.Logger)
 
 	c := inputDB.NewInputConnection()
-	err := c.Insert(getTestFlow1())
+	err := c.Insert(testFlow1)
 	require.Nil(t, err)
-	err = c.Insert(getTestFlow2())
+	err = c.Insert(testFlow2)
 	require.Nil(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -106,7 +109,8 @@ func TestReader(t *testing.T) {
 		outFlow, ok := f.(*data.Flow)
 		flowTestResults <- testResult{ok, "flow is *data.Flow", nil}
 
-		flow1 := getTestFlow1()
+		flow1 := &data.Flow{}
+		*flow1 = *testFlow1
 		flow1.ID = outFlow.ID
 		flowTestResults <- testResult{reflect.DeepEqual(flow1, outFlow), "flow1 read correctly", []interface{}{outFlow, flow1}}
 
@@ -115,7 +119,8 @@ func TestReader(t *testing.T) {
 		outFlow, ok = f.(*data.Flow)
 		flowTestResults <- testResult{ok, "flow is *data.Flow", nil}
 
-		flow2 := getTestFlow2()
+		flow2 := &data.Flow{}
+		*flow2 = *testFlow2
 		flow2.ID = outFlow.ID
 		flowTestResults <- testResult{reflect.DeepEqual(flow2, outFlow), "flow2 read correctly", []interface{}{outFlow, flow2}}
 
@@ -124,7 +129,8 @@ func TestReader(t *testing.T) {
 		outFlow, ok = f.(*data.Flow)
 		flowTestResults <- testResult{ok, "flow is *data.Flow", nil}
 
-		flow3 := getTestFlow3()
+		flow3 := &data.Flow{}
+		*flow3 = *testFlow3
 		flow3.ID = outFlow.ID
 		flowTestResults <- testResult{reflect.DeepEqual(flow3, outFlow), "flow3 read correctly", []interface{}{outFlow, flow3}}
 		close(flowTestResults)
@@ -137,7 +143,7 @@ func TestReader(t *testing.T) {
 	}(errorTestResults, errs, &wg)
 
 	time.Sleep(2 * time.Second)
-	err = c.Insert(getTestFlow3())
+	err = c.Insert(testFlow3)
 	require.Nil(t, err)
 	time.Sleep(2 * time.Second)
 	cancel()
