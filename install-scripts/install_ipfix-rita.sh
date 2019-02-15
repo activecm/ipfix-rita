@@ -497,8 +497,8 @@ cp -r ./pkg/lib "$INSTALLATION_LIB_DIR"
 RECV_BUFF_SIZE=$(sysctl -n net.core.rmem_max)
 RECV_BUFF_OPT_SIZE="$((1024*1024*64))"
 if [ "$RECV_BUFF_SIZE" -lt "$RECV_BUFF_OPT_SIZE" ]; then
-  sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE
-  echo "net.core.rmem_max=$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf  >&2
+  sysctl -w net.core.rmem_max=$RECV_BUFF_OPT_SIZE >&2
+  echo "net.core.rmem_max=$RECV_BUFF_OPT_SIZE" >> /etc/sysctl.conf
 fi
 
 "$INSTALLATION_BIN_DIR/ipfix-rita" up --no-start
