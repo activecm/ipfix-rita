@@ -42,16 +42,13 @@ func NewConnCounter(threshold int,
 
 // NewConnCounterFromArray creates a new ConnCounter. Each unique
 // connection starts with the counts supplied in the FreqConn array.
-func NewConnCounterFromArray(data []FreqConn, threshold int,
+func NewConnCounterFromArray(data map[UConnPair]int, threshold int,
 	thresholdMetFunc, thresholdExceededFunc func(UConnPair, int) error) ConnCounter {
 	c := ConnCounter{
-		connectionCounts:      make(map[UConnPair]int),
+		connectionCounts:      data,
 		threshold:             threshold,
 		thresholdMetFunc:      thresholdMetFunc,
 		thresholdExceededFunc: thresholdExceededFunc,
-	}
-	for _, freqConn := range data {
-		c.connectionCounts[freqConn.UConnPair] = freqConn.ConnectionCount
 	}
 	return c
 }
@@ -60,15 +57,22 @@ func NewConnCounterFromArray(data []FreqConn, threshold int,
 // UConnPair passed in. If the ConnCounter threshold is
 // met, thresholdMetFunc is ran. Alternatively, if the
 // threshold is exceeded, thresholdExceededFunc is ran.
+// Returns true if either thresholdMet or thresholdExceeded
+// is called. May return an error from either function.
+// If an error is returned, the count is not updated.
 func (f ConnCounter) Increment(connectionPair UConnPair) (bool, error) {
 	newCount := f.connectionCounts[connectionPair] + 1
-	f.connectionCounts[connectionPair] = newCount
+	var err error
+	funcRan := false
 	if newCount == f.threshold {
-		err := f.thresholdMetFunc(connectionPair, newCount)
-		return true, err
+		err = f.thresholdMetFunc(connectionPair, newCount)
+		funcRan = true
 	} else if newCount > f.threshold {
-		err := f.thresholdExceededFunc(connectionPair, newCount)
-		return true, err
+		err = f.thresholdExceededFunc(connectionPair, newCount)
+		funcRan = true
 	}
-	return false, nil
+	if err == nil {
+		f.connectionCounts[connectionPair] = newCount
+	}
+	return funcRan, err
 }
