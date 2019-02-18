@@ -38,7 +38,8 @@ and you check your RITA config file and the connection string is
 
 \
 The IPFIX-RITA installer should run on most Linux distributions provided
-**Docker (min v17.06+)** and **docker-compose (min v1.17)** are installed.
+**Docker (min v17.06, max 18.09)** and **docker-compose (min v1.17, max v1.23)**
+are installed.
 #### How to [Install Docker](https://docs.docker.com/install/)
 #### How to [Install docker-compose](https://docs.docker.com/compose/install/).
 
@@ -67,9 +68,38 @@ You will be prompted for configuration details regarding the RITA database
 connection and the names of the resulting datasets. Further configuration
 options can be set in `/etc/ipfix-rita/converter/converter.yaml`.
 
+Once this is complete you can direct your IPFix or Netflow v5/v9 logs to
+your IPFIX-RITA machine that is listening for logs on **UDP port 2055**.
+
 By default, **IPFIX-RITA will run at start up unless it is stopped**. For more
 information see [Additional Info](docs/Additional%20Info.md). Full
 documentation for IPFIX-RITA can be found in the [docs](docs/) folder.
+
+# Useful Commands
+Below are some useful commands to use with the IPFIX-RITA docker containers.
+
+```
+sudo ipfix-rita stop
+```
+This will stop all of the ipfix-rita containers, if you see a lot of errors
+running it is sometimes helpful to stop the containers so you don't get a
+ton of errors stored in your logs while you check other components.
+
+```
+sudo ipfix-rita restart
+```
+Will stop and restart the ipfix-rita containers. If the container was
+already stopped it will start it back up. This can be helpful if a
+connection was lost to regain that connection or to reload variables
+that were changed in the config file.
+
+```
+sudo ipfix-rita log
+```
+Will display all the logs from the IPFIX-RITA, this includes Info, Warning,
+and Error logs, it can be a lot so we recommend running it with tail. This
+is useful because it allows us to see what is happening in IPFIX-RITA at
+any given time
 
 # IPFix/Netflow v9/Netflow v5 Compatibility
 
@@ -178,6 +208,100 @@ local   0.000GB
 That means you're not yet saving data; skip to the next section to see why. If
 your output also includes "Metadatabase" and "IPFIX-YYMMDD" databases, that's a
 good sign. To get out of this terminal type "exit".
+
+### Ensuring Your RITA Machine is connected to IPFIX-RITA
+To check if you have an ongoing connection with your IPFIX-RITA machine run
+the following command from your RITA machine
+```
+netstat -an | grep :27017
+```
+If your IPFIX-RITA machine's address is `192.168.0.6` and your RITA machine's
+addess is `10.0.0.5` you should see something like the following pop up:
+```
+tcp        0      0 0.0.0.0:27017           0.0.0.0:*               LISTEN     
+tcp        0      0 10.0.0.5:27017          192.168.0.6:47486       ESTABLISHED
+tcp        0      0 10.0.0.5:27017          192.168.0.6:47476       ESTABLISHED
+```
+That means RITA is connecting to IPFIX-RITA (since the IPFIX-RITA address is
+listed), however if you only see 
+```
+tcp        0      0 0.0.0.0:27017           0.0.0.0:*               LISTEN     
+```
+Then your RITA box is listening for incoming data but no connection to
+the IPFIX-RITA machine has been established. Double check the values in
+your MongoDB config file on your RITA machine (/etc/mongod.conf by
+default) as well as your RITA connection settings for IPFIX-RITA
+in the IPFIX-RITA config file at /etc/ipfix-rita/converter/converter.yaml
+
+The values for ConnectionString should be `mongodb://ip.address.for.rita:mongoPort`
+AuthenticationMechanism, TLS Enable, TLS VerifyCertificate and CAFile should all be
+the same as your mongod.conf file on your RITA machine. In addition, if present the
+CAFile should be copied on your IPFIX-RITA machine too.
+
+### Checking if Data is Being Sent to IPFIX-RITA
+To Check if data is arriving at the IPFIX-RITA box, run
+```
+sudo ipfix-rita logs | grep "new data"
+```
+If you see
+```
+converter_1  | INFO[0090] reading new data from input buffer
+```
+You have recieved some logs, however if you are still recieving data requires
+counting lines. An easy way to do this is to run
+```
+sudo ipfix-rita logs | grep "new data" | wc -l
+```
+which will return a number (say 245), that is the number of times the line shows
+up in your logs. Now wait 5-10 minutes and run the command again, it should
+increase. If the value didn't, then you might not be recieving logs. Double
+check your router is sending IPFix/Netflow data, and if the problem persists
+contact support@activecountermeasures.com
+
+### Checking if RITA is Recieving Records
+To check that RITA is not only recieving records but storing them for
+threat-hunting requires us to look directly into mongo. So start by
+loading mongo, if you don't have users and passwords enabled run 
+```
+mongo
+```
+on your RITA machine to attach to the local mongo instance then run
+```
+show dbs
+```
+to show all of the databases stored. Normally IPFIX-RITA uses the form
+IPFIX-\[YYYY-MM-DD\] to store your databases so if you see
+```
+IPFIX-2019-12-24  0.002GB
+IPFIX-2018-12-25  0.053GB
+IPFIX-2018-12-26  0.034GB
+MetaDatabase      0.000GB
+admin             0.000GB
+config            0.000GB
+local             0.000GB
+rita-bl           0.017GB
+```
+Type the following command to tell mongo to use the current day
+```
+use IPFIX-2018-12-26
+```
+then to see how many connections are currently stored and if we
+are updating them run the following
+```
+db.conn.find().count()
+```
+and you should see a number printed like so
+```
+9759
+```
+That's the number of connections currently stored in the connection
+collection of the mongo database. Since IPFIX-RITA takes a little
+to process the data if you run the same command again in a short time
+you'll likely still see the same number, so wait 10-15 minutes and run
+the command again. You should see the number go up, if the number don't
+increase then IPFIX-RITA isn't storing data in RITA. It could be caused
+by a number of problems. Check the other issues in this document and if
+the problem persists contact support@activecountermeasures.com
 
 ### Checking for Errors from IPFIX-RITA
 To see if there are any errors reported by IPFIX-RITA, run
