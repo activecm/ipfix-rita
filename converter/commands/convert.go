@@ -267,8 +267,7 @@ func interruptContext(log logging.Logger) (context.Context, func()) {
 	go func() {
 		select {
 		case <-sigChan:
-			logTime := time.Now().Format("2006-01-02T15:04:05Z07:00")
-			log.Info(logTime+" CTRL-C Received", nil)
+			log.Info(" CTRL-C Received", nil)
 			cancel()
 		case <-ctx.Done():
 		}
