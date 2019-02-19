@@ -2,7 +2,7 @@ package freqconn
 
 import (
 	"github.com/globalsign/mgo"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo/bson"
 )
 
 const strobesCollection = "freqConn"
