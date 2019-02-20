@@ -12,24 +12,23 @@ import (
 //when the connection counter hits the threshold but
 //thresholdExceeded is not
 func TestThresholdMet(t *testing.T) {
-	threshold := 10
 	shouldPass := false
 	thresholdMet := func(conn freqconn.UConnPair, count int) error {
 		shouldPass = true
 		return nil
 	}
 	thresholdExceeded := func(conn freqconn.UConnPair, count int) error {
-		t.Fatalf("thresholdExceeded called when it should not have been. count %d, threshold %d", count, threshold)
+		t.Fatalf("thresholdExceeded called when it should not have been. count %d, threshold %d", count, testThreshold)
 		return nil
 	}
-	c := freqconn.NewConnCounter(threshold, thresholdMet, thresholdExceeded)
+	c := freqconn.NewConnCounter(testThreshold, thresholdMet, thresholdExceeded)
 
 	testConnection := freqconn.UConnPair{
 		Src: "1.1.1.1",
 		Dst: "2.2.2.2",
 	}
 
-	for i := 0; i < threshold-1; i++ {
+	for i := 0; i < testThreshold-1; i++ {
 		funcRan, err := c.Increment(testConnection)
 		require.False(t, funcRan, "Increment said a threshold function ran when it should not have")
 		require.Nil(t, err, "Increment returned an error when it shouldn't have")
@@ -46,12 +45,11 @@ func TestThresholdMet(t *testing.T) {
 //when the connection counter exceeds the threshold but
 //thresholdExceeded is not
 func TestThresholdExceeded(t *testing.T) {
-	threshold := 10
 	shouldPass := false
 	thresholdMetCalledOnce := false
 	thresholdMet := func(conn freqconn.UConnPair, count int) error {
 		if thresholdMetCalledOnce {
-			t.Fatalf("thresholdMet called when it should not have been. count %d, threshold %d", count, threshold)
+			t.Fatalf("thresholdMet called when it should not have been. count %d, threshold %d", count, testThreshold)
 		} else {
 			thresholdMetCalledOnce = true
 		}
@@ -61,14 +59,14 @@ func TestThresholdExceeded(t *testing.T) {
 		shouldPass = true
 		return nil
 	}
-	c := freqconn.NewConnCounter(threshold, thresholdMet, thresholdExceeded)
+	c := freqconn.NewConnCounter(testThreshold, thresholdMet, thresholdExceeded)
 
 	testConnection := freqconn.UConnPair{
 		Src: "1.1.1.1",
 		Dst: "2.2.2.2",
 	}
 
-	for i := 0; i < threshold-1; i++ {
+	for i := 0; i < testThreshold-1; i++ {
 		funcRan, err := c.Increment(testConnection)
 		require.False(t, funcRan, "Increment said a threshold function ran when it should not have")
 		require.Nil(t, err, "Increment returned an error when it shouldn't have")

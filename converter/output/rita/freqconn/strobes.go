@@ -5,14 +5,17 @@ import (
 	"github.com/globalsign/mgo/bson"
 )
 
-const strobesCollection = "freqConn"
-const connCollection = "conn"
+//StrobesCollection contains the name for the RITA freqConn MongoDB collection
+const StrobesCollection = "freqConn"
 
-//LoadFreqConnCollection reads the data in the strobesCollection
+//ConnCollection contains the name for the RITA conn MongoDB collection
+const ConnCollection = "conn"
+
+//LoadFreqConnCollection reads the data in the StrobesCollection
 //of a RITA database into a map which counts how many times
 //a connection pair was seen
 func LoadFreqConnCollection(db *mgo.Database) (map[UConnPair]int, error) {
-	strobeIter := db.C(strobesCollection).Find(nil).Iter()
+	strobeIter := db.C(StrobesCollection).Find(nil).Iter()
 	dataMap := make(map[UConnPair]int)
 	var entry FreqConn
 	for strobeIter.Next(&entry) {
@@ -23,20 +26,21 @@ func LoadFreqConnCollection(db *mgo.Database) (map[UConnPair]int, error) {
 }
 
 //GetFreqInserter returns a method for use with ConnCounter's
-//thresholdMetFunc which deletes any matching entries in the RITA conn collection
+//thresholdMetFunc which deletes any matching entries in the RITA ConnCollection
 //and creates a new record in the freqConn collection
 func GetFreqInserter(db *mgo.Database) func(UConnPair, int) error {
 	return func(connPair UConnPair, count int) error {
-		err := db.C(connCollection).Remove(bson.M{
+		_, err := db.C(ConnCollection).RemoveAll(bson.M{
 			"$and": []bson.M{
 				bson.M{"id_orig_h": connPair.Src},
 				bson.M{"id_resp_h": connPair.Dst},
 			},
 		})
+
 		if err != nil {
 			return err
 		}
-		err = db.C(strobesCollection).Insert(FreqConn{
+		err = db.C(StrobesCollection).Insert(FreqConn{
 			UConnPair:       connPair,
 			ConnectionCount: count,
 		})
@@ -49,13 +53,20 @@ func GetFreqInserter(db *mgo.Database) func(UConnPair, int) error {
 //a given UConnPair
 func GetFreqIncrementer(db *mgo.Database) func(UConnPair, int) error {
 	return func(connPair UConnPair, count int) error {
-		err := db.C(strobesCollection).Update(
+
+		//Note we have to track the count in counter.go anyways, so
+		//we could just update with count instead of calling inc
+		//but inc gets the point across a bit better.
+
+		err := db.C(StrobesCollection).Update(
 			bson.M{
 				"src": connPair.Src,
 				"dst": connPair.Dst,
 			},
 			bson.M{
-				"connection_count": count,
+				"$inc": bson.M{
+					"connection_count": 1,
+				},
 			},
 		)
 		return err
