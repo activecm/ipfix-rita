@@ -48,11 +48,11 @@ type streamingRITATimeIntervalWriter struct {
 //ImportFinished in the Metadatabase when the database is the previous
 //database and the grace period expires.
 func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, localNets []net.IPNet,
-	strobeThreshold int, bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
+	bufferSize int64, autoFlushTime time.Duration, intervalLengthMillis int64,
 	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
 
-	db, err := rita.NewDBManager(ritaConf, strobeThreshold, bufferSize, autoFlushTime)
+	db, err := rita.NewDBManager(ritaConf, bufferSize, autoFlushTime)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}

@@ -46,11 +46,10 @@ type DBManager struct {
 
 //NewDBManager instantiates a new RITAOutputDB with the
 //details specified in the RITA configuration
-func NewDBManager(ritaConf config.RITA, strobeThreshold int,
-	bufferSize int64, flushDeadline time.Duration) (DBManager, error) {
+func NewDBManager(ritaConf config.RITA, bufferSize int64, flushDeadline time.Duration) (DBManager, error) {
 
 	db := DBManager{
-		strobeThreshold: strobeThreshold,
+		strobeThreshold: ritaConf.GetStrobe().GetConnectionLimit(),
 		bufferSize:      bufferSize,
 		flushDeadline:   flushDeadline,
 	}

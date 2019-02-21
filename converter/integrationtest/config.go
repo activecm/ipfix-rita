@@ -70,12 +70,18 @@ func (t *OutputConfig) GetRITAConfig() config.RITA { return &t.rita }
 //RitaConfig implements config.RITA
 type RitaConfig struct {
 	mongoDB MongoDBConfig
+	strobe  StrobeConfig
 }
 
 func (r *RitaConfig) GetConnectionConfig() config.MongoDBConnection { return &r.mongoDB }
 
-func (r *RitaConfig) GetDBRoot() string { return "RITA" }
-func (r *RitaConfig) GetMetaDB() string { return "MetaDatabase" }
+func (r *RitaConfig) GetDBRoot() string        { return "RITA" }
+func (r *RitaConfig) GetMetaDB() string        { return "MetaDatabase" }
+func (r *RitaConfig) GetStrobe() config.Strobe { return &r.strobe }
+
+type StrobeConfig struct{}
+
+func (s *StrobeConfig) GetConnectionLimit() int { return 250000 }
 
 //FilteringConfig implements config.Filtering
 type FilteringConfig struct{}
