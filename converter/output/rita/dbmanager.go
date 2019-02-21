@@ -5,23 +5,11 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/database"
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
 )
-
-//MetaDBDatabasesCollection is the name of the RITA collection
-//in the RITA MetaDB that keeps track of RITA managed databases
-const MetaDBDatabasesCollection = "databases"
-
-//RitaConnInputCollection is the name of the RITA collection
-//which houses input connection data
-const RitaConnInputCollection = "conn"
-
-// Version specifies which RITA DB schema the resulting data matches
-var Version = "v2.0.0+ActiveCM-IPFIX"
-
-// TODO: Use version in RITA as dep
 
 // DBMetaInfo defines some information about the database
 type DBMetaInfo struct {
@@ -66,7 +54,7 @@ func NewDBManager(ritaConf config.RITA, bufferSize int64, flushDeadline time.Dur
 	db.dbRoot = ritaConf.GetDBRoot()
 	db.metaDBName = ritaConf.GetMetaDB()
 
-	err = db.ssn.DB(db.metaDBName).C(MetaDBDatabasesCollection).EnsureIndex(mgo.Index{
+	err = db.ssn.DB(db.metaDBName).C(constants.MetaDBDatabasesCollection).EnsureIndex(mgo.Index{
 		Key: []string{
 			"name",
 		},
@@ -107,18 +95,18 @@ func (d DBManager) NewRitaDB(dbNameSuffix string, asyncErrorChan chan<- error, o
 //MetaDatabase for a given database name. This allows RITA to manage
 //the database.
 func (d DBManager) ensureMetaDBRecordExists(dbName string) error {
-	numRecords, err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
+	numRecords, err := d.ssn.DB(d.metaDBName).C(constants.MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
 	}
 	if numRecords != 0 {
 		return nil
 	}
-	err = d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
+	err = d.ssn.DB(d.metaDBName).C(constants.MetaDBDatabasesCollection).Insert(DBMetaInfo{
 		Name:           dbName,
 		ImportFinished: false,
 		Analyzed:       false,
-		ImportVersion:  Version,
+		ImportVersion:  constants.Version,
 		AnalyzeVersion: "",
 	})
 	if err != nil {
@@ -132,7 +120,7 @@ func (d DBManager) ensureMetaDBRecordExists(dbName string) error {
 //more data will be placed in the database and that the database
 //is ready for analysis.
 func (d DBManager) markImportFinishedInMetaDB(dbName string) error {
-	err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Update(
+	err := d.ssn.DB(d.metaDBName).C(constants.MetaDBDatabasesCollection).Update(
 		bson.M{"name": dbName},
 		bson.M{
 			"$set": bson.M{
@@ -142,7 +130,7 @@ func (d DBManager) markImportFinishedInMetaDB(dbName string) error {
 	)
 
 	if err != nil {
-		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, d.metaDBName, MetaDBDatabasesCollection)
+		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, d.metaDBName, constants.MetaDBDatabasesCollection)
 	}
 	return nil
 }

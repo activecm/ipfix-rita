@@ -3,6 +3,7 @@ package freqconn_test
 import (
 	"fmt"
 	"github.com/activecm/dbtest"
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ func TestLoadFreqConnCollection(t *testing.T) {
 
 	// Populate the collection
 	for i := 0; i < 100; i++ {
-		err = testDB.C(freqconn.StrobesCollection).Insert(&freqconn.FreqConn{
+		err = testDB.C(constants.StrobesCollection).Insert(&freqconn.FreqConn{
 			UConnPair: freqconn.UConnPair{
 				Src: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i),
 				Dst: fmt.Sprintf("%d.%d.%d.%d", i+1, i+1, i+1, i+1),
@@ -74,7 +75,7 @@ func TestStrobesThresholdMet(t *testing.T) {
 	}
 
 	for i := 0; i < testThreshold-1; i++ {
-		err = testDB.C(freqconn.ConnCollection).Insert(&s)
+		err = testDB.C(constants.ConnCollection).Insert(&s)
 		require.Nil(t, err, "Could not insert test data")
 	}
 
@@ -87,16 +88,16 @@ func TestStrobesThresholdMet(t *testing.T) {
 
 	require.Nil(t, err, "Could not delete existing conn records or create a new freqConn record")
 
-	connCount, err := testDB.C(freqconn.ConnCollection).Count()
+	connCount, err := testDB.C(constants.ConnCollection).Count()
 	require.Nil(t, err, "Could not count how many records remain in conn collection")
 	require.Zero(t, connCount, "Matching records were not removed from the conn collection after ThresholdMet was ran")
 
-	freqCount, err := testDB.C(freqconn.StrobesCollection).Count()
+	freqCount, err := testDB.C(constants.StrobesCollection).Count()
 	require.Nil(t, err, "Could not count how many records exist in freqConn collection")
 	require.Equal(t, 1, freqCount, "ThresholdMet did not create a single record in freqConn")
 
 	var freqResult freqconn.FreqConn
-	err = testDB.C(freqconn.StrobesCollection).Find(nil).One(&freqResult)
+	err = testDB.C(constants.StrobesCollection).Find(nil).One(&freqResult)
 	require.Nil(t, err, "Could not check freqConn for new records after ThresholdMet was ran")
 
 	require.Equal(t, srcIP, freqResult.Src, "Source IP in freqConn does not match the original address")
@@ -123,7 +124,7 @@ func TestStrobesThresholdExceeded(t *testing.T) {
 		Dst: "2.2.2.2",
 	}
 
-	err = testDB.C(freqconn.StrobesCollection).Insert(&freqconn.FreqConn{
+	err = testDB.C(constants.StrobesCollection).Insert(&freqconn.FreqConn{
 		UConnPair:       uconn,
 		ConnectionCount: testThreshold,
 	})
@@ -138,7 +139,7 @@ func TestStrobesThresholdExceeded(t *testing.T) {
 	}
 
 	var freqResult freqconn.FreqConn
-	err = testDB.C(freqconn.StrobesCollection).Find(&uconn).One(&freqResult)
+	err = testDB.C(constants.StrobesCollection).Find(&uconn).One(&freqResult)
 	require.Nil(t, err, "Could not check freqConn for new records after ThresholdExceeded was run")
 
 	require.Equal(t, testThreshold+incAmount, freqResult.ConnectionCount, "Connection count incorrect after calling ThresholdExceeded")

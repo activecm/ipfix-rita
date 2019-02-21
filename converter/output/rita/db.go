@@ -2,6 +2,7 @@ package rita
 
 import (
 	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/globalsign/mgo"
@@ -31,7 +32,7 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 	connCounter := freqconn.NewConnCounter(strobeThreshold, strobesNotifier)
 
 	connColl := buffered.NewAutoFlushCollection(
-		outputDB.C(RitaConnInputCollection).With(connSess),
+		outputDB.C(constants.ConnCollection).With(connSess),
 		bufferSize, flushDeadline,
 	)
 
@@ -59,7 +60,7 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 
 	started := connColl.StartAutoFlush(asyncErrorChan, onFatalError)
 	if !started {
-		err = errors.Errorf("failed to start auto flusher for collection %s.%s", outputDB.Name, RitaConnInputCollection)
+		err = errors.Errorf("failed to start auto flusher for collection %s.%s", outputDB.Name, constants.ConnCollection)
 		strobesSess.Close()
 		connSess.Close()
 		return db, err
@@ -78,7 +79,7 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 func (d DB) ensureConnIndexExists() error {
 	tmpConn := parsetypes.Conn{}
 	for _, index := range tmpConn.Indices() {
-		err := d.outputDB.C(RitaConnInputCollection).EnsureIndex(mgo.Index{
+		err := d.outputDB.C(constants.ConnCollection).EnsureIndex(mgo.Index{
 			Key: []string{index},
 		})
 
@@ -92,7 +93,7 @@ func (d DB) ensureConnIndexExists() error {
 func (d DB) ensureFreqConnIndexExists() error {
 	tmpFreq := parsetypes.Freq{}
 	for _, index := range tmpFreq.Indices() {
-		err := d.outputDB.C(freqconn.StrobesCollection).EnsureIndex(mgo.Index{
+		err := d.outputDB.C(constants.StrobesCollection).EnsureIndex(mgo.Index{
 			Key: []string{index},
 		})
 

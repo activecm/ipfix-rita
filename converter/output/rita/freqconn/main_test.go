@@ -7,7 +7,7 @@ import (
 
 	"github.com/activecm/dbtest"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
-	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 )
 
 const testThreshold = 10
@@ -32,8 +32,8 @@ var freqConnInitFixture = integrationtest.TestFixture{
 			return nil, false
 		}
 
-		connCollection := ssn.DB(testDBName).C(freqconn.ConnCollection)
-		strobesCollection := ssn.DB(testDBName).C(freqconn.StrobesCollection)
+		connCollection := ssn.DB(testDBName).C(constants.ConnCollection)
+		strobesCollection := ssn.DB(testDBName).C(constants.StrobesCollection)
 
 		connCount, err := connCollection.Find(nil).Count()
 		if err != nil {

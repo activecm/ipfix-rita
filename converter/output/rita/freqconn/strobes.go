@@ -1,15 +1,10 @@
 package freqconn
 
 import (
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 )
-
-//StrobesCollection contains the name for the RITA freqConn MongoDB collection
-const StrobesCollection = "freqConn"
-
-//ConnCollection contains the name for the RITA conn MongoDB collection
-const ConnCollection = "conn"
 
 //StrobesNotifier implements ConnCountNotifier and serves to keep
 //the RITA conn and freqConn collections in line with the internal
@@ -33,7 +28,7 @@ func NewStrobesNotifier(db *mgo.Database) StrobesNotifier {
 //of a RITA database into a map which counts how many times
 //a connection pair was seen
 func (s StrobesNotifier) LoadFreqConnCollection() (map[UConnPair]int, error) {
-	strobeIter := s.db.C(StrobesCollection).Find(nil).Iter()
+	strobeIter := s.db.C(constants.StrobesCollection).Find(nil).Iter()
 	dataMap := make(map[UConnPair]int)
 	var entry FreqConn
 	for strobeIter.Next(&entry) {
@@ -46,7 +41,7 @@ func (s StrobesNotifier) LoadFreqConnCollection() (map[UConnPair]int, error) {
 //ThresholdMet deletes any matching entries in the RITA ConnCollection
 //and creates a new record in the freqConn collection
 func (s StrobesNotifier) ThresholdMet(connPair UConnPair, count int) error {
-	_, err := s.db.C(ConnCollection).RemoveAll(bson.M{
+	_, err := s.db.C(constants.ConnCollection).RemoveAll(bson.M{
 		"$and": []bson.M{
 			bson.M{"id_orig_h": connPair.Src},
 			bson.M{"id_resp_h": connPair.Dst},
@@ -56,7 +51,7 @@ func (s StrobesNotifier) ThresholdMet(connPair UConnPair, count int) error {
 	if err != nil {
 		return err
 	}
-	err = s.db.C(StrobesCollection).Insert(FreqConn{
+	err = s.db.C(constants.StrobesCollection).Insert(FreqConn{
 		UConnPair:       connPair,
 		ConnectionCount: count,
 	})
@@ -70,7 +65,7 @@ func (s StrobesNotifier) ThresholdExceeded(connPair UConnPair, count int) error 
 	//we could just update with count instead of calling inc
 	//but inc gets the point across a bit better.
 
-	err := s.db.C(StrobesCollection).Update(
+	err := s.db.C(constants.StrobesCollection).Update(
 		bson.M{
 			"src": connPair.Src,
 			"dst": connPair.Dst,
