@@ -84,12 +84,6 @@ func NewDBManager(ritaConf config.RITA, strobeThreshold int,
 	return db, nil
 }
 
-//NewMetaDBDatabasesConnection returns a new socket connected to the
-//MetaDB databases collection
-func (d DBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
-	return d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).With(d.ssn.Copy())
-}
-
 //NewRitaDB creates a new RITA Database by creating the appropriate
 //MetaDB records, ensuring the correct indexes are in place, and returning
 //a new rita.DB object. As data is written to the rita.DB object,

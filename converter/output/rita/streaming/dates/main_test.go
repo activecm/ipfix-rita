@@ -17,6 +17,7 @@ var fixtureManager *integrationtest.FixtureManager
 
 const mongoContainerFixtureKey = "date-test-db-container"
 
+const strobesThreshold = 250000
 const bufferSize = int64(5)
 const autoFlushTime = 5 * time.Second
 const intervalLengthMillis = int64(30 * 1000)
@@ -62,7 +63,7 @@ var streamingRITATimeIntervalWriterFixture = integrationtest.TestFixture{
 		ritaWriter, err := dates.NewStreamingRITATimeIntervalWriter(
 			env.GetOutputConfig().GetRITAConfig(),
 			internalNets,
-			bufferSize, autoFlushTime,
+			strobesThreshold, bufferSize, autoFlushTime,
 			intervalLengthMillis, gracePeriodCutoffMillis,
 			clock, timezone, timeFormatString,
 			env.Logger,

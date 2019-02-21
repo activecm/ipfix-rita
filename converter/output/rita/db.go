@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+//DB represents a RITA database and provides routines
+//for constructing a new RITA database and inserting
+//new data into that database
 type DB struct {
 	manager         DBManager
 	outputDB        *mgo.Database
@@ -100,6 +103,9 @@ func (d DB) ensureFreqConnIndexExists() error {
 	return nil
 }
 
+//InsertConnRecord writes a connection record to the RITA database.
+//Each connection pair is counted, and if the count exceeds a threshold,
+//the connection info is sent to freqConn, otherwise it is sent to conn
 func (d DB) InsertConnRecord(connRecord *parsetypes.Conn) error {
 	thresholdMet, err := d.connCounter.Increment(freqconn.UConnPair{
 		Src: connRecord.Source,
@@ -114,10 +120,15 @@ func (d DB) InsertConnRecord(connRecord *parsetypes.Conn) error {
 	return nil
 }
 
+//MarkFinished ensures that the database is ready for analysis
+//by RITA. Note: MarkFinished may be called after Close. This is
+//by design so the MetaDatabase is only updated after the last
+//of the data has been flushed to MongoDB.
 func (d DB) MarkFinished() error {
 	return d.manager.markImportFinishedInMetaDB(d.outputDB.Name)
 }
 
+//Close closes the underlying database connections wrapped by the DB
 func (d DB) Close() error {
 	d.strobesNotifier.Close()
 	//An error may arise when the collection is flushed in d.connColl.Close()
