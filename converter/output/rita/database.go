@@ -21,7 +21,8 @@ const RitaConnInputCollection = "conn"
 
 var Version = "v2.0.0+ActiveCM-IPFIX"
 
-//TODO: Use version in RITA as dep
+// TODO: Use version in RITA as dep
+
 // DBMetaInfo defines some information about the database
 type DBMetaInfo struct {
 	ID             bson.ObjectId `bson:"_id,omitempty"`   // Ident
@@ -32,18 +33,18 @@ type DBMetaInfo struct {
 	AnalyzeVersion string        `bson:"analyze_version"` // Rita version at analyze
 }
 
-//OutputDB wraps a *mgo.Session connected to MongoDB
+//RITADBManager wraps a *mgo.Session connected to MongoDB
 //and provides facility for interacting with RITA compatible databases
-type OutputDB struct {
+type RITADBManager struct {
 	ssn        *mgo.Session
 	metaDBName string
 	dbRoot     string
 }
 
-//NewOutputDB instantiates a new RITAOutputDB with the
+//NewRITADBManager instantiates a new RITAOutputDB with the
 //details specified in the RITA configuration
-func NewOutputDB(ritaConf config.RITA) (OutputDB, error) {
-	db := OutputDB{}
+func NewRITADBManager(ritaConf config.RITA) (RITADBManager, error) {
+	db := RITADBManager{}
 	var err error
 	db.ssn, err = database.Dial(ritaConf.GetConnectionConfig())
 	if err != nil {
@@ -75,17 +76,17 @@ func NewOutputDB(ritaConf config.RITA) (OutputDB, error) {
 
 //NewMetaDBDatabasesConnection returns a new socket connected to the
 //MetaDB databases collection
-func (o OutputDB) NewMetaDBDatabasesConnection() *mgo.Collection {
-	return o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).With(o.ssn.Copy())
+func (r RITADBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
+	return r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).With(r.ssn.Copy())
 }
 
 //NewRITAOutputConnection returns a new socket connected to the
 //RITA output collection with a given DB suffix
-func (o OutputDB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
-	ssn := o.ssn.Copy()
-	dbName := o.dbRoot
+func (r RITADBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
+	ssn := r.ssn.Copy()
+	dbName := r.dbRoot
 	if dbNameSuffix != "" {
-		dbName = o.dbRoot + "-" + dbNameSuffix
+		dbName = r.dbRoot + "-" + dbNameSuffix
 	}
 
 	//create the conn collection handle
@@ -110,15 +111,15 @@ func (o OutputDB) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection,
 //EnsureMetaDBRecordExists ensures that a database record exists in the
 //MetaDatabase for a given database name. This allows RITA to manage
 //the database.
-func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
-	numRecords, err := o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
+func (r RITADBManager) EnsureMetaDBRecordExists(dbName string) error {
+	numRecords, err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
 	}
 	if numRecords != 0 {
 		return nil
 	}
-	err = o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
+	err = r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
 		Name:           dbName,
 		ImportFinished: false,
 		Analyzed:       false,
@@ -135,8 +136,8 @@ func (o OutputDB) EnsureMetaDBRecordExists(dbName string) error {
 //RITA MetaDatabase database record. This lets RITA know that no
 //more data will be placed in the database and that the database
 //is ready for analysis.
-func (o OutputDB) MarkImportFinishedInMetaDB(dbName string) error {
-	err := o.ssn.DB(o.metaDBName).C(MetaDBDatabasesCollection).Update(
+func (r RITADBManager) MarkImportFinishedInMetaDB(dbName string) error {
+	err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Update(
 		bson.M{"name": dbName},
 		bson.M{
 			"$set": bson.M{
@@ -146,19 +147,19 @@ func (o OutputDB) MarkImportFinishedInMetaDB(dbName string) error {
 	)
 
 	if err != nil {
-		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, o.metaDBName, MetaDBDatabasesCollection)
+		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, r.metaDBName, MetaDBDatabasesCollection)
 	}
 	return nil
 }
 
 //Ping ensures the database connection is valid
-func (o OutputDB) Ping() error {
-	err := o.ssn.Ping()
+func (r RITADBManager) Ping() error {
+	err := r.ssn.Ping()
 	if err != nil {
 		return errors.Wrap(err, "could not contact the database")
 	}
 	//see if theres any permissions problems
-	_, err = o.ssn.DatabaseNames()
+	_, err = r.ssn.DatabaseNames()
 	if err != nil {
 		return errors.Wrap(err, "could not list the databases in the database")
 	}
@@ -166,6 +167,6 @@ func (o OutputDB) Ping() error {
 }
 
 //Close closing the underlying connection to MongoDB
-func (o OutputDB) Close() {
-	o.ssn.Close()
+func (r RITADBManager) Close() {
+	r.ssn.Close()
 }
