@@ -19,7 +19,7 @@ import (
 )
 
 type streamingRITATimeIntervalWriter struct {
-	ritaDBManager           rita.RITADBManager
+	ritaDBManager           rita.DBManager
 	localNets               []net.IPNet
 	collectionBufferSize    int64
 	autoflushDeadline       time.Duration
@@ -55,7 +55,7 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, localNets []net.IP
 	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
 
-	db, err := rita.NewRITADBManager(ritaConf)
+	db, err := rita.NewDBManager(ritaConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}
@@ -79,7 +79,7 @@ func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis in
 	onFatal func(), autoFlushErrChan chan<- error) (*buffered.AutoFlushCollection, error) {
 
 	//time.Unix(seconds, nanoseconds)
-	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
+	//1000 milliseconds per second, 1000 nanoseconds to a microsecond. 1000 microseconds to a millisecond
 	newTime := time.Unix(unixTSMillis/1000, (unixTSMillis%1000)*1000*1000).In(s.timezone)
 
 	newColl, err := s.ritaDBManager.NewRITAOutputConnection(newTime.Format(s.timeFormatString))

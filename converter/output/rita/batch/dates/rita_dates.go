@@ -23,7 +23,7 @@ import (
 //before being sent to MongoDB. The buffers are flushed when
 //they are full or after a deadline passes for the individual buffer.
 type batchRITAConnDateWriter struct {
-	db                rita.RITADBManager
+	db                rita.DBManager
 	localNets         []net.IPNet
 	outputCollections map[string]*buffered.AutoFlushCollection
 	bufferSize        int64
@@ -40,7 +40,7 @@ type batchRITAConnDateWriter struct {
 //when the buffer is full or after a deadline passes.
 func NewBatchRITAConnDateWriter(ritaConf config.RITA, localNets []net.IPNet,
 	bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
-	db, err := rita.NewRITADBManager(ritaConf)
+	db, err := rita.NewDBManager(ritaConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}
@@ -138,7 +138,7 @@ func (r *batchRITAConnDateWriter) getConnCollectionForSession(sess *session.Aggr
 	//get the latest flowEnd time
 	endTimeMilliseconds := sess.FlowEndMilliseconds()
 	//time.Unix(seconds, nanoseconds)
-	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
+	//1000 milliseconds per second, 1000 nanoseconds to a microsecond. 1000 microseconds to a millisecond
 	endTime := time.Unix(endTimeMilliseconds/1000, (endTimeMilliseconds%1000)*1000*1000)
 	endTimeStr := endTime.Format("2006-01-02")
 

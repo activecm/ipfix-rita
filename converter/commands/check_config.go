@@ -53,7 +53,7 @@ func init() {
 			fmt.Printf("Found %d Flow Records Ready For Processing\n", count)
 			coll.Database.Session.Close()
 
-			outDB, err := rita.NewRITADBManager(conf.GetOutputConfig().GetRITAConfig())
+			outDB, err := rita.NewDBManager(conf.GetOutputConfig().GetRITAConfig())
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}

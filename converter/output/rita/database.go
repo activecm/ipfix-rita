@@ -19,6 +19,7 @@ const MetaDBDatabasesCollection = "databases"
 //which houses input connection data
 const RitaConnInputCollection = "conn"
 
+// Version specifies which RITA DB schema the resulting data matches
 var Version = "v2.0.0+ActiveCM-IPFIX"
 
 // TODO: Use version in RITA as dep
@@ -33,18 +34,18 @@ type DBMetaInfo struct {
 	AnalyzeVersion string        `bson:"analyze_version"` // Rita version at analyze
 }
 
-//RITADBManager wraps a *mgo.Session connected to MongoDB
+//DBManager wraps a *mgo.Session connected to MongoDB
 //and provides facility for interacting with RITA compatible databases
-type RITADBManager struct {
+type DBManager struct {
 	ssn        *mgo.Session
 	metaDBName string
 	dbRoot     string
 }
 
-//NewRITADBManager instantiates a new RITAOutputDB with the
+//NewDBManager instantiates a new RITAOutputDB with the
 //details specified in the RITA configuration
-func NewRITADBManager(ritaConf config.RITA) (RITADBManager, error) {
-	db := RITADBManager{}
+func NewDBManager(ritaConf config.RITA) (DBManager, error) {
+	db := DBManager{}
 	var err error
 	db.ssn, err = database.Dial(ritaConf.GetConnectionConfig())
 	if err != nil {
@@ -76,13 +77,13 @@ func NewRITADBManager(ritaConf config.RITA) (RITADBManager, error) {
 
 //NewMetaDBDatabasesConnection returns a new socket connected to the
 //MetaDB databases collection
-func (r RITADBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
+func (r DBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
 	return r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).With(r.ssn.Copy())
 }
 
 //NewRITAOutputConnection returns a new socket connected to the
 //RITA output collection with a given DB suffix
-func (r RITADBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
+func (r DBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
 	ssn := r.ssn.Copy()
 	dbName := r.dbRoot
 	if dbNameSuffix != "" {
@@ -111,7 +112,7 @@ func (r RITADBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collec
 //EnsureMetaDBRecordExists ensures that a database record exists in the
 //MetaDatabase for a given database name. This allows RITA to manage
 //the database.
-func (r RITADBManager) EnsureMetaDBRecordExists(dbName string) error {
+func (r DBManager) EnsureMetaDBRecordExists(dbName string) error {
 	numRecords, err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
@@ -136,7 +137,7 @@ func (r RITADBManager) EnsureMetaDBRecordExists(dbName string) error {
 //RITA MetaDatabase database record. This lets RITA know that no
 //more data will be placed in the database and that the database
 //is ready for analysis.
-func (r RITADBManager) MarkImportFinishedInMetaDB(dbName string) error {
+func (r DBManager) MarkImportFinishedInMetaDB(dbName string) error {
 	err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Update(
 		bson.M{"name": dbName},
 		bson.M{
@@ -153,7 +154,7 @@ func (r RITADBManager) MarkImportFinishedInMetaDB(dbName string) error {
 }
 
 //Ping ensures the database connection is valid
-func (r RITADBManager) Ping() error {
+func (r DBManager) Ping() error {
 	err := r.ssn.Ping()
 	if err != nil {
 		return errors.Wrap(err, "could not contact the database")
@@ -167,6 +168,6 @@ func (r RITADBManager) Ping() error {
 }
 
 //Close closing the underlying connection to MongoDB
-func (r RITADBManager) Close() {
+func (r DBManager) Close() {
 	r.ssn.Close()
 }
