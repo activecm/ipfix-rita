@@ -58,7 +58,7 @@ func NewDBManager(ritaConf config.RITA) (DBManager, error) {
 	db.dbRoot = ritaConf.GetDBRoot()
 	db.metaDBName = ritaConf.GetMetaDB()
 
-	db.ssn.DB(db.metaDBName).C(MetaDBDatabasesCollection).EnsureIndex(mgo.Index{
+	err = db.ssn.DB(db.metaDBName).C(MetaDBDatabasesCollection).EnsureIndex(mgo.Index{
 		Key: []string{
 			"name",
 		},
