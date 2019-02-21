@@ -18,37 +18,41 @@ type FreqConn struct {
 // ConnCounter tracks how many UConnPairs with
 // matching source and destination addresses have been processed.
 // When the count for a given UConnPair meets the threshold,
-// the given thresholdMetFunc will be executed with the UConnPair and the
-// new count. If the count then exceeds the threshold,
-// the given thresholdExceededFunc will then be ran in a similar fashion.
+// the ThresholdMet method on the given ConnCountNotifier will be executed
+// with the UConnPair and the new count. If the count then exceeds the threshold,
+// the ThresholdExceeded method will then be ran in a similar fashion.
 type ConnCounter struct {
-	connectionCounts      map[UConnPair]int
-	threshold             int
-	thresholdMetFunc      func(UConnPair, int) error
-	thresholdExceededFunc func(UConnPair, int) error
+	connectionCounts map[UConnPair]int
+	threshold        int
+	notifier         ConnCountNotifier
+}
+
+// ConnCountNotifier specifies an interface for updating an external component
+// with the new count for a given connection pair. ThresholdMet will be called
+// when the count hits a specified threshold, and ThresholdExceeded will be
+// called when the count exceeds a specified threshold.
+type ConnCountNotifier interface {
+	ThresholdMet(UConnPair, int) error
+	ThresholdExceeded(UConnPair, int) error
 }
 
 // NewConnCounter creates a new ConnCounter. Each unique connection
 // starts at 0.
-func NewConnCounter(threshold int,
-	thresholdMetFunc, thresholdExceededFunc func(UConnPair, int) error) ConnCounter {
+func NewConnCounter(threshold int, notifier ConnCountNotifier) ConnCounter {
 	return ConnCounter{
-		connectionCounts:      make(map[UConnPair]int),
-		threshold:             threshold,
-		thresholdMetFunc:      thresholdMetFunc,
-		thresholdExceededFunc: thresholdExceededFunc,
+		connectionCounts: make(map[UConnPair]int),
+		threshold:        threshold,
+		notifier:         notifier,
 	}
 }
 
 // NewConnCounterFromArray creates a new ConnCounter. Each unique
 // connection starts with the counts supplied in the FreqConn array.
-func NewConnCounterFromArray(data map[UConnPair]int, threshold int,
-	thresholdMetFunc, thresholdExceededFunc func(UConnPair, int) error) ConnCounter {
+func NewConnCounterFromArray(data map[UConnPair]int, threshold int, notifier ConnCountNotifier) ConnCounter {
 	c := ConnCounter{
-		connectionCounts:      data,
-		threshold:             threshold,
-		thresholdMetFunc:      thresholdMetFunc,
-		thresholdExceededFunc: thresholdExceededFunc,
+		connectionCounts: data,
+		threshold:        threshold,
+		notifier:         notifier,
 	}
 	return c
 }
@@ -65,10 +69,10 @@ func (f ConnCounter) Increment(connectionPair UConnPair) (bool, error) {
 	var err error
 	funcRan := false
 	if newCount == f.threshold {
-		err = f.thresholdMetFunc(connectionPair, newCount)
+		err = f.notifier.ThresholdMet(connectionPair, newCount)
 		funcRan = true
 	} else if newCount > f.threshold {
-		err = f.thresholdExceededFunc(connectionPair, newCount)
+		err = f.notifier.ThresholdExceeded(connectionPair, newCount)
 		funcRan = true
 	}
 	if err == nil {

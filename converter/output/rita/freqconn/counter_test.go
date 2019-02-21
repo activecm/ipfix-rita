@@ -8,6 +8,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//closureConnCountNotifier provides a way to anonymously define
+//an implementation for ConnCountNotifier
+type closureConnCountNotifier struct {
+	thresholdMetFunc      func(freqconn.UConnPair, int) error
+	thresholdExceededFunc func(freqconn.UConnPair, int) error
+}
+
+func (a closureConnCountNotifier) ThresholdMet(conn freqconn.UConnPair, count int) error {
+	return a.thresholdMetFunc(conn, count)
+}
+
+func (a closureConnCountNotifier) ThresholdExceeded(conn freqconn.UConnPair, count int) error {
+	return a.thresholdExceededFunc(conn, count)
+}
+
 //TestThresholdMet ensures thresholdMet is called
 //when the connection counter hits the threshold but
 //thresholdExceeded is not
@@ -21,7 +36,7 @@ func TestThresholdMet(t *testing.T) {
 		t.Fatalf("thresholdExceeded called when it should not have been. count %d, threshold %d", count, testThreshold)
 		return nil
 	}
-	c := freqconn.NewConnCounter(testThreshold, thresholdMet, thresholdExceeded)
+	c := freqconn.NewConnCounter(testThreshold, closureConnCountNotifier{thresholdMet, thresholdExceeded})
 
 	testConnection := freqconn.UConnPair{
 		Src: "1.1.1.1",
@@ -59,7 +74,7 @@ func TestThresholdExceeded(t *testing.T) {
 		shouldPass = true
 		return nil
 	}
-	c := freqconn.NewConnCounter(testThreshold, thresholdMet, thresholdExceeded)
+	c := freqconn.NewConnCounter(testThreshold, closureConnCountNotifier{thresholdMet, thresholdExceeded})
 
 	testConnection := freqconn.UConnPair{
 		Src: "1.1.1.1",
@@ -97,7 +112,7 @@ func TestErrorsReturned(t *testing.T) {
 		return thresholdExceededErr
 	}
 
-	c := freqconn.NewConnCounter(1, thresholdMet, thresholdExceeded)
+	c := freqconn.NewConnCounter(1, closureConnCountNotifier{thresholdMet, thresholdExceeded})
 
 	testConnection := freqconn.UConnPair{
 		Src: "1.1.1.1",
@@ -112,7 +127,7 @@ func TestErrorsReturned(t *testing.T) {
 	require.True(t, funcRan, "Increment said threshold function did not run when it should have")
 	require.Equal(t, thresholdMetErr, err, "error from thresholdMet not returned")
 
-	c = freqconn.NewConnCounter(1, func(freqconn.UConnPair, int) error { return nil }, thresholdExceeded)
+	c = freqconn.NewConnCounter(1, closureConnCountNotifier{func(freqconn.UConnPair, int) error { return nil }, thresholdExceeded})
 	c.Increment(testConnection)
 	funcRan, err = c.Increment(testConnection)
 	require.True(t, funcRan, "Increment said threshold function did not run when it should have")

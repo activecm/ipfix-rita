@@ -19,6 +19,7 @@ func TestLoadFreqConnCollection(t *testing.T) {
 
 	ssn, err := mongoDBContainer.NewSession()
 	require.Nil(t, err, "Could not connect to MongoDB")
+	defer ssn.Close()
 
 	testDB := ssn.DB(testDBName)
 
@@ -34,8 +35,10 @@ func TestLoadFreqConnCollection(t *testing.T) {
 		require.Nil(t, err, "Could not insert test data")
 	}
 
+	freqConnNotifier := freqconn.NewStrobesNotifier(testDB)
+
 	// Try to read the data
-	data, err := freqconn.LoadFreqConnCollection(ssn.DB(testDBName))
+	data, err := freqConnNotifier.LoadFreqConnCollection()
 	require.Nil(t, err, "Could not fetch freqconn entries")
 
 	require.Len(t, data, 100, "Number of retrieved records does not match inserted data")
@@ -48,10 +51,9 @@ func TestLoadFreqConnCollection(t *testing.T) {
 	}
 }
 
-//TestFreqInserter tests the function returned by GetFreqInserter. The returned function should
-//clear out any matching records in the conn collection and insert a new record into the
-//the freqConn collection.
-func TestFreqInserter(t *testing.T) {
+//TestStrobesThresholdMet ensures ThresholdMet clears out any matching records in the conn
+//collection and inserts a new record into the freqConn collection.
+func TestStrobesThresholdMet(t *testing.T) {
 	fixtures := fixtureManager.BeginTest(t)
 	defer fixtureManager.EndTest(t)
 
@@ -59,6 +61,7 @@ func TestFreqInserter(t *testing.T) {
 
 	ssn, err := mongoDBContainer.NewSession()
 	require.Nil(t, err, "Could not connect to MongoDB")
+	defer ssn.Close()
 
 	testDB := ssn.DB(testDBName)
 
@@ -75,9 +78,9 @@ func TestFreqInserter(t *testing.T) {
 		require.Nil(t, err, "Could not insert test data")
 	}
 
-	freqInserter := freqconn.GetFreqInserter(testDB)
+	freqConnNotifier := freqconn.NewStrobesNotifier(testDB)
 
-	err = freqInserter(freqconn.UConnPair{
+	err = freqConnNotifier.ThresholdMet(freqconn.UConnPair{
 		Src: srcIP,
 		Dst: dstIP,
 	}, testThreshold)
@@ -86,25 +89,24 @@ func TestFreqInserter(t *testing.T) {
 
 	connCount, err := testDB.C(freqconn.ConnCollection).Count()
 	require.Nil(t, err, "Could not count how many records remain in conn collection")
-	require.Zero(t, connCount, "Matching records were not removed from the conn collection after freqInserter was ran")
+	require.Zero(t, connCount, "Matching records were not removed from the conn collection after ThresholdMet was ran")
 
 	freqCount, err := testDB.C(freqconn.StrobesCollection).Count()
 	require.Nil(t, err, "Could not count how many records exist in freqConn collection")
-	require.Equal(t, 1, freqCount, "freqInserter did not create a single record in freqConn")
+	require.Equal(t, 1, freqCount, "ThresholdMet did not create a single record in freqConn")
 
 	var freqResult freqconn.FreqConn
 	err = testDB.C(freqconn.StrobesCollection).Find(nil).One(&freqResult)
-	require.Nil(t, err, "Could not check freqConn for new records after freqInserter was ran")
+	require.Nil(t, err, "Could not check freqConn for new records after ThresholdMet was ran")
 
 	require.Equal(t, srcIP, freqResult.Src, "Source IP in freqConn does not match the original address")
 	require.Equal(t, dstIP, freqResult.Dst, "Destination IP in freqConn does not match the original address")
-	require.Equal(t, testThreshold, freqResult.ConnectionCount, "Connection count in freqConn does not match the count passed to freqInserter")
+	require.Equal(t, testThreshold, freqResult.ConnectionCount, "Connection count in freqConn does not match the count passed to ThresholdMet")
 }
 
-//TestFreqIncrementer tests the function returned by GetFreqIncrementer.
-//The returned function should increment the connection_count for a given
-//UConnPair in the freqConn collection.
-func TestFreqIncrementer(t *testing.T) {
+//TestStrobesThresholdExceeded ensures ThresholdExceeded increments the connection_count
+//for a given UConnPair in the freqConn collection.
+func TestStrobesThresholdExceeded(t *testing.T) {
 	fixtures := fixtureManager.BeginTest(t)
 	defer fixtureManager.EndTest(t)
 
@@ -112,6 +114,7 @@ func TestFreqIncrementer(t *testing.T) {
 
 	ssn, err := mongoDBContainer.NewSession()
 	require.Nil(t, err, "Could not connect to MongoDB")
+	defer ssn.Close()
 
 	testDB := ssn.DB(testDBName)
 
@@ -122,21 +125,23 @@ func TestFreqIncrementer(t *testing.T) {
 
 	err = testDB.C(freqconn.StrobesCollection).Insert(&freqconn.FreqConn{
 		UConnPair:       uconn,
-		ConnectionCount: 0,
+		ConnectionCount: testThreshold,
 	})
 	require.Nil(t, err, "Could not populate freqConn with test data")
 
-	freqIncrementer := freqconn.GetFreqIncrementer(testDB)
+	freqNotifier := freqconn.NewStrobesNotifier(testDB)
 
-	for i := 0; i < testThreshold; i++ {
-		freqIncrementer(uconn, i)
+	incAmount := 10
+
+	for i := testThreshold + 1; i <= testThreshold+incAmount; i++ {
+		freqNotifier.ThresholdExceeded(uconn, i)
 	}
 
 	var freqResult freqconn.FreqConn
 	err = testDB.C(freqconn.StrobesCollection).Find(&uconn).One(&freqResult)
-	require.Nil(t, err, "Could not check freqConn for new records after freqIncrementer was run")
+	require.Nil(t, err, "Could not check freqConn for new records after ThresholdExceeded was run")
 
-	require.Equal(t, testThreshold, freqResult.ConnectionCount, "Connection count incorrect after callign freqIncrementer")
+	require.Equal(t, testThreshold+incAmount, freqResult.ConnectionCount, "Connection count incorrect after calling ThresholdExceeded")
 	require.Equal(t, uconn.Src, freqResult.Src)
 	require.Equal(t, uconn.Dst, freqResult.Dst)
 }
