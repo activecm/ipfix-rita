@@ -77,17 +77,17 @@ func NewDBManager(ritaConf config.RITA) (DBManager, error) {
 
 //NewMetaDBDatabasesConnection returns a new socket connected to the
 //MetaDB databases collection
-func (r DBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
-	return r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).With(r.ssn.Copy())
+func (d DBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
+	return d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).With(d.ssn.Copy())
 }
 
 //NewRITAOutputConnection returns a new socket connected to the
 //RITA output collection with a given DB suffix
-func (r DBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
-	ssn := r.ssn.Copy()
-	dbName := r.dbRoot
+func (d DBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
+	ssn := d.ssn.Copy()
+	dbName := d.dbRoot
 	if dbNameSuffix != "" {
-		dbName = r.dbRoot + "-" + dbNameSuffix
+		dbName = d.dbRoot + "-" + dbNameSuffix
 	}
 
 	//create the conn collection handle
@@ -112,15 +112,15 @@ func (r DBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection
 //EnsureMetaDBRecordExists ensures that a database record exists in the
 //MetaDatabase for a given database name. This allows RITA to manage
 //the database.
-func (r DBManager) EnsureMetaDBRecordExists(dbName string) error {
-	numRecords, err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
+func (d DBManager) EnsureMetaDBRecordExists(dbName string) error {
+	numRecords, err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
 	}
 	if numRecords != 0 {
 		return nil
 	}
-	err = r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
+	err = d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Insert(DBMetaInfo{
 		Name:           dbName,
 		ImportFinished: false,
 		Analyzed:       false,
@@ -137,8 +137,8 @@ func (r DBManager) EnsureMetaDBRecordExists(dbName string) error {
 //RITA MetaDatabase database record. This lets RITA know that no
 //more data will be placed in the database and that the database
 //is ready for analysis.
-func (r DBManager) MarkImportFinishedInMetaDB(dbName string) error {
-	err := r.ssn.DB(r.metaDBName).C(MetaDBDatabasesCollection).Update(
+func (d DBManager) MarkImportFinishedInMetaDB(dbName string) error {
+	err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Update(
 		bson.M{"name": dbName},
 		bson.M{
 			"$set": bson.M{
@@ -148,19 +148,19 @@ func (r DBManager) MarkImportFinishedInMetaDB(dbName string) error {
 	)
 
 	if err != nil {
-		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, r.metaDBName, MetaDBDatabasesCollection)
+		return errors.Wrapf(err, "could not mark database %s imported in database index %s.%s", dbName, d.metaDBName, MetaDBDatabasesCollection)
 	}
 	return nil
 }
 
 //Ping ensures the database connection is valid
-func (r DBManager) Ping() error {
-	err := r.ssn.Ping()
+func (d DBManager) Ping() error {
+	err := d.ssn.Ping()
 	if err != nil {
 		return errors.Wrap(err, "could not contact the database")
 	}
 	//see if theres any permissions problems
-	_, err = r.ssn.DatabaseNames()
+	_, err = d.ssn.DatabaseNames()
 	if err != nil {
 		return errors.Wrap(err, "could not list the databases in the database")
 	}
@@ -168,6 +168,6 @@ func (r DBManager) Ping() error {
 }
 
 //Close closing the underlying connection to MongoDB
-func (r DBManager) Close() {
-	r.ssn.Close()
+func (d DBManager) Close() {
+	d.ssn.Close()
 }
