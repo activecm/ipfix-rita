@@ -19,8 +19,10 @@ type StrobesNotifier struct {
 }
 
 //NewStrobesNotifier creates a new StrobesNotifier from a MongoDB
-//database handle. Note the lifetime of the session used to create
-//the database handle must be handled externally.
+//database handle. Note the StrobesNotifier.Close() method
+//closes the socket used by the db handle. You may want to
+//copy the initial connection before passing the handle to this
+//constructor.
 func NewStrobesNotifier(db *mgo.Database) StrobesNotifier {
 	return StrobesNotifier{
 		db: db,
@@ -80,4 +82,9 @@ func (s StrobesNotifier) ThresholdExceeded(connPair UConnPair, count int) error 
 		},
 	)
 	return err
+}
+
+//Close closes the socket wrapped by the Database
+func (s StrobesNotifier) Close() {
+	s.db.Session.Close()
 }

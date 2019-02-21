@@ -3,8 +3,8 @@ package buffered
 import (
 	"sync"
 
-	"github.com/pkg/errors"
 	mgo "github.com/globalsign/mgo"
+	"github.com/pkg/errors"
 )
 
 //Collection wraps an *mgo.Collection in order
@@ -16,7 +16,10 @@ type Collection struct {
 }
 
 //InitializeCollection wraps a *mgo.Collection with a buffer of a given size
-//for performing buffered insertions.
+//for performing buffered insertions. Note the Collection.Close() method
+//closes the socket used by the collection handle. You may want to
+//copy the initial connection before passing the handle to this
+//constructor.
 func InitializeCollection(coll *Collection, mgoCollection *mgo.Collection, bufferSize int64) {
 	coll.mgoCollection = mgoCollection
 	coll.buffer = make([]interface{}, 0, bufferSize)

@@ -5,7 +5,6 @@ import (
 
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/database"
-	"github.com/activecm/rita/parser/parsetypes"
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
@@ -37,15 +36,25 @@ type DBMetaInfo struct {
 //DBManager wraps a *mgo.Session connected to MongoDB
 //and provides facility for interacting with RITA compatible databases
 type DBManager struct {
-	ssn        *mgo.Session
-	metaDBName string
-	dbRoot     string
+	ssn             *mgo.Session
+	metaDBName      string
+	dbRoot          string
+	strobeThreshold int
+	bufferSize      int64
+	flushDeadline   time.Duration
 }
 
 //NewDBManager instantiates a new RITAOutputDB with the
 //details specified in the RITA configuration
-func NewDBManager(ritaConf config.RITA) (DBManager, error) {
-	db := DBManager{}
+func NewDBManager(ritaConf config.RITA, strobeThreshold int,
+	bufferSize int64, flushDeadline time.Duration) (DBManager, error) {
+
+	db := DBManager{
+		strobeThreshold: strobeThreshold,
+		bufferSize:      bufferSize,
+		flushDeadline:   flushDeadline,
+	}
+
 	var err error
 	db.ssn, err = database.Dial(ritaConf.GetConnectionConfig())
 	if err != nil {
@@ -81,38 +90,30 @@ func (d DBManager) NewMetaDBDatabasesConnection() *mgo.Collection {
 	return d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).With(d.ssn.Copy())
 }
 
-//NewRITAOutputConnection returns a new socket connected to the
-//RITA output collection with a given DB suffix
-func (d DBManager) NewRITAOutputConnection(dbNameSuffix string) (*mgo.Collection, error) {
-	ssn := d.ssn.Copy()
+//NewRitaDB creates a new RITA Database by creating the appropriate
+//MetaDB records, ensuring the correct indexes are in place, and returning
+//a new rita.DB object. As data is written to the rita.DB object,
+//data is continually flushed out to the database on another thread.
+//If any errors occur on the flushing thread, they are reported on
+//asyncErrorChan. If a fatal error occurs, onFatalError is called.
+func (d DBManager) NewRitaDB(dbNameSuffix string, asyncErrorChan chan<- error, onFatalError func()) (DB, error) {
 	dbName := d.dbRoot
 	if dbNameSuffix != "" {
 		dbName = d.dbRoot + "-" + dbNameSuffix
 	}
 
-	//create the conn collection handle
-	connColl := ssn.DB(dbName).C(RitaConnInputCollection)
-
-	//ensure RITA's needed indexes exist
-	tmpConn := parsetypes.Conn{}
-	for _, index := range tmpConn.Indices() {
-		err := connColl.EnsureIndex(mgo.Index{
-			Key: []string{index},
-		})
-
-		if err != nil {
-			ssn.Close()
-			return nil, errors.Wrapf(err, "could not create RITA conn index %s", index)
-		}
-	}
-
-	return connColl, nil
+	//note newDB will spawn off new sockets for connecting to MongoDB
+	return newDB(
+		d, d.ssn.DB(dbName),
+		d.strobeThreshold, d.bufferSize, d.flushDeadline,
+		asyncErrorChan, onFatalError,
+	)
 }
 
-//EnsureMetaDBRecordExists ensures that a database record exists in the
+//ensureMetaDBRecordExists ensures that a database record exists in the
 //MetaDatabase for a given database name. This allows RITA to manage
 //the database.
-func (d DBManager) EnsureMetaDBRecordExists(dbName string) error {
+func (d DBManager) ensureMetaDBRecordExists(dbName string) error {
 	numRecords, err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Find(bson.M{"name": dbName}).Count()
 	if err != nil {
 		return errors.Wrapf(err, "could not count MetaDB records with name: %s", dbName)
@@ -133,11 +134,11 @@ func (d DBManager) EnsureMetaDBRecordExists(dbName string) error {
 	return nil
 }
 
-//MarkImportFinishedInMetaDB sets the import_finished flag on the
+//markImportFinishedInMetaDB sets the import_finished flag on the
 //RITA MetaDatabase database record. This lets RITA know that no
 //more data will be placed in the database and that the database
 //is ready for analysis.
-func (d DBManager) MarkImportFinishedInMetaDB(dbName string) error {
+func (d DBManager) markImportFinishedInMetaDB(dbName string) error {
 	err := d.ssn.DB(d.metaDBName).C(MetaDBDatabasesCollection).Update(
 		bson.M{"name": dbName},
 		bson.M{
