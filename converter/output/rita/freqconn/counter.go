@@ -46,9 +46,9 @@ func NewConnCounter(threshold int, notifier ConnCountNotifier) ConnCounter {
 	}
 }
 
-// NewConnCounterFromArray creates a new ConnCounter. Each unique
-// connection starts with the counts supplied in the FreqConn array.
-func NewConnCounterFromArray(data map[UConnPair]int, threshold int, notifier ConnCountNotifier) ConnCounter {
+// NewConnCounterFromMap creates a new ConnCounter. Each unique
+// connection starts with the counts supplied in the data map.
+func NewConnCounterFromMap(data map[UConnPair]int, threshold int, notifier ConnCountNotifier) ConnCounter {
 	c := ConnCounter{
 		connectionCounts: data,
 		threshold:        threshold,

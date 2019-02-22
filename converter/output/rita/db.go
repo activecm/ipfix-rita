@@ -36,7 +36,14 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 	//The strobes notifier needs access to the connColl so it can flush
 	//the connColl buffer before it removes entries from the conn collection
 	strobesNotifier := freqconn.NewStrobesNotifier(outputDB.With(strobesSess), connColl)
-	connCounter := freqconn.NewConnCounter(strobeThreshold, strobesNotifier)
+
+	//Get the existing strobes data so our counts start aligned
+	existingStrobeData, err := strobesNotifier.LoadFreqConnCollection()
+	if err != nil {
+		return DB{}, err
+	}
+
+	connCounter := freqconn.NewConnCounterFromMap(existingStrobeData, strobeThreshold, strobesNotifier)
 
 	db := DB{
 		manager:         dbManager,
@@ -46,7 +53,7 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 		strobesNotifier: strobesNotifier,
 	}
 
-	err := db.ensureConnIndexExists()
+	err = db.ensureConnIndexExists()
 	if err != nil {
 		strobesSess.Close()
 		connSess.Close()
