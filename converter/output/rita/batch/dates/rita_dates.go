@@ -9,10 +9,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
-<<<<<<< HEAD
-	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
-=======
->>>>>>> f450d47... Update the batch dates writer
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
@@ -26,23 +22,12 @@ import (
 //before being sent to MongoDB. The buffers are flushed when
 //they are full or after a deadline passes for the individual buffer.
 type batchRITAConnDateWriter struct {
-<<<<<<< HEAD
-	db                rita.DBManager
-	localNets         []net.IPNet
-	outputCollections map[string]*buffered.AutoFlushCollection
-	bufferSize        int64
-	autoFlushTime     time.Duration
-	autoFlushContext  context.Context
-	autoFlushOnFatal  func()
-	log               logging.Logger
-=======
 	db               rita.DBManager
 	localNets        []net.IPNet
 	outputDBs        map[string]rita.DB
 	autoFlushContext context.Context
 	autoFlushOnFatal func()
 	log              logging.Logger
->>>>>>> f450d47... Update the batch dates writer
 }
 
 //NewBatchRITAConnDateWriter creates an buffered RITA compatible writer
@@ -50,38 +35,11 @@ type batchRITAConnDateWriter struct {
 //each record's flow end date. Metadatabase records are created
 //as the output databases are created. Each buffer is flushed
 //when the buffer is full or after a deadline passes.
-<<<<<<< HEAD
 func NewBatchRITAConnDateWriter(ritaConf config.RITA, localNets []net.IPNet,
 	bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
-	db, err := rita.NewDBManager(ritaConf)
-=======
-func NewBatchRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
-	bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
 	db, err := rita.NewDBManager(ritaConf, bufferSize, autoFlushTime)
->>>>>>> f450d47... Update the batch dates writer
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
-	}
-
-<<<<<<< HEAD
-	autoFlushContext, autoFlushOnFail := context.WithCancel(context.Background())
-	//return the new writer
-	return &batchRITAConnDateWriter{
-		db:                db,
-		localNets:         localNets,
-		outputCollections: make(map[string]*buffered.AutoFlushCollection),
-		bufferSize:        bufferSize,
-		autoFlushTime:     autoFlushTime,
-		autoFlushContext:  autoFlushContext,
-		autoFlushOnFatal:  autoFlushOnFail,
-		log:               log,
-=======
-	//parse local networks
-	localNets, localNetsErrs := ipfixConf.GetLocalNetworks()
-	if len(localNetsErrs) != 0 {
-		for i := range localNetsErrs {
-			log.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
-		}
 	}
 
 	autoFlushContext, autoFlushOnFail := context.WithCancel(context.Background())
@@ -93,7 +51,6 @@ func NewBatchRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
 		autoFlushContext: autoFlushContext,
 		autoFlushOnFatal: autoFlushOnFail,
 		log:              log,
->>>>>>> f450d47... Update the batch dates writer
 	}, nil
 }
 
@@ -128,22 +85,14 @@ func (r *batchRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-ch
 				sess.ToRITAConn(&connRecord, r.isIPLocal)
 
 				//create/ get the buffered output collection
-<<<<<<< HEAD
-				outColl, err := r.getConnCollectionForSession(sess, errs, r.autoFlushOnFatal)
-=======
 				outDB, err := r.getDBForSession(sess, errs, r.autoFlushOnFatal)
->>>>>>> f450d47... Update the batch dates writer
 				if err != nil {
 					errs <- err
 					break WriteLoop
 				}
 
 				//insert the record
-<<<<<<< HEAD
-				err = outColl.Insert(connRecord)
-=======
 				err = outDB.InsertConnRecord(&connRecord)
->>>>>>> f450d47... Update the batch dates writer
 				if err != nil {
 					errs <- err
 					break WriteLoop
@@ -155,13 +104,6 @@ func (r *batchRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-ch
 }
 
 func (r *batchRITAConnDateWriter) closeDBSessions(errs chan<- error) {
-<<<<<<< HEAD
-	for i := range r.outputCollections {
-		r.outputCollections[i].Close()
-
-		err := r.db.MarkImportFinishedInMetaDB(r.outputCollections[i].Database())
-		//stops outputCollections from sending on errs
-=======
 	for i := range r.outputDBs {
 		err := r.outputDBs[i].Close()
 		if err != nil {
@@ -169,7 +111,6 @@ func (r *batchRITAConnDateWriter) closeDBSessions(errs chan<- error) {
 		}
 
 		err = r.outputDBs[i].MarkFinished()
->>>>>>> f450d47... Update the batch dates writer
 		if err != nil {
 			errs <- err
 		}
@@ -188,13 +129,8 @@ func (r *batchRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
 	return false
 }
 
-<<<<<<< HEAD
-func (r *batchRITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate,
-	autoFlushAsyncErrChan chan<- error, autoFlushOnFatal func()) (*buffered.AutoFlushCollection, error) {
-=======
 func (r *batchRITAConnDateWriter) getDBForSession(sess *session.Aggregate,
 	autoFlushAsyncErrChan chan<- error, autoFlushOnFatal func()) (rita.DB, error) {
->>>>>>> f450d47... Update the batch dates writer
 
 	//get the latest flowEnd time
 	endTimeMilliseconds := sess.FlowEndMilliseconds()
@@ -204,32 +140,6 @@ func (r *batchRITAConnDateWriter) getDBForSession(sess *session.Aggregate,
 	endTimeStr := endTime.Format("2006-01-02")
 
 	//cache the database connection
-<<<<<<< HEAD
-	outBufferedColl, ok := r.outputCollections[endTimeStr]
-	if !ok {
-		//connect to the db
-		var err error
-		outColl, err := r.db.NewRITAOutputConnection(endTimeStr)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not connect to output database for suffix: %s", endTimeStr)
-		}
-
-		//create the meta db record
-		err = r.db.EnsureMetaDBRecordExists(outColl.Database.Name)
-		if err != nil {
-			outColl.Database.Session.Close()
-			return nil, err
-		}
-
-		//create the output buffer
-		outBufferedColl = buffered.NewAutoFlushCollection(outColl, r.bufferSize, r.autoFlushTime)
-		outBufferedColl.StartAutoFlush(autoFlushAsyncErrChan, autoFlushOnFatal)
-
-		//cache the result
-		r.outputCollections[endTimeStr] = outBufferedColl
-	}
-	return outBufferedColl, nil
-=======
 	outDB, ok := r.outputDBs[endTimeStr]
 	if !ok {
 		//connect to the db
@@ -243,5 +153,4 @@ func (r *batchRITAConnDateWriter) getDBForSession(sess *session.Aggregate,
 		r.outputDBs[endTimeStr] = outDB
 	}
 	return outDB, nil
->>>>>>> f450d47... Update the batch dates writer
 }
