@@ -81,7 +81,10 @@ func (r *RitaConfig) GetStrobe() config.Strobe { return &r.strobe }
 
 type StrobeConfig struct{}
 
-func (s *StrobeConfig) GetConnectionLimit() int { return 250000 }
+func (s *StrobeConfig) GetConnectionLimit() int {
+	//Lowered from the usual 250000 so tests involving this limit don't take forever.
+	return 100
+}
 
 //FilteringConfig implements config.Filtering
 type FilteringConfig struct{}

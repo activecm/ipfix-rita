@@ -2,9 +2,6 @@ package dates_test
 
 import (
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/activecm/dbtest"
 	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/input"
@@ -12,10 +9,13 @@ import (
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
+	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/benbjohnson/clock"
 	"github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
 )
 
 func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
@@ -727,4 +727,109 @@ func generateNSessions(n int64, targetSessionEnd time.Time) []session.Aggregate 
 		sessions = append(sessions, sessA)
 	}
 	return sessions
+}
+
+func TestStrobes(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	strobeLimit := env.GetOutputConfig().GetRITAConfig().GetStrobe().GetConnectionLimit()
+	expectedConnCount := strobeLimit + 5
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts outside of the grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	//don't adjust clock so db names align with intervals
+	currDBTime := clock.Now().In(timezone)
+	prevDBTime := clock.Now().In(timezone).Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := currDBTime
+
+	//clock starts outside of the grace period
+	//This is the "mostly standard" setup
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	sessionChan := make(chan *session.Aggregate, expectedConnCount)
+
+	//Set the end time half way through the non grace period
+	targetDBTimeWithOffset := targetDBTime.Add(time.Duration(gracePeriodCutoffMillis/2) * time.Millisecond)
+	sourceIP := "1.1.1.1"
+	destIP := "2.2.2.2"
+
+	sessions := make([]session.Aggregate, expectedConnCount)
+
+	for i := 0; i < expectedConnCount; i++ {
+		var sessA session.Aggregate
+		var sessB session.Aggregate
+
+		//create a mock flow
+		a := input.NewFlowMock()
+		b := &input.FlowMock{}
+		//set the targeted session end timestamp
+		a.MockFlowEndMilliseconds = targetDBTimeWithOffset.UnixNano() / 1000000
+		a.MockFlowStartMilliseconds = a.MockFlowEndMilliseconds - 10*1000
+		//set the ports so A will be the source. The port numbers are used to determine
+		//which flow originated the connection when the timestamps are the same
+		a.MockSourceIPAddress = sourceIP
+		a.MockDestinationIPAddress = destIP
+		a.MockSourcePort = 20000
+		a.MockDestinationPort = 80
+		//Fill out b
+		*b = *a
+		b.MockDestinationIPAddress = a.MockSourceIPAddress
+		b.MockSourceIPAddress = a.MockDestinationIPAddress
+		b.MockDestinationPort = a.MockSourcePort
+		b.MockSourcePort = a.MockDestinationPort
+
+		session.FromFlow(a, &sessA)
+		session.FromFlow(b, &sessB)
+		sessA.Merge(&sessB)
+
+		sessions[i] = sessA
+	}
+
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	//ensure conn collections are empty in each possible db
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	//ensure freqconn is empty for previous db
+	prevDBFreqCount, err := ssn.DB(prevDBName).C(constants.StrobesCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBFreqCount)
+
+	//ensure freqconn is correct for current db
+	var freq freqconn.FreqConn
+	err = ssn.DB(currDBName).C(constants.StrobesCollection).Find(nil).One(&freq)
+	require.Nil(t, err)
+	require.Equal(t, sourceIP, freq.Src)
+	require.Equal(t, destIP, freq.Dst)
+	require.Equal(t, expectedConnCount, freq.ConnectionCount)
+
+	ssn.Close()
 }

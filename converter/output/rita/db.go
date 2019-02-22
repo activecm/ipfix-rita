@@ -28,13 +28,15 @@ func newDB(dbManager DBManager, outputDB *mgo.Database,
 	strobesSess := outputDB.Session.Copy()
 	connSess := outputDB.Session.Copy()
 
-	strobesNotifier := freqconn.NewStrobesNotifier(outputDB.With(strobesSess))
-	connCounter := freqconn.NewConnCounter(strobeThreshold, strobesNotifier)
-
 	connColl := buffered.NewAutoFlushCollection(
 		outputDB.C(constants.ConnCollection).With(connSess),
 		bufferSize, flushDeadline,
 	)
+
+	//The strobes notifier needs access to the connColl so it can flush
+	//the connColl buffer before it removes entries from the conn collection
+	strobesNotifier := freqconn.NewStrobesNotifier(outputDB.With(strobesSess), connColl)
+	connCounter := freqconn.NewConnCounter(strobeThreshold, strobesNotifier)
 
 	db := DB{
 		manager:         dbManager,

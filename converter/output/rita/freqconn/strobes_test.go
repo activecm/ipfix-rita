@@ -3,11 +3,13 @@ package freqconn_test
 import (
 	"fmt"
 	"github.com/activecm/dbtest"
+	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 //TestLoadFreqConnCollection loads the freqConn collection up with data and pulls it down
@@ -36,7 +38,7 @@ func TestLoadFreqConnCollection(t *testing.T) {
 		require.Nil(t, err, "Could not insert test data")
 	}
 
-	freqConnNotifier := freqconn.NewStrobesNotifier(testDB)
+	freqConnNotifier := freqconn.NewStrobesNotifier(testDB, nil)
 
 	// Try to read the data
 	data, err := freqConnNotifier.LoadFreqConnCollection()
@@ -79,7 +81,7 @@ func TestStrobesThresholdMet(t *testing.T) {
 		require.Nil(t, err, "Could not insert test data")
 	}
 
-	freqConnNotifier := freqconn.NewStrobesNotifier(testDB)
+	freqConnNotifier := freqconn.NewStrobesNotifier(testDB, nil)
 
 	err = freqConnNotifier.ThresholdMet(freqconn.UConnPair{
 		Src: srcIP,
@@ -130,7 +132,7 @@ func TestStrobesThresholdExceeded(t *testing.T) {
 	})
 	require.Nil(t, err, "Could not populate freqConn with test data")
 
-	freqNotifier := freqconn.NewStrobesNotifier(testDB)
+	freqNotifier := freqconn.NewStrobesNotifier(testDB, nil)
 
 	incAmount := 10
 
@@ -145,4 +147,69 @@ func TestStrobesThresholdExceeded(t *testing.T) {
 	require.Equal(t, testThreshold+incAmount, freqResult.ConnectionCount, "Connection count incorrect after calling ThresholdExceeded")
 	require.Equal(t, uconn.Src, freqResult.Src)
 	require.Equal(t, uconn.Dst, freqResult.Dst)
+}
+
+func TestStrobesWithAutoFlushCollection(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	mongoDBContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+
+	ssn, err := mongoDBContainer.NewSession()
+	require.Nil(t, err, "Could not connect to MongoDB")
+	defer ssn.Close()
+
+	testDB := ssn.DB(testDBName)
+
+	srcIP := "1.1.1.1"
+	dstIP := "2.2.2.2"
+
+	s := parsetypes.Conn{
+		Source:      srcIP,
+		Destination: dstIP,
+	}
+	bufferSize := 200
+	flushTime := 2 * time.Second
+
+	//Load an autoflush collection up with data (but not to the point where it will flush because the buffer is full)
+	autoFlushColl := buffered.NewAutoFlushCollection(testDB.C(constants.ConnCollection), int64(bufferSize), flushTime)
+
+	errs := make(chan error, bufferSize)
+	autoFlushColl.StartAutoFlush(errs, func() { t.FailNow() })
+
+	for i := 0; i < bufferSize/2; i++ {
+		err = autoFlushColl.Insert(&s)
+		require.Nil(t, err, "Could not insert test data")
+	}
+
+	//Run the ThresholdMet method. This should flush the auto flush collection.
+	//If it doesn't the collection will have records in it after we call ThresholdMet
+	//and wait for the deadline to pass
+	freqConnNotifier := freqconn.NewStrobesNotifier(testDB, autoFlushColl)
+
+	err = freqConnNotifier.ThresholdMet(freqconn.UConnPair{
+		Src: srcIP,
+		Dst: dstIP,
+	}, testThreshold)
+
+	require.Nil(t, err, "Could not delete existing conn records or create a new freqConn record")
+
+	//Wait for the auto flush deadline to pass
+	time.Sleep(flushTime)
+
+	connCount, err := testDB.C(constants.ConnCollection).Count()
+	require.Nil(t, err, "Could not count how many records remain in conn collection")
+	require.Zero(t, connCount, "Matching records were not removed from the conn collection/ the auto flush buffer after ThresholdMet was ran")
+
+	freqCount, err := testDB.C(constants.StrobesCollection).Count()
+	require.Nil(t, err, "Could not count how many records exist in freqConn collection")
+	require.Equal(t, 1, freqCount, "ThresholdMet did not create a single record in freqConn")
+
+	var freqResult freqconn.FreqConn
+	err = testDB.C(constants.StrobesCollection).Find(nil).One(&freqResult)
+	require.Nil(t, err, "Could not check freqConn for new records after ThresholdMet was ran")
+
+	require.Equal(t, srcIP, freqResult.Src, "Source IP in freqConn does not match the original address")
+	require.Equal(t, dstIP, freqResult.Dst, "Destination IP in freqConn does not match the original address")
+	require.Equal(t, testThreshold, freqResult.ConnectionCount, "Connection count in freqConn does not match the count passed to ThresholdMet")
 }

@@ -1,6 +1,7 @@
 package freqconn
 
 import (
+	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
@@ -10,17 +11,23 @@ import (
 //the RITA conn and freqConn collections in line with the internal
 //connection count map. This effectively implements RITA's "strobes" analysis.
 type StrobesNotifier struct {
-	db *mgo.Database
+	db                *mgo.Database
+	connAutoFlushColl *buffered.AutoFlushCollection
 }
 
 //NewStrobesNotifier creates a new StrobesNotifier from a MongoDB
-//database handle. Note the StrobesNotifier.Close() method
+//database handle. If an AutoFlushCollection is currently bound
+//to the RITA conn collection, pass in a reference and the Notifier
+//will ensure the collection buffer is flushed before altering the
+//conn collection. If no such AutoFlushCollection exists, pass in nil.
+// Note the StrobesNotifier.Close() method
 //closes the socket used by the db handle. You may want to
 //copy the initial connection before passing the handle to this
 //constructor.
-func NewStrobesNotifier(db *mgo.Database) StrobesNotifier {
+func NewStrobesNotifier(db *mgo.Database, connAutoFlushColl *buffered.AutoFlushCollection) StrobesNotifier {
 	return StrobesNotifier{
-		db: db,
+		db:                db,
+		connAutoFlushColl: connAutoFlushColl,
 	}
 }
 
@@ -41,6 +48,18 @@ func (s StrobesNotifier) LoadFreqConnCollection() (map[UConnPair]int, error) {
 //ThresholdMet deletes any matching entries in the RITA ConnCollection
 //and creates a new record in the freqConn collection
 func (s StrobesNotifier) ThresholdMet(connPair UConnPair, count int) error {
+
+	//We have to ensure that the auto flush collection pushes any buffered
+	//data to the conn collection before we issue the remove command.
+	//Otherwise data may be pushed into the conn collection after we call
+	//remove.
+	if s.connAutoFlushColl != nil {
+		err := s.connAutoFlushColl.Flush()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := s.db.C(constants.ConnCollection).RemoveAll(bson.M{
 		"$and": []bson.M{
 			bson.M{"id_orig_h": connPair.Src},
