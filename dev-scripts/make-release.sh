@@ -53,6 +53,7 @@ IN_DEV_MAIN_COMPOSE_FILE="$IN_DEV_COMPOSE_DIR/main.yaml"
 ################################################################################
 echo "Building Docker images"
 COMPOSE_FILE="$IN_DEV_MAIN_COMPOSE_FILE" docker-compose build
+docker pull mongo:3.6
 
 ################################################################################
 TMP_DIR=`mktemp -d -q "/tmp/IPFIX-RITA.XXXXXXXX" </dev/null`
