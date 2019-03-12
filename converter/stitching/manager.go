@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"sync"
 
+	"github.com/activecm/ipfix-rita/converter/filter"
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/stitching/matching/rammatch"
@@ -35,6 +36,10 @@ type Manager struct {
 	//will flush when a flush happens. The matcher will flush to
 	//matcherMaxSize * matcherFlushToPercent.
 	matcherFlushToPercent float64
+	//flowFilter determines which flows should be dropped from the pipeline.
+	//The dropped flows will not be stitched, and they will not appear in the
+	//result stream.
+	flowFilter filter.FlowFilter
 
 	log logging.Logger
 }
@@ -42,7 +47,8 @@ type Manager struct {
 //NewManager creates a Manager with the given settings
 func NewManager(sameSessionThreshold int64, numStitchers int32,
 	stitcherBufferSize, outputBufferSize int64, matcherMaxSize int64,
-	matcherFlushToPercent float64, log logging.Logger) Manager {
+	matcherFlushToPercent float64, flowFilter filter.FlowFilter,
+	log logging.Logger) Manager {
 
 	return Manager{
 		sameSessionThreshold:  sameSessionThreshold,
@@ -51,7 +57,8 @@ func NewManager(sameSessionThreshold int64, numStitchers int32,
 		outputBufferSize:      outputBufferSize,
 		matcherMaxSize:        matcherMaxSize,
 		matcherFlushToPercent: matcherFlushToPercent,
-		log: log,
+		flowFilter:            flowFilter,
+		log:                   log,
 	}
 }
 
@@ -131,6 +138,7 @@ func (m Manager) runInner(input <-chan input.Flow,
 
 	//keep track of how many flows we process
 	var flowCount int
+	var flowsFilteredOut int
 
 	//loop over the input until its closed
 	//If the input is coming from input.mgologstash and managed by
@@ -138,6 +146,17 @@ func (m Manager) runInner(input <-chan input.Flow,
 	//be closed when the program recieves CTRL-C
 	for inFlow := range input {
 		flowCount++
+
+		//check if we should filter out a flow
+		shouldFilterOut, err := m.flowFilter.Match(inFlow)
+		if err != nil {
+			errs <- errors.Wrap(err, "could not determine if flow should be filtered out")
+			continue
+		}
+		if shouldFilterOut {
+			flowsFilteredOut++
+			continue
+		}
 
 		/*
 			buffCounts := make(logging.Fields)
@@ -185,7 +204,8 @@ func (m Manager) runInner(input <-chan input.Flow,
 	matcher.Close()
 
 	m.log.Info("stitching manager exiting", logging.Fields{
-		"flows processed": flowCount,
+		"flows processed":    flowCount,
+		"flows filtered out": flowsFilteredOut,
 	})
 
 	//all stichers and flushers are done, no more sessions can be produced

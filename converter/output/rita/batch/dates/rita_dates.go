@@ -38,19 +38,11 @@ type batchRITAConnDateWriter struct {
 //each record's flow end date. Metadatabase records are created
 //as the output databases are created. Each buffer is flushed
 //when the buffer is full or after a deadline passes.
-func NewBatchRITAConnDateWriter(ritaConf config.RITA, ipfixConf config.IPFIX,
+func NewBatchRITAConnDateWriter(ritaConf config.RITA, localNets []net.IPNet,
 	bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
 	db, err := rita.NewOutputDB(ritaConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
-	}
-
-	//parse local networks
-	localNets, localNetsErrs := ipfixConf.GetLocalNetworks()
-	if len(localNetsErrs) != 0 {
-		for i := range localNetsErrs {
-			log.Warn("could not parse local network", logging.Fields{"err": localNetsErrs[i]})
-		}
 	}
 
 	autoFlushContext, autoFlushOnFail := context.WithCancel(context.Background())

@@ -9,14 +9,14 @@ import (
 
 //TestConfig implements config.Config
 type TestConfig struct {
-	input  InputConfig
-	output OutputConfig
-	ipfix  IPFIXConfig
+	input     InputConfig
+	output    OutputConfig
+	filtering FilteringConfig
 }
 
-func (t *TestConfig) GetInputConfig() config.Input   { return &t.input }
-func (t *TestConfig) GetOutputConfig() config.Output { return &t.output }
-func (t *TestConfig) GetIPFIXConfig() config.IPFIX   { return &t.ipfix }
+func (t *TestConfig) GetInputConfig() config.Input         { return &t.input }
+func (t *TestConfig) GetOutputConfig() config.Output       { return &t.output }
+func (t *TestConfig) GetFilteringConfig() config.Filtering { return &t.filtering }
 
 //InputConfig implements config.Input
 type InputConfig struct {
@@ -77,9 +77,17 @@ func (r *RitaConfig) GetConnectionConfig() config.MongoDBConnection { return &r.
 func (r *RitaConfig) GetDBRoot() string { return "RITA" }
 func (r *RitaConfig) GetMetaDB() string { return "MetaDatabase" }
 
-//IPFIXConfig implements config.IPFIX
-type IPFIXConfig struct{}
+//FilteringConfig implements config.Filtering
+type FilteringConfig struct{}
 
-func (t *IPFIXConfig) GetLocalNetworks() ([]net.IPNet, []error) {
+func (f *FilteringConfig) GetAlwaysIncludeSubnets() ([]net.IPNet, []error) {
+	return []net.IPNet{}, []error{}
+}
+
+func (f *FilteringConfig) GetNeverIncludeSubnets() ([]net.IPNet, []error) {
+	return []net.IPNet{}, []error{}
+}
+
+func (f *FilteringConfig) GetInternalSubnets() ([]net.IPNet, []error) {
 	return []net.IPNet{}, []error{}
 }

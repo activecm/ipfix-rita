@@ -32,9 +32,9 @@ func ReadConfigFile() ([]byte, error) {
 //yamlConfig contains the applications settings
 //as represented by a YAML string. Implements config.Config
 type yamlConfig struct {
-	Input  input  `yaml:"Input"`
-	Output output `yaml:"Output"`
-	IPFIX  ipfix  `yaml:"IPFIX"`
+	Input     input     `yaml:"Input"`
+	Output    output    `yaml:"Output"`
+	Filtering filtering `yaml:"Filtering"`
 }
 
 func (y *yamlConfig) GetInputConfig() config.Input {
@@ -45,8 +45,8 @@ func (y *yamlConfig) GetOutputConfig() config.Output {
 	return &y.Output
 }
 
-func (y *yamlConfig) GetIPFIXConfig() config.IPFIX {
-	return &y.IPFIX
+func (y *yamlConfig) GetFilteringConfig() config.Filtering {
+	return &y.Filtering
 }
 
 //NewYAMLConfig creates a new yamlConfig from
