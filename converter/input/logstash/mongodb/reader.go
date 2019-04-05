@@ -56,7 +56,6 @@ func (r Reader) Drain(ctx context.Context) (<-chan input.Flow, <-chan error) {
 }
 
 func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- input.Flow, errs chan<- error) {
-	r.log.Info("checking input buffer for more data", nil)
 	dataFound := false
 	flow := &data.Flow{}
 	for buffer.Next(flow) {
@@ -78,5 +77,4 @@ func (r Reader) drainInner(ctx context.Context, buffer Buffer, out chan<- input.
 	if buffer.Err() != nil {
 		errs <- errors.Wrap(buffer.Err(), "could not drain input buffer")
 	}
-	r.log.Info("waiting for more data to arrive in input buffer", nil)
 }
