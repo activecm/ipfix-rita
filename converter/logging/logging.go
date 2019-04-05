@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -40,6 +42,8 @@ func NewLogrusLogger() Logger {
 }
 
 func (l logrusLogger) Error(err error, fields Fields) {
+	logTime := time.Now().Format("2006-01-02T15:04:05")
+
 	if err, ok := err.(stackTracer); ok {
 		if fields == nil {
 			fields = make(Fields)
@@ -47,24 +51,28 @@ func (l logrusLogger) Error(err error, fields Fields) {
 		fields["stacktrace"] = err.StackTrace()
 	}
 	if fields != nil {
-		l.logger.WithFields(log.Fields(fields)).Error(err.Error())
+		l.logger.WithFields(log.Fields(fields)).Error(logTime + " " + err.Error())
 	} else {
-		l.logger.Error(err.Error())
+		l.logger.Error(logTime + " " + err.Error())
 	}
 }
 
 func (l logrusLogger) Info(msg string, fields Fields) {
+	logTime := time.Now().Format("2006-01-02T15:04:05Z07:00")
+
 	if fields != nil {
-		l.logger.WithFields(log.Fields(fields)).Info(msg)
+		l.logger.WithFields(log.Fields(fields)).Info(logTime + " " + msg)
 	} else {
-		l.logger.Info(msg)
+		l.logger.Info(logTime + " " + msg)
 	}
 }
 
 func (l logrusLogger) Warn(msg string, fields Fields) {
+	logTime := time.Now().Format("2006-01-02T15:04:05Z07:00")
+
 	if fields != nil {
-		l.logger.WithFields(log.Fields(fields)).Warn(msg)
+		l.logger.WithFields(log.Fields(fields)).Warn(logTime + " " + msg)
 	} else {
-		l.logger.Warn(msg)
+		l.logger.Warn(logTime + " " + msg)
 	}
 }
