@@ -267,7 +267,7 @@ func interruptContext(log logging.Logger) (context.Context, func()) {
 	go func() {
 		select {
 		case <-sigChan:
-			log.Info(" CTRL-C Received", nil)
+			log.Info("CTRL-C Received", nil)
 			cancel()
 		case <-ctx.Done():
 		}
