@@ -3,9 +3,8 @@
 IPFIX-RITA is a system for processing IPFix/Netflow v9/Netflow v5 records for
 use with [RITA](https://github.com/activecm/rita).
 
-
-NOTICE: IPFIX-RITA is still in beta, it has only been tested on a limited
-number of devices.
+:exclamation: **NOTICE** :exclamation:
+IPFIX-RITA is not currently under active development. If you wish to use it for research purposes, be aware that it will only work with [version 2 of RITA](https://github.com/activecm/rita/releases/tag/v2.0.0).
 
 # Installing IPFIX-RITA
 
