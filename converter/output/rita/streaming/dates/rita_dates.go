@@ -11,7 +11,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
-	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/benbjohnson/clock"
@@ -19,21 +18,19 @@ import (
 )
 
 type streamingRITATimeIntervalWriter struct {
-	ritaDBManager           rita.OutputDB
+	ritaDBManager           rita.DBManager
 	localNets               []net.IPNet
-	collectionBufferSize    int64
-	autoflushDeadline       time.Duration
 	segmentTSFactory        SegmentRelativeTimestampFactory
 	gracePeriodCutoffMillis int64
 	timeFormatString        string
 	timezone                *time.Location
 
-	clock              clock.Clock
-	inGracePeriod      bool
-	currentSegmentTS   SegmentRelativeTimestamp
-	previousCollection *buffered.AutoFlushCollection
-	currentCollection  *buffered.AutoFlushCollection
-	collectionMutex    *sync.Mutex
+	clock            clock.Clock
+	inGracePeriod    bool
+	currentSegmentTS SegmentRelativeTimestamp
+	previousDB       *rita.DB
+	currentDB        *rita.DB
+	collectionMutex  *sync.Mutex
 
 	log logging.Logger
 }
@@ -55,19 +52,17 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, localNets []net.IP
 	gracePeriodCutoffMillis int64, clock clock.Clock, timezone *time.Location, timeFormatString string,
 	log logging.Logger) (output.SessionWriter, error) {
 
-	db, err := rita.NewOutputDB(ritaConf)
+	db, err := rita.NewDBManager(ritaConf, bufferSize, autoFlushTime)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}
 
 	return &streamingRITATimeIntervalWriter{
-		ritaDBManager:        db,
-		localNets:            localNets,
-		collectionBufferSize: bufferSize,
-		autoflushDeadline:    autoFlushTime,
-		segmentTSFactory:     NewSegmentRelativeTimestampFactory(intervalLengthMillis, timezone),
-		timezone:             timezone,
-		clock:                clock,
+		ritaDBManager:    db,
+		localNets:        localNets,
+		segmentTSFactory: NewSegmentRelativeTimestampFactory(intervalLengthMillis, timezone),
+		timezone:         timezone,
+		clock:            clock,
 		gracePeriodCutoffMillis: gracePeriodCutoffMillis,
 		timeFormatString:        timeFormatString,
 		collectionMutex:         new(sync.Mutex),
@@ -75,29 +70,18 @@ func NewStreamingRITATimeIntervalWriter(ritaConf config.RITA, localNets []net.IP
 	}, nil
 }
 
-func (s *streamingRITATimeIntervalWriter) newAutoFlushCollection(unixTSMillis int64,
-	onFatal func(), autoFlushErrChan chan<- error) (*buffered.AutoFlushCollection, error) {
+func (s *streamingRITATimeIntervalWriter) newRITADB(unixTSMillis int64,
+	onFatal func(), autoFlushErrChan chan<- error) (*rita.DB, error) {
 
 	//time.Unix(seconds, nanoseconds)
-	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
+	//1000 milliseconds per second, 1000 nanoseconds to a microsecond. 1000 microseconds to a millisecond
 	newTime := time.Unix(unixTSMillis/1000, (unixTSMillis%1000)*1000*1000).In(s.timezone)
 
-	newColl, err := s.ritaDBManager.NewRITAOutputConnection(newTime.Format(s.timeFormatString))
+	newDB, err := s.ritaDBManager.NewRitaDB(newTime.Format(s.timeFormatString), autoFlushErrChan, onFatal)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
+		return nil, errors.Wrapf(err, "failed to create new rita database")
 	}
-	err = s.ritaDBManager.EnsureMetaDBRecordExists(newColl.Database.Name)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
-	}
-
-	newAutoFlushCollection := buffered.NewAutoFlushCollection(newColl, s.collectionBufferSize, s.autoflushDeadline)
-	started := newAutoFlushCollection.StartAutoFlush(autoFlushErrChan, onFatal)
-	if !started {
-		errmsg := fmt.Sprintf("failed to start auto flusher for collection XXX-%s.%s", newTime.Format(s.timeFormatString), rita.RitaConnInputCollection)
-		return nil, errors.New(errmsg)
-	}
-	return newAutoFlushCollection, nil
+	return &newDB, nil
 }
 
 func (s *streamingRITATimeIntervalWriter) initializeCurrentSegmentAndGracePeriod(
@@ -164,25 +148,32 @@ FlushLoop:
 			if s.inGracePeriod {
 				//Beginning of grace period, different time segment
 
-				//set previousCollection to currentCollection
-				s.previousCollection = s.currentCollection
+				//set previousDB to currentDB
+				s.previousDB = s.currentDB
 
-				//clear currentCollection so it is created when needed
-				s.currentCollection = nil
+				//clear currentDB so it is created when needed
+				//NOTE: we don't close the db as it can still be used as s.previousDB
+				s.currentDB = nil
 				s.collectionMutex.Unlock()
-			} else if s.previousCollection != nil {
+			} else if s.previousDB != nil {
 				//End of grace period, same segment
 
 				//unlock the mutex immediately since we don't want to
 				//hold the lock while we flush a buffer.
-				prevColl := s.previousCollection
-				s.previousCollection = nil
+				prevDB := s.previousDB
+				s.previousDB = nil
 				s.collectionMutex.Unlock()
 
-				//Flush the previous collection and close it out
-				prevColl.Flush()
-				prevColl.Close()
-				err := s.ritaDBManager.MarkImportFinishedInMetaDB(prevColl.Database())
+				//Close out the previous collection
+				//This will close the database sockets used by the object
+				err := prevDB.Close()
+				if err != nil {
+					errsOut <- err
+					break FlushLoop
+				}
+
+				//Ensure the metadatabase is updated
+				err = prevDB.MarkFinished()
 				if err != nil {
 					errsOut <- err
 					break FlushLoop
@@ -201,9 +192,11 @@ FlushLoop:
 	//This loop should only exit if there is an error (or the user shuts down the program)
 
 	//wrap up the previous collection if it is open
-	if s.previousCollection != nil {
-		s.previousCollection.Flush()
-		s.previousCollection.Close()
+	if s.previousDB != nil {
+		err := s.previousDB.Close()
+		if err != nil {
+			errsOut <- err
+		}
 		/*
 			BUG: https://github.com/activecm/ipfix-rita/issues/35
 			err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.previousCollection.Database())
@@ -214,9 +207,11 @@ FlushLoop:
 	}
 
 	//Wrap up the current collection
-	if s.currentCollection != nil { //could be nil due to error
-		s.currentCollection.Flush()
-		s.currentCollection.Close()
+	if s.currentDB != nil { //could be nil due to error
+		err := s.currentDB.Close()
+		if err != nil {
+			errsOut <- err
+		}
 		/*
 			BUG: https://github.com/activecm/ipfix-rita/issues/35
 			err := s.ritaDBManager.MarkImportFinishedInMetaDB(s.currentCollection.Database())
@@ -257,9 +252,9 @@ WriteLoop:
 				var ritaConn parsetypes.Conn
 				sess.ToRITAConn(&ritaConn, s.isIPLocal)
 
-				if s.currentCollection == nil {
+				if s.currentDB == nil {
 					var err error
-					s.currentCollection, err = s.newAutoFlushCollection(s.currentSegmentTS.SegmentStartMillis, onFatal, errsOut)
+					s.currentDB, err = s.newRITADB(s.currentSegmentTS.SegmentStartMillis, onFatal, errsOut)
 					if err != nil {
 						errsOut <- errors.Wrap(err, "could not lazily initialize MongoDB output collection")
 						break WriteLoop
@@ -267,7 +262,7 @@ WriteLoop:
 				}
 
 				//Insert into today's db
-				err := s.currentCollection.Insert(ritaConn)
+				err := s.currentDB.InsertConnRecord(&ritaConn)
 				if err != nil {
 					errsOut <- errors.Wrap(err, "could not insert session into the current period collection")
 					break WriteLoop
@@ -276,11 +271,11 @@ WriteLoop:
 				var ritaConn parsetypes.Conn
 				sess.ToRITAConn(&ritaConn, s.isIPLocal)
 
-				if s.previousCollection == nil {
+				if s.previousDB == nil {
 					prevTimeMillis := s.currentSegmentTS.SegmentStartMillis - s.currentSegmentTS.SegmentDurationMillis
 
 					var err error
-					s.previousCollection, err = s.newAutoFlushCollection(prevTimeMillis, onFatal, errsOut)
+					s.previousDB, err = s.newRITADB(prevTimeMillis, onFatal, errsOut)
 					if err != nil {
 						errsOut <- errors.Wrap(err, "could not lazily initialize MongoDB output collection")
 						break WriteLoop
@@ -288,7 +283,7 @@ WriteLoop:
 				}
 
 				//Insert into yesterday's db
-				err := s.previousCollection.Insert(ritaConn)
+				err := s.previousDB.InsertConnRecord(&ritaConn)
 				if err != nil {
 					errsOut <- errors.Wrap(err, "could not insert session into the previous period collection")
 					break WriteLoop

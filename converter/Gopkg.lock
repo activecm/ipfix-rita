@@ -29,15 +29,15 @@
   version = "v0.1.1"
 
 [[projects]]
-  digest = "1:8d688914c687eedb46c74d8cfb05e3a351fc3b914ec03f7339178ced760a2d69"
+  digest = "1:10de4a36895028cd46843f261fa4d62adeebc83060781497e861ea6db0aa92ce"
   name = "github.com/activecm/rita"
   packages = [
     "config",
     "parser/parsetypes",
   ]
   pruneopts = ""
-  revision = "ccc5ca0db8ed830ed2901eebb4843e95da1e1ba4"
-  version = "v1.1.1"
+  revision = "c279d298ca2128f9d0c9a38b93661272ce115a64"
+  version = "v2.0.0"
 
 [[projects]]
   branch = "master"
@@ -54,6 +54,14 @@
   pruneopts = ""
   revision = "2ee87856327ba09384cabd113bc6b5d174e9ec0f"
   version = "v3.5.1"
+
+[[projects]]
+  digest = "1:cba3e5921fe4f8a4c80374e1f6679a5b0615a0399d5f7d804b5a85db40c0c7eb"
+  name = "github.com/creasty/defaults"
+  packages = ["."]
+  pruneopts = ""
+  revision = "edf4f6a95a3223dfff4eff2c404103e756fef68d"
+  version = "v1.3.0"
 
 [[projects]]
   digest = "1:0deddd908b6b4b768cfc272c16ee61e7088a60f7fe2f06c547bd3d8e1f8b8e77"
@@ -262,6 +270,7 @@
     "github.com/globalsign/mgo/bson",
     "github.com/pkg/errors",
     "github.com/sirupsen/logrus",
+    "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
     "gopkg.in/yaml.v2",

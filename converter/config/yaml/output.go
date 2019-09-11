@@ -16,6 +16,7 @@ type ritaMongoDB struct {
 	MongoDB mongoDBConnection `yaml:"MongoDB-Connection"`
 	DBRoot  string            `yaml:"DBRoot"`
 	MetaDB  string            `yaml:"MetaDB"`
+	Strobe  strobe            `yaml:"Strobe"`
 }
 
 func (r *ritaMongoDB) GetConnectionConfig() config.MongoDBConnection {
@@ -28,4 +29,17 @@ func (r *ritaMongoDB) GetDBRoot() string {
 
 func (r *ritaMongoDB) GetMetaDB() string {
 	return r.MetaDB
+}
+
+func (r *ritaMongoDB) GetStrobe() config.Strobe {
+	return &r.Strobe
+}
+
+//strobe implements config.Strobe
+type strobe struct {
+	ConnectionLimit int `yaml:"ConnectionLimit"`
+}
+
+func (s *strobe) GetConnectionLimit() int {
+	return s.ConnectionLimit
 }

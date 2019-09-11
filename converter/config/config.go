@@ -77,6 +77,13 @@ type RITA interface {
 	GetConnectionConfig() MongoDBConnection
 	GetDBRoot() string
 	GetMetaDB() string
+	GetStrobe() Strobe
+}
+
+//Strobe contains configuration for populating the
+//freqConn collection / Strobes analysis in RITA
+type Strobe interface {
+	GetConnectionLimit() int
 }
 
 //Filtering contains information on local subnets and other networks/hosts

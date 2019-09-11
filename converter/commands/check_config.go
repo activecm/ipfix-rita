@@ -2,12 +2,12 @@ package commands
 
 import (
 	"fmt"
-
 	"github.com/activecm/ipfix-rita/converter/config"
 	"github.com/activecm/ipfix-rita/converter/config/yaml"
 	"github.com/activecm/ipfix-rita/converter/input/logstash/mongodb"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
 	"github.com/urfave/cli"
+	"time"
 )
 
 func init() {
@@ -53,7 +53,7 @@ func init() {
 			fmt.Printf("Found %d Flow Records Ready For Processing\n", count)
 			coll.Database.Session.Close()
 
-			outDB, err := rita.NewOutputDB(conf.GetOutputConfig().GetRITAConfig())
+			outDB, err := rita.NewDBManager(conf.GetOutputConfig().GetRITAConfig(), 100, 1*time.Second)
 			if err != nil {
 				return cli.NewExitError(fmt.Sprintf("%+v\n", err), 1)
 			}

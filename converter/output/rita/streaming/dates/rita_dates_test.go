@@ -2,19 +2,20 @@ package dates_test
 
 import (
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/activecm/dbtest"
 	"github.com/activecm/ipfix-rita/converter/environment"
 	"github.com/activecm/ipfix-rita/converter/input"
 	"github.com/activecm/ipfix-rita/converter/integrationtest"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
+	"github.com/activecm/ipfix-rita/converter/output/rita/constants"
+	"github.com/activecm/ipfix-rita/converter/output/rita/freqconn"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/benbjohnson/clock"
 	"github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
 )
 
 func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
@@ -51,15 +52,15 @@ func TestOutOfPeriodSessionsInGracePeriod(t *testing.T) {
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, prevDBCount)
 
-	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	targetDBCount, err := ssn.DB(targetDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, targetDBCount)
 	ssn.Close()
@@ -103,15 +104,15 @@ func TestOutOfPeriodSessionsOutOfGracePeriod(t *testing.T) {
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, prevDBCount)
 
-	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	targetDBCount, err := ssn.DB(targetDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, targetDBCount)
 	ssn.Close()
@@ -149,12 +150,12 @@ func TestPreviousPeriodSessionsInGracePeriod(t *testing.T) {
 	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	fmt.Printf("Checking %s.%s", prevDBName, rita.RitaConnInputCollection)
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	fmt.Printf("Checking %s.%s", prevDBName, constants.ConnCollection)
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), prevDBCount)
 
@@ -203,15 +204,15 @@ func TestPreviousPeriodSessionsOutOfGracePeriod(t *testing.T) {
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, prevDBCount)
 
-	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	targetDBCount, err := ssn.DB(targetDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, targetDBCount)
 	ssn.Close()
@@ -251,15 +252,15 @@ func TestCurrentPeriodSessionsInGracePeriod(t *testing.T) {
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), currDBCount)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, prevDBCount)
 
-	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	targetDBCount, err := ssn.DB(targetDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), targetDBCount)
 	ssn.Close()
@@ -307,15 +308,15 @@ func TestCurrentPeriodSessionsOutOfGracePeriod(t *testing.T) {
 	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
 	targetDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + targetDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), currDBCount)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, prevDBCount)
 
-	targetDBCount, err := ssn.DB(targetDBName).C(rita.RitaConnInputCollection).Count()
+	targetDBCount, err := ssn.DB(targetDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), targetDBCount)
 	ssn.Close()
@@ -370,15 +371,15 @@ func TestGracePeriodFlip(t *testing.T) {
 	//slow machines
 	time.Sleep(waitTime)
 
-	prevDBCount, err := ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), prevDBCount)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	nextDBCount, err := ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	nextDBCount, err := ssn.DB(nextDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, nextDBCount)
 
@@ -395,15 +396,15 @@ func TestGracePeriodFlip(t *testing.T) {
 	//slow machines
 	time.Sleep(waitTime)
 
-	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err = ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), prevDBCount)
 
-	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err = ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, currDBCount)
 
-	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	nextDBCount, err = ssn.DB(nextDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, nextDBCount)
 
@@ -423,15 +424,15 @@ func TestGracePeriodFlip(t *testing.T) {
 	//slow machines
 	time.Sleep(waitTime)
 
-	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err = ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), prevDBCount)
 
-	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err = ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), currDBCount)
 
-	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	nextDBCount, err = ssn.DB(nextDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 0, nextDBCount)
 
@@ -444,15 +445,15 @@ func TestGracePeriodFlip(t *testing.T) {
 	//slow machines
 	time.Sleep(waitTime)
 
-	prevDBCount, err = ssn.DB(prevDBName).C(rita.RitaConnInputCollection).Count()
+	prevDBCount, err = ssn.DB(prevDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), prevDBCount)
 
-	currDBCount, err = ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err = ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), currDBCount)
 
-	nextDBCount, err = ssn.DB(nextDBName).C(rita.RitaConnInputCollection).Count()
+	nextDBCount, err = ssn.DB(nextDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, int(bufferSize), nextDBCount)
 
@@ -493,7 +494,7 @@ func TestBufferFlushOnClose(t *testing.T) {
 	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
 	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 4, currDBCount)
 	ssn.Close()
@@ -534,7 +535,7 @@ func TestBufferFlushOnTimeout(t *testing.T) {
 	waitTime := 10 * time.Second
 	time.Sleep(waitTime)
 
-	currDBCount, err := ssn.DB(currDBName).C(rita.RitaConnInputCollection).Count()
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
 	require.Nil(t, err)
 	require.Equal(t, 4, currDBCount)
 	ssn.Close()
@@ -594,7 +595,7 @@ func TestMetaDBRecords(t *testing.T) {
 	time.Sleep(waitTime)
 
 	dbInfo := rita.DBMetaInfo{}
-	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(constants.MetaDBDatabasesCollection).Find(
 		bson.M{"name": prevDBName},
 	).One(&dbInfo)
 
@@ -610,7 +611,7 @@ func TestMetaDBRecords(t *testing.T) {
 	time.Sleep(waitTime)
 
 	dbInfo = rita.DBMetaInfo{}
-	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(constants.MetaDBDatabasesCollection).Find(
 		bson.M{"name": currDBName},
 	).One(&dbInfo)
 
@@ -622,7 +623,7 @@ func TestMetaDBRecords(t *testing.T) {
 	time.Sleep(waitTime)
 
 	dbInfo = rita.DBMetaInfo{}
-	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(constants.MetaDBDatabasesCollection).Find(
 		bson.M{"name": prevDBName},
 	).One(&dbInfo)
 
@@ -641,7 +642,7 @@ func TestMetaDBRecords(t *testing.T) {
 	time.Sleep(waitTime)
 
 	dbInfo = rita.DBMetaInfo{}
-	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(constants.MetaDBDatabasesCollection).Find(
 		bson.M{"name": nextDBName},
 	).One(&dbInfo)
 
@@ -653,7 +654,7 @@ func TestMetaDBRecords(t *testing.T) {
 	time.Sleep(waitTime)
 
 	dbInfo = rita.DBMetaInfo{}
-	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(rita.MetaDBDatabasesCollection).Find(
+	ssn.DB(env.GetOutputConfig().GetRITAConfig().GetMetaDB()).C(constants.MetaDBDatabasesCollection).Find(
 		bson.M{"name": currDBName},
 	).One(&dbInfo)
 
@@ -726,4 +727,109 @@ func generateNSessions(n int64, targetSessionEnd time.Time) []session.Aggregate 
 		sessions = append(sessions, sessA)
 	}
 	return sessions
+}
+
+func TestStrobes(t *testing.T) {
+	fixtures := fixtureManager.BeginTest(t)
+	defer fixtureManager.EndTest(t)
+
+	env := fixtures.Get(integrationtest.EnvironmentFixture.Key).(environment.Environment)
+	strobeLimit := env.GetOutputConfig().GetRITAConfig().GetStrobe().GetConnectionLimit()
+	expectedConnCount := strobeLimit + 5
+
+	ritaWriter := fixtures.GetWithSkip(t, streamingRITATimeIntervalWriterFixture.Key).(output.SessionWriter)
+	//clock starts outside of the grace period
+	clock := fixtures.Get(clockFixture.Key).(*clock.Mock)
+
+	//don't adjust clock so db names align with intervals
+	currDBTime := clock.Now().In(timezone)
+	prevDBTime := clock.Now().In(timezone).Add(-1 * time.Duration(intervalLengthMillis) * time.Millisecond)
+	targetDBTime := currDBTime
+
+	//clock starts outside of the grace period
+	//This is the "mostly standard" setup
+	clock.Add(time.Duration(gracePeriodCutoffMillis) * time.Millisecond)
+
+	sessionChan := make(chan *session.Aggregate, expectedConnCount)
+
+	//Set the end time half way through the non grace period
+	targetDBTimeWithOffset := targetDBTime.Add(time.Duration(gracePeriodCutoffMillis/2) * time.Millisecond)
+	sourceIP := "1.1.1.1"
+	destIP := "2.2.2.2"
+
+	sessions := make([]session.Aggregate, expectedConnCount)
+
+	for i := 0; i < expectedConnCount; i++ {
+		var sessA session.Aggregate
+		var sessB session.Aggregate
+
+		//create a mock flow
+		a := input.NewFlowMock()
+		b := &input.FlowMock{}
+		//set the targeted session end timestamp
+		a.MockFlowEndMilliseconds = targetDBTimeWithOffset.UnixNano() / 1000000
+		a.MockFlowStartMilliseconds = a.MockFlowEndMilliseconds - 10*1000
+		//set the ports so A will be the source. The port numbers are used to determine
+		//which flow originated the connection when the timestamps are the same
+		a.MockSourceIPAddress = sourceIP
+		a.MockDestinationIPAddress = destIP
+		a.MockSourcePort = 20000
+		a.MockDestinationPort = 80
+		//Fill out b
+		*b = *a
+		b.MockDestinationIPAddress = a.MockSourceIPAddress
+		b.MockSourceIPAddress = a.MockDestinationIPAddress
+		b.MockDestinationPort = a.MockSourcePort
+		b.MockSourcePort = a.MockDestinationPort
+
+		session.FromFlow(a, &sessA)
+		session.FromFlow(b, &sessB)
+		sessA.Merge(&sessB)
+
+		sessions[i] = sessA
+	}
+
+	for i := range sessions {
+		sessionChan <- &sessions[i]
+	}
+	close(sessionChan)
+
+	errs := ritaWriter.Write(sessionChan)
+
+	mongoContainer := fixtures.GetWithSkip(t, mongoContainerFixtureKey).(dbtest.MongoDBContainer)
+	ssn, err := mongoContainer.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for err = range errs {
+		t.Fatal(err)
+	}
+
+	//ensure conn collections are empty in each possible db
+	currDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + currDBTime.Format(timeFormatString)
+	prevDBName := env.GetOutputConfig().GetRITAConfig().GetDBRoot() + "-" + prevDBTime.Format(timeFormatString)
+
+	currDBCount, err := ssn.DB(currDBName).C(constants.ConnCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, currDBCount)
+
+	prevDBCount, err := ssn.DB(prevDBName).C(constants.ConnCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBCount)
+
+	//ensure freqconn is empty for previous db
+	prevDBFreqCount, err := ssn.DB(prevDBName).C(constants.StrobesCollection).Count()
+	require.Nil(t, err)
+	require.Equal(t, 0, prevDBFreqCount)
+
+	//ensure freqconn is correct for current db
+	var freq freqconn.FreqConn
+	err = ssn.DB(currDBName).C(constants.StrobesCollection).Find(nil).One(&freq)
+	require.Nil(t, err)
+	require.Equal(t, sourceIP, freq.Src)
+	require.Equal(t, destIP, freq.Dst)
+	require.Equal(t, expectedConnCount, freq.ConnectionCount)
+
+	ssn.Close()
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/activecm/ipfix-rita/converter/logging"
 	"github.com/activecm/ipfix-rita/converter/output"
 	"github.com/activecm/ipfix-rita/converter/output/rita"
-	"github.com/activecm/ipfix-rita/converter/output/rita/buffered"
 	"github.com/activecm/ipfix-rita/converter/stitching/session"
 	"github.com/activecm/rita/parser/parsetypes"
 	"github.com/pkg/errors"
@@ -23,14 +22,12 @@ import (
 //before being sent to MongoDB. The buffers are flushed when
 //they are full or after a deadline passes for the individual buffer.
 type batchRITAConnDateWriter struct {
-	db                rita.OutputDB
-	localNets         []net.IPNet
-	outputCollections map[string]*buffered.AutoFlushCollection
-	bufferSize        int64
-	autoFlushTime     time.Duration
-	autoFlushContext  context.Context
-	autoFlushOnFatal  func()
-	log               logging.Logger
+	db               rita.DBManager
+	localNets        []net.IPNet
+	outputDBs        map[string]rita.DB
+	autoFlushContext context.Context
+	autoFlushOnFatal func()
+	log              logging.Logger
 }
 
 //NewBatchRITAConnDateWriter creates an buffered RITA compatible writer
@@ -40,7 +37,7 @@ type batchRITAConnDateWriter struct {
 //when the buffer is full or after a deadline passes.
 func NewBatchRITAConnDateWriter(ritaConf config.RITA, localNets []net.IPNet,
 	bufferSize int64, autoFlushTime time.Duration, log logging.Logger) (output.SessionWriter, error) {
-	db, err := rita.NewOutputDB(ritaConf)
+	db, err := rita.NewDBManager(ritaConf, bufferSize, autoFlushTime)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not connect to RITA MongoDB")
 	}
@@ -48,14 +45,12 @@ func NewBatchRITAConnDateWriter(ritaConf config.RITA, localNets []net.IPNet,
 	autoFlushContext, autoFlushOnFail := context.WithCancel(context.Background())
 	//return the new writer
 	return &batchRITAConnDateWriter{
-		db:                db,
-		localNets:         localNets,
-		outputCollections: make(map[string]*buffered.AutoFlushCollection),
-		bufferSize:        bufferSize,
-		autoFlushTime:     autoFlushTime,
-		autoFlushContext:  autoFlushContext,
-		autoFlushOnFatal:  autoFlushOnFail,
-		log:               log,
+		db:               db,
+		localNets:        localNets,
+		outputDBs:        make(map[string]rita.DB),
+		autoFlushContext: autoFlushContext,
+		autoFlushOnFatal: autoFlushOnFail,
+		log:              log,
 	}, nil
 }
 
@@ -90,14 +85,14 @@ func (r *batchRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-ch
 				sess.ToRITAConn(&connRecord, r.isIPLocal)
 
 				//create/ get the buffered output collection
-				outColl, err := r.getConnCollectionForSession(sess, errs, r.autoFlushOnFatal)
+				outDB, err := r.getDBForSession(sess, errs, r.autoFlushOnFatal)
 				if err != nil {
 					errs <- err
 					break WriteLoop
 				}
 
 				//insert the record
-				err = outColl.Insert(connRecord)
+				err = outDB.InsertConnRecord(&connRecord)
 				if err != nil {
 					errs <- err
 					break WriteLoop
@@ -109,11 +104,13 @@ func (r *batchRITAConnDateWriter) Write(sessions <-chan *session.Aggregate) <-ch
 }
 
 func (r *batchRITAConnDateWriter) closeDBSessions(errs chan<- error) {
-	for i := range r.outputCollections {
-		r.outputCollections[i].Close()
+	for i := range r.outputDBs {
+		err := r.outputDBs[i].Close()
+		if err != nil {
+			errs <- err
+		}
 
-		err := r.db.MarkImportFinishedInMetaDB(r.outputCollections[i].Database())
-		//stops outputCollections from sending on errs
+		err = r.outputDBs[i].MarkFinished()
 		if err != nil {
 			errs <- err
 		}
@@ -132,39 +129,28 @@ func (r *batchRITAConnDateWriter) isIPLocal(ipAddrStr string) bool {
 	return false
 }
 
-func (r *batchRITAConnDateWriter) getConnCollectionForSession(sess *session.Aggregate,
-	autoFlushAsyncErrChan chan<- error, autoFlushOnFatal func()) (*buffered.AutoFlushCollection, error) {
+func (r *batchRITAConnDateWriter) getDBForSession(sess *session.Aggregate,
+	autoFlushAsyncErrChan chan<- error, autoFlushOnFatal func()) (rita.DB, error) {
 
 	//get the latest flowEnd time
 	endTimeMilliseconds := sess.FlowEndMilliseconds()
 	//time.Unix(seconds, nanoseconds)
-	//1000 milliseconds per second, 1000 nanosecodns to a microsecond. 1000 microseconds to a millisecond
+	//1000 milliseconds per second, 1000 nanoseconds to a microsecond. 1000 microseconds to a millisecond
 	endTime := time.Unix(endTimeMilliseconds/1000, (endTimeMilliseconds%1000)*1000*1000)
 	endTimeStr := endTime.Format("2006-01-02")
 
 	//cache the database connection
-	outBufferedColl, ok := r.outputCollections[endTimeStr]
+	outDB, ok := r.outputDBs[endTimeStr]
 	if !ok {
 		//connect to the db
 		var err error
-		outColl, err := r.db.NewRITAOutputConnection(endTimeStr)
+		outDB, err := r.db.NewRitaDB(endTimeStr, autoFlushAsyncErrChan, autoFlushOnFatal)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not connect to output database for suffix: %s", endTimeStr)
+			return outDB, errors.Wrapf(err, "could not create output database for suffix: %s", endTimeStr)
 		}
-
-		//create the meta db record
-		err = r.db.EnsureMetaDBRecordExists(outColl.Database.Name)
-		if err != nil {
-			outColl.Database.Session.Close()
-			return nil, err
-		}
-
-		//create the output buffer
-		outBufferedColl = buffered.NewAutoFlushCollection(outColl, r.bufferSize, r.autoFlushTime)
-		outBufferedColl.StartAutoFlush(autoFlushAsyncErrChan, autoFlushOnFatal)
 
 		//cache the result
-		r.outputCollections[endTimeStr] = outBufferedColl
+		r.outputDBs[endTimeStr] = outDB
 	}
-	return outBufferedColl, nil
+	return outDB, nil
 }
